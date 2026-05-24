@@ -6,6 +6,73 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [Sprint 1 — Auth + 3 users] — 2026-05-24
+
+Auth multi-user complète : 3 comptes seedés (Stan ADMIN, Certe MEMBER, Angath MEMBER), login Google OAuth + mot de passe de secours, middleware cookie, page ADMIN de gestion des users.
+
+### Added — données & schéma
+
+- Enum `UserRole` (ADMIN | MEMBER) + enum `AuthSource` (GOOGLE | PASSWORD) dans `prisma/schema.prisma`.
+- Modèle `User` : id, email (unique), name, passwordHash (bcrypt), color, role, active, lastAuthSource, lastLoginAt, createdAt, updatedAt. **Pas de soft-delete** — on désactive via `active: false` au lieu de supprimer (préserve l'historique d'audit / completedBy futur).
+- Migration `20260524*_add_user`.
+- `prisma/seed.ts` étendu : 3 users seedés (Stan/violet, Certe/cyan, Angath/amber), `upsert` idempotent, mdp hashé bcrypt depuis `APP_PASSWORD` env var. Le hash n'est PAS réécrit si l'user existe déjà (préserve les changements de mdp post-seed).
+
+### Added — auth
+
+- `lib/auth/session.ts` : `getSession`, `createSession({userId, email, role, source})`, `destroySession`. JWT HS256 dans cookie `youri-session`, httpOnly + secure (prod) + sameSite=lax, 365 jours. Fail-closed si `SESSION_SECRET` < 32 chars.
+- `lib/auth/users.ts` : `getCurrentUser` (cached par render React), `requireUser` (redirect /login si absent), `requireAdmin` (redirect /dashboard si pas ADMIN), `isAdmin` (boolean UI).
+- `middleware.ts` racine : protège tout sauf PUBLIC_PATHS (/login, /api/auth/*, /api/health, assets statiques). Pages non-loggées → 307 vers /login?from=...&. API → 401 JSON. Edge runtime (jose, pas Prisma).
+
+### Added — API routes
+
+- `POST /api/auth/password` : login mdp. Body `{email, password}`. Bcrypt compare constant-time + dummy hash si user inexistant (anti-timing leak). Délai 250ms en cas d'échec (anti-bruteforce). Met à jour `lastLoginAt` + `lastAuthSource: PASSWORD` (fire & forget).
+- `GET /api/auth/google` : init OAuth (redirect Google avec scope `openid email profile`, state = `from`). 503 si `GOOGLE_CLIENT_ID` absent.
+- `GET /api/auth/google/callback` : échange code → token Google → parse id_token → vérif `email_verified` + whitelist `AUTH_ALLOWED_EMAILS` → trouve user en BDD (pas de création à la volée) → crée session + redirect `from`. Erreurs renvoyées sur `/login?error=...`.
+- `POST /api/auth/logout` : destroy cookie session.
+
+### Added — UI
+
+- `components/ui/input.tsx` + `label.tsx` (primitives shadcn écrites à la main).
+- `components/auth/login-form.tsx` : Client component. Bouton "Continuer avec Google" + section repliable "Mot de passe de secours" (form email + mdp). Affiche les erreurs OAuth depuis `?error=` query param. Préserve `?from=` pour ramener à la destination après login.
+- `app/login/page.tsx` : page publique, redirige direct vers /dashboard si déjà loggué. `<Suspense>` autour du form (useSearchParams).
+- `components/layout/logout-button.tsx` : POST /api/auth/logout puis push /login.
+- `components/layout/user-menu.tsx` : avatar circulaire (initiales colorées via `user.color`) + dropdown maison (nom, email, rôle, logout). Close au click outside.
+- `app/(app)/layout.tsx` mis à jour : `requireUser()` au top + UserMenu dans la topbar (force-dynamic).
+- `app/(app)/error.tsx` : error boundary du segment protégé (avec boutons "Réessayer" + "Retour dashboard").
+
+### Added — settings ADMIN
+
+- `lib/actions/users.ts` : 2 server actions ADMIN-only — `resetUserPassword` (Zod, 8 chars min, bcrypt) et `toggleUserActive` (empêche l'admin de se désactiver lui-même). Chaque action démarre par `await requireAdmin()`.
+- `app/(app)/settings/users/page.tsx` : table des 3 users avec rôle, statut active, dernier login. `requireAdmin()` au top — un MEMBER tombe sur /dashboard.
+- `app/(app)/settings/users/users-table.tsx` : client component avec form inline "Réinit. mdp" (8 chars min, l'ADMIN saisit le mdp à transmettre à l'user) + bouton "Désactiver/Réactiver".
+
+### Added — tests
+
+- `tests/auth/session.test.ts` : 5 tests sur la mécanique JWT (signature valide, mauvais secret, token corrompu, token expiré, alg:none attempt). **22/22 verts** au total (dates + session).
+
+### Validated — smoke test e2e (port 3001, contre la vraie DB SQLite)
+
+```
+✅ GET /dashboard sans cookie       → HTTP 307 → /login?from=/dashboard
+✅ GET /api/health (public)         → HTTP 200 { ok:true, db:"up" }
+✅ POST /api/auth/password (OK)     → HTTP 200 + cookie youri-session posé
+✅ GET /dashboard avec cookie       → HTTP 200
+✅ POST /api/auth/password (WRONG)  → HTTP 401 { error:"Identifiants invalides" }
+✅ GET /settings/users (ADMIN)      → HTTP 200
+```
+
+### Known / TODO
+
+- ⚠️ **Next 16 warning** : "The `middleware` file convention is deprecated. Please use `proxy` instead." À migrer vers `proxy.ts` (nouvelle convention Next 16). Fonctionne pour l'instant — fix prévu Sprint 11 (polish + mobile).
+- ⚠️ **Google OAuth pas testé** : nécessite `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` dans `.env.local`. Stan doit créer un OAuth Client distinct dans Google Cloud Console (cf. `docs/process/vps-deploy.md § OAuth Google`). Le code est en place, fonctionnel dès que les credentials sont fournis.
+- ⚠️ Page `/settings` (parent) n'existe pas encore (uniquement `/settings/users`). Sera ajoutée Sprint ultérieur quand on aura d'autres sections (profil org, templates de tâches, etc.).
+
+### Mdp par défaut au login
+
+`APP_PASSWORD` env var (cf. `.env.local`, actuellement `ChangeMeBeforeProd2026`). Identique pour les 3 users au seed initial. L'ADMIN peut le réinitialiser individuellement via `/settings/users` à tout moment.
+
+---
+
 ## [Sprint 0 — Bootstrap] — 2026-05-24
 
 Scaffold initial du projet Youri V2 avant le développement métier.

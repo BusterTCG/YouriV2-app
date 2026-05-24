@@ -15,6 +15,66 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─────────────────────────── ENUMS ───────────────────────────
+
+/// Rôle d'un utilisateur. Convention décisions verrouillées :
+/// - ADMIN : Stan uniquement. Peut gérer les autres users + éditer les
+///   templates de tâches (Sprint 6).
+/// - MEMBER : tout le monde fait TOUT (créer/modifier/supprimer n'importe
+///   quel deal/tâche/artiste). Pas de restrictions métier.
+/// Cf. docs/architecture-decisions.md § Users & permissions.
+enum UserRole {
+  ADMIN
+  MEMBER
+}
+
+/// Source de l'authentification (audit, debug).
+enum AuthSource {
+  GOOGLE
+  PASSWORD
+}
+
+// ─────────────────────────── USERS (Sprint 1) ───────────────────────────
+
+/// Compte utilisateur Pangee Prod. 3 seedés au bootstrap :
+/// Stan (ADMIN), Certe (MEMBER), Angath (MEMBER).
+///
+/// Pas de soft-delete (pas de `deletedAt`) — on désactive via `active: false`
+/// au lieu de supprimer, pour préserver l'historique d'audit / completedBy
+/// sur les tâches que l'user a validées (à venir Sprint 6).
+model User {
+  id            String   @id @default(cuid())
+
+  /// Email principal (login). Pour les users avec Google OAuth, c'est aussi
+  /// l'email Google. Unique.
+  email         String   @unique
+
+  /// Nom d'affichage (sidebar, badges, "Validé par X").
+  name          String
+
+  /// Hash bcrypt du mot de passe de secours (fallback si Google down).
+  /// Tous les users ont le même mdp au démarrage (APP_PASSWORD). Réinitia-
+  /// lisable depuis /settings/users par l'ADMIN.
+  passwordHash  String
+
+  /// Couleur d'identification de l'user (badges "assigné à", chips). Hex.
+  color         String   @default("#3b82f6")
+
+  /// Rôle (ADMIN | MEMBER). Voir enum UserRole pour les implications.
+  role          UserRole @default(MEMBER)
+
+  /// Désactiver = empêche le login mais préserve l'historique des actions.
+  /// Préféré à un soft-delete pour la traçabilité.
+  active        Boolean  @default(true)
+
+  /// Trace la dernière source d'auth (debug si problème OAuth vs mdp).
+  lastAuthSource AuthSource?
+  lastLoginAt    DateTime?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
 // ─────────────────────────── APP RUNTIME ───────────────────────────
 
 /// Key-value store pour les settings runtime (flags features, version
