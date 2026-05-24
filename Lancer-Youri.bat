@@ -8,10 +8,38 @@ echo    YOURI V2 - PANGEE PROD - Lancement local
 echo  ============================================
 echo.
 
-REM Verifie si le serveur tourne deja sur le port 3001 (Youri V2 ; KN tourne sur 3000).
+REM ============================================
+REM   DEPENDANCE : KuroNeko-App doit tourner aussi
+REM ============================================
+REM Youri V2 consomme l'annuaire (Contacts + Lieux) via l'API REST de KN.
+REM Sans KN actif, les pages /contacts et /lieux affichent "Annuaire indisponible".
+REM On verifie si KN tourne deja sur 3000 ; sinon on lance Lancer-KuroNeko.bat
+REM dans une fenetre dediee.
+
+set KN_DIR=C:\Users\stani\Dev\KuroNeko-App
+set KN_BAT=%KN_DIR%\Lancer-KuroNeko.bat
+
+curl -s -o nul -m 1 http://localhost:3000 >nul 2>&1
+if %errorlevel% equ 0 (
+    echo  [OK] KuroNeko-App tourne deja sur http://localhost:3000
+) else (
+    if exist "%KN_BAT%" (
+        echo  [INFO] KuroNeko-App n'est pas actif. Demarrage en parallele...
+        start "Kuro Neko - dev parallel" cmd /c "%KN_BAT%"
+        echo  [OK] Une fenetre dediee KuroNeko a ete ouverte. KN demarre en
+        echo       arriere-plan ^(env. 5-10s^).
+    ) else (
+        echo  [ATTENTION] %KN_BAT% introuvable.
+        echo              Les pages /contacts et /lieux afficheront "Annuaire indisponible".
+        echo              Lance manuellement KuroNeko si tu en as besoin.
+    )
+)
+echo.
+
+REM Verifie si Youri tourne deja sur le port 3001.
 curl -s -o nul -m 1 http://localhost:3001 >nul 2>&1
 if %errorlevel% equ 0 (
-    echo  [OK] Le serveur tourne deja sur http://localhost:3001
+    echo  [OK] Le serveur Youri tourne deja sur http://localhost:3001
     echo       Ouverture du navigateur...
     start "" http://localhost:3001/dashboard
     timeout /t 2 /nobreak >nul
