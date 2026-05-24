@@ -6,6 +6,78 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [Sprint 2 — Master data : kn-client + Artist + sidebar nav] — 2026-05-24
+
+Annuaire (Contact / Venue / VenueRoom) consommé depuis KN via API REST + table Artist locale Youri (rosters distincts) + vraie nav latérale.
+
+### Added — client API inter-app
+
+- `lib/kn-client.ts` : client HTTP typé vers KN avec helper `knFetch<T>` (Bearer token, timeout 5s), 10 fonctions typées (list/get/create/update contacts/venues/rooms), erreurs typées (`KnApiUnavailableError`, `KnNotFoundError`, `KnValidationError`), types `KnContact/KnVenue/KnVenueRoom/KnList<T>`, types `ContactSnapshot/VenueSnapshot` préparés pour Sprint 3.
+
+### Added — schéma & seed
+
+- Model Prisma `Artist` (id, name unique, slug unique, color, notes, active, deletedAt). Migration `add_artist`.
+- `lib/slug.ts` : `slugify()` (strip diacritiques, lowercase, tirets) + `uniqueSlug()` (suffixe -2/-3 si collision).
+- Seed étendu : 3 artistes exemples (Artiste Test 1/2/3, couleurs pink/emerald/orange).
+
+### Added — composants UI shadcn
+
+- `components/ui/dialog.tsx`, `textarea.tsx`, `badge.tsx`, `separator.tsx`, `sheet.tsx` (primitives écrites à la main, Radix UI pour Dialog/Separator/Sheet).
+
+### Added — nav sidebar + mobile
+
+- `components/layout/nav-config.ts` : 5 groupes (Pilotage / Deals / Annuaire / Outils / Administration), flags `placeholder` (WIP) et `adminOnly`.
+- `components/layout/sidebar-nav.tsx` : rendu nav réutilisé desktop + sheet, highlight item actif via `usePathname`, items WIP en opacity réduite + badge "WIP".
+- `components/layout/sidebar.tsx` : sidebar desktop fixe (hidden md:flex, w-60).
+- `components/layout/mobile-nav.tsx` : hamburger md:hidden ouvrant un Sheet.
+- `app/(app)/layout.tsx` refondu : sidebar + topbar avec hamburger mobile, calcule `isAdmin` pour filtrer les items adminOnly.
+
+### Added — pages /artistes (CRUD local Youri)
+
+- `app/(app)/artistes/page.tsx` : liste cards (3 colonnes desktop, 1 mobile) avec puce couleur + badge Inactif + extrait notes. Bouton "Nouvel artiste".
+- `app/(app)/artistes/[slug]/page.tsx` : fiche détail avec 3 cards (Notes / Métadonnées / Deals & tâches placeholder Sprint 3).
+- `components/artists/` : `artist-form-dialog.tsx` (form name/color picker HTML5/notes/active), `new-artist-button.tsx`, `artist-edit-button.tsx`, `artist-delete-button.tsx` (suppression à 2 clics dans 4s, pattern KN).
+- `lib/actions/artists.ts` : `createArtist` (auto-slug + unique suffix), `updateArtist` (recalcule slug si name change), `softDeleteArtist` (TODO Sprint 3 : check DealArtiste avant). Zod + safeAction.
+
+### Added — pages /contacts (wrapper API KN)
+
+- `app/(app)/contacts/page.tsx` : Suspense + appel `listContacts({ q })` côté server. Gère `KnApiUnavailableError` → card rouge "Annuaire indisponible" au lieu de 500.
+- `components/contacts/` : `contacts-search.tsx` (debounce 300ms, `?q=`), `contacts-list.tsx` (cards avec type badge, société, ville, phone/email cliquables, notes), `contact-form-dialog.tsx` (firstName/lastName/company/city/type select/profession/phone/email/notes), `new-contact-button.tsx`.
+- `lib/actions/contacts.ts` : `createContact` + `updateContact` proxy vers `lib/kn-client.ts`. Pas de table Contact locale.
+
+### Added — pages /lieux (wrapper API KN + sous-salles)
+
+- `app/(app)/lieux/page.tsx` : même pattern que /contacts.
+- `components/venues/` : `venues-search.tsx`, `venues-list.tsx`, `new-venue-button.tsx`, `venue-form-dialog.tsx` avec section "Sous-salles" inline (visible en edit only — besoin de venueId).
+- `lib/actions/venues.ts` : `createVenue`, `updateVenue`, `createVenueRoom` proxies vers kn-client.
+
+### Added — tests
+
+- `tests/slug.test.ts` : 10 tests (slugify diacritiques, ponctuation, edge cases / uniqueSlug suffix). **32/32 verts au total** (dates 17 + session 5 + slug 10).
+
+### Fixed — bug détecté pendant le smoke test (côté KN)
+
+- Next 16 levait "You cannot use different slug names for the same dynamic path ('venueId' !== 'id')" car KN avait `venues/[id]/route.ts` et `venues/[venueId]/rooms/route.ts` (slugs incohérents). Fix appliqué dans le commit KN `46d53f3` : renommage `[venueId]` → `[id]` + alias local `venueId` pour clarté dans le handler. Path API inchangé, zéro impact sur le kn-client Youri.
+
+### Validated — smoke test e2e KN ↔ Youri
+
+```
+✅ KN /api/external/contacts (avec token)  → HTTP 200
+✅ Youri /api/health                       → HTTP 200
+✅ Login Stan sur Youri /api/auth/password → HTTP 200 + cookie
+✅ /contacts (Youri → API KN)              → HTTP 200
+✅ /lieux (Youri → API KN)                 → HTTP 200
+✅ /artistes (Youri local)                 → HTTP 200
+✅ KN renvoie bien la liste Contacts       → "total":1
+```
+
+### Connu / TODO
+
+- `softDeleteArtist` : Sprint 3 ajoutera check `prisma.dealArtiste.count` pour bloquer la suppression si DealArtiste actifs référencent l'artiste (décision verrouillée cascade soft-delete).
+- Page `/settings` parent toujours absente — `/settings/users` reste l'unique page settings pour l'instant.
+
+---
+
 ## [Sprint 1 — Auth + 3 users] — 2026-05-24
 
 Auth multi-user complète : 3 comptes seedés (Stan ADMIN, Certe MEMBER, Angath MEMBER), login Google OAuth + mot de passe de secours, middleware cookie, page ADMIN de gestion des users.

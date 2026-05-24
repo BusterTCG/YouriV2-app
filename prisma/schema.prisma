@@ -75,6 +75,42 @@ model User {
   updatedAt     DateTime @updatedAt
 }
 
+// ─────────────────────────── MASTER DATA (Sprint 2) ───────────────────────────
+
+/// Artiste managé / produit par Pangee Prod.
+///
+/// Table dédiée Youri — PAS partagée avec KuroNeko (roster différent).
+/// Soft-deletable (`deletedAt`) avec garde côté server action : on bloque
+/// la suppression si des DealArtiste actifs référencent l'artiste (cf.
+/// docs/architecture-decisions.md § Cascade soft-delete). DealArtiste sera
+/// ajouté Sprint 3.
+model Artist {
+  id        String    @id @default(cuid())
+
+  /// Nom d'affichage de l'artiste. Unique pour éviter doublons accidentels.
+  name      String    @unique
+
+  /// Slug pour les URLs `/artistes/[slug]`. Généré depuis `name` via lib/slug.ts.
+  /// Unique. Si l'user crée 2 fois "Jean Dupont", le slug aura un suffixe -2.
+  slug      String    @unique
+
+  /// Couleur d'identification (badges, chips, agenda futur). Hex.
+  color     String    @default("#6366f1")
+
+  /// Notes libres internes (style musical, préférences, infos contractuelles
+  /// rapides). Pas le profil complet — on n'a pas d'ArtistProfile en V2.
+  notes     String?
+
+  /// Désactiver = masquer dans les listes par défaut. Soft-delete via
+  /// `deletedAt` reste l'opération "définitive" (visible dans /trash Sprint 10).
+  active    Boolean   @default(true)
+
+  deletedAt DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
 // ─────────────────────────── APP RUNTIME ───────────────────────────
 
 /// Key-value store pour les settings runtime (flags features, version

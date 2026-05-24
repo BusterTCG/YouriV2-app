@@ -13,6 +13,7 @@
  */
 import { PrismaClient, UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { slugify } from "../lib/slug";
 
 const prisma = new PrismaClient();
 
@@ -40,16 +41,41 @@ const USERS = [
   },
 ] as const;
 
+/**
+ * 3 artistes d'exemple pour Sprint 2 — Stan pourra les renommer / supprimer
+ * via /artistes. Couleurs pré-choisies pour des badges agréables.
+ */
+const ARTISTS = [
+  { name: "Artiste Test 1", color: "#ec4899" }, // pink
+  { name: "Artiste Test 2", color: "#10b981" }, // emerald
+  { name: "Artiste Test 3", color: "#f97316" }, // orange
+] as const;
+
 async function main() {
   console.log("🌱 Seed Youri V2");
 
   // ─── AppSetting bootstrap ───
   await prisma.appSetting.upsert({
     where: { key: "bootstrap-version" },
-    update: { value: "0.2.0" }, // bump Sprint 1
-    create: { key: "bootstrap-version", value: "0.2.0" },
+    update: { value: "0.3.0" }, // bump Sprint 2
+    create: { key: "bootstrap-version", value: "0.3.0" },
   });
   console.log("  ✓ AppSetting bootstrap-version");
+
+  // ─── 3 artistes d'exemple (idempotent par name unique) ───
+  for (const artist of ARTISTS) {
+    await prisma.artist.upsert({
+      where: { name: artist.name },
+      // En update on ne touche pas à color/notes (l'user a pu les personnaliser)
+      update: {},
+      create: {
+        name: artist.name,
+        slug: slugify(artist.name),
+        color: artist.color,
+      },
+    });
+    console.log(`  ✓ Artist ${artist.name}`);
+  }
 
   // ─── 3 users ───
   const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
