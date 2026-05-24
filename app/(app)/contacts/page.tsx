@@ -1,10 +1,11 @@
 import { Suspense } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertTriangle } from "lucide-react";
-import { listContacts, KnApiUnavailableError } from "@/lib/kn-client";
+import { listContacts, listVenues, KnApiUnavailableError } from "@/lib/kn-client";
 import { ContactsList } from "@/components/contacts/contacts-list";
 import { ContactsSearch } from "@/components/contacts/contacts-search";
 import { NewContactButton } from "@/components/contacts/new-contact-button";
+import type { VenueOption } from "@/lib/contacts-types";
 
 export const dynamic = "force-dynamic";
 
@@ -15,12 +16,19 @@ interface PageProps {
 /**
  * Page /contacts — wrapper UI sur l'API externe KuroNeko (annuaire partagé).
  *
- * Toutes les lectures passent par lib/kn-client → KN /api/external/contacts.
- * Si KN est down, on affiche un message d'erreur explicite ("Annuaire
- * indisponible") au lieu de planter en 500.
+ * Lit DEUX flux KN en parallèle :
+ *   - listContacts() : la liste filtrée + paginée
+ *   - listVenues() : pour le dropdown "Salle rattachée" du form contact
+ *
+ * Si KN est down → message "Annuaire indisponible" au lieu de 500.
  */
 export default async function ContactsPage({ searchParams }: PageProps) {
   const { q } = await searchParams;
+
+  // Fetch venues (pour le dropdown form) en parallèle de la liste contacts.
+  // Si KN est down, on garde quand même la page → l'erreur sera affichée
+  // dans le Suspense child.
+  const venues = await listVenuesSafe();
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -31,19 +39,30 @@ export default async function ContactsPage({ searchParams }: PageProps) {
             Annuaire partagé avec KuroNeko (single writer authoritatif).
           </p>
         </div>
-        <NewContactButton />
+        <NewContactButton venues={venues} />
       </div>
 
       <ContactsSearch />
 
       <Suspense fallback={<ContactsLoading />}>
-        <ContactsFetcher q={q ?? ""} />
+        <ContactsFetcher q={q ?? ""} venues={venues} />
       </Suspense>
     </div>
   );
 }
 
-async function ContactsFetcher({ q }: { q: string }) {
+async function listVenuesSafe(): Promise<VenueOption[]> {
+  try {
+    const result = await listVenues({ limit: 200 });
+    return result.items.map((v) => ({ id: v.id, name: v.name, city: v.city }));
+  } catch {
+    // KN down : on retourne une liste vide → le dropdown "Salle rattachée"
+    // sera caché (cf. ContactFormDialog `{venues.length > 0 && ...}`).
+    return [];
+  }
+}
+
+async function ContactsFetcher({ q, venues }: { q: string; venues: VenueOption[] }) {
   try {
     const result = await listContacts({ q: q || undefined, limit: 100 });
     return (
@@ -52,7 +71,7 @@ async function ContactsFetcher({ q }: { q: string }) {
           {result.total} contact{result.total > 1 ? "s" : ""}
           {q && ` pour "${q}"`}
         </p>
-        <ContactsList contacts={result.items} />
+        <ContactsList contacts={result.items} venues={venues} />
       </>
     );
   } catch (e) {
@@ -73,7 +92,7 @@ async function ContactsFetcher({ q }: { q: string }) {
         </Card>
       );
     }
-    throw e; // laisse l'error boundary segment gérer
+    throw e;
   }
 }
 

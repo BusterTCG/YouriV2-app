@@ -280,6 +280,16 @@ export function updateContact(id: string, input: UpdateContactInput): Promise<Kn
   });
 }
 
+/**
+ * Soft-delete d'un contact (côté KN). Le contact reste en BDD KN avec
+ * `deletedAt` set, visible dans /trash KN où Stan peut restaurer/purger.
+ */
+export function deleteContact(id: string): Promise<void> {
+  return knFetch<void>(`/api/external/contacts/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
 // ─────────── Venues ───────────
 
 export interface ListVenuesParams {

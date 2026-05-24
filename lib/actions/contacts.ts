@@ -7,10 +7,9 @@ import { safeAction, type ActionResult } from "@/lib/errors";
 import {
   createContact as knCreateContact,
   updateContact as knUpdateContact,
+  deleteContact as knDeleteContact,
   type CreateContactInput,
   type KnContact,
-  KnApiUnavailableError,
-  KnValidationError,
 } from "@/lib/kn-client";
 
 /**
@@ -20,9 +19,29 @@ import {
  * Toutes les opérations passent par lib/kn-client.ts qui call KN
  * (single writer authoritatif).
  *
- * Si KN est down → ActionResult { ok: false, error: "Annuaire indisponible…" }
- * pour que l'UI puisse afficher un message clair.
+ * Signature compatible KuroNeko-App ContactFormDialog (copie fidèle) :
+ *   - `createContact(payload)` → ActionResult<{ id }>
+ *   - `updateContact(id, payload)` → ActionResult<{ id }>
+ *   - `deleteContact(id)` → ActionResult
+ *
+ * Re-export du type ActionResult pour faciliter l'import depuis les composants
+ * client (le form KN importe `ActionResult` depuis `lib/actions/contacts`).
  */
+
+export type { ActionResult } from "@/lib/errors";
+
+// ─────────── Schema ───────────
+
+const CONTACT_TYPES = [
+  "ORGANIZER",
+  "AGENCY",
+  "ARTIST",
+  "PRODUCTION",
+  "TECHNICAL",
+  "PRESS",
+  "BRAND",
+  "OTHER",
+] as const;
 
 const ContactInputSchema = z.object({
   firstName: z.string().trim().min(1, "Prénom requis").max(80),
@@ -42,43 +61,45 @@ const ContactInputSchema = z.object({
       "Email invalide",
     ),
   notes: z.string().max(2000).optional().nullable(),
-  type: z
-    .enum(["ORGANIZER", "AGENCY", "ARTIST", "PRODUCTION", "TECHNICAL", "PRESS", "BRAND", "OTHER"])
-    .default("OTHER"),
+  type: z.enum(CONTACT_TYPES).default("OTHER"),
+  venueId: z.string().optional().nullable(),
 });
 
 // ─────────── Create ───────────
 
-export async function createContact(input: unknown): Promise<ActionResult<KnContact>> {
+export async function createContact(
+  input: unknown,
+): Promise<ActionResult<{ id: string }>> {
   return safeAction("createContact", async () => {
     await requireUser();
     const data = ContactInputSchema.parse(input) as CreateContactInput;
-    try {
-      const contact = await knCreateContact(data);
-      revalidatePath("/contacts");
-      return contact;
-    } catch (e) {
-      if (e instanceof KnApiUnavailableError || e instanceof KnValidationError) throw e;
-      throw e;
-    }
+    const contact = await knCreateContact(data);
+    revalidatePath("/contacts");
+    return { id: contact.id };
   });
 }
 
 // ─────────── Update ───────────
 
-const UpdateContactSchema = z.object({
-  id: z.string().min(1),
-  patch: ContactInputSchema.partial(),
-});
-
 export async function updateContact(
-  input: z.infer<typeof UpdateContactSchema>,
-): Promise<ActionResult<KnContact>> {
+  id: string,
+  input: unknown,
+): Promise<ActionResult<{ id: string }>> {
   return safeAction("updateContact", async () => {
     await requireUser();
-    const { id, patch } = UpdateContactSchema.parse(input);
-    const contact = await knUpdateContact(id, patch);
+    const data = ContactInputSchema.partial().parse(input);
+    const contact = await knUpdateContact(id, data);
     revalidatePath("/contacts");
-    return contact;
+    return { id: contact.id };
+  });
+}
+
+// ─────────── Delete (soft-delete côté KN) ───────────
+
+export async function deleteContact(id: string): Promise<ActionResult> {
+  return safeAction("deleteContact", async () => {
+    await requireUser();
+    await knDeleteContact(id);
+    revalidatePath("/contacts");
   });
 }

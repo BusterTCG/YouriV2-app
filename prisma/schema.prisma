@@ -84,6 +84,11 @@ model User {
 /// la suppression si des DealArtiste actifs référencent l'artiste (cf.
 /// docs/architecture-decisions.md § Cascade soft-delete). DealArtiste sera
 /// ajouté Sprint 3.
+///
+/// Structure repompée à l'identique de KuroNeko-App (cf. AGENTS.md règle
+/// "copie fidèle de KN") : avatar avec position de recadrage + fiche
+/// ArtistProfile complète en relation 1-1 (identité civile, SACD,
+/// intermittence, structure, RIB, bio, social).
 model Artist {
   id        String    @id @default(cuid())
 
@@ -97,8 +102,21 @@ model Artist {
   /// Couleur d'identification (badges, chips, agenda futur). Hex.
   color     String    @default("#6366f1")
 
+  /// URL relative vers la photo d'avatar uploadée (ex. "/uploads/avatars/<id>-<ts>.jpg").
+  /// Null = pas de photo, on affiche le fallback initiales+couleur. Fichier stocké
+  /// dans `public/uploads/avatars/` côté serveur.
+  avatarUrl String?
+
+  /// Position horizontale du recadrage avatar dans le rond (0-100 %, défaut 50 = centré).
+  /// Appliqué via CSS `object-position`. Permet de re-centrer la photo si le sujet
+  /// n'est pas au milieu du fichier source (typique iPhone portrait).
+  avatarPositionX Float @default(50)
+
+  /// Position verticale du recadrage avatar (0-100 %, défaut 50 = centré).
+  avatarPositionY Float @default(50)
+
   /// Notes libres internes (style musical, préférences, infos contractuelles
-  /// rapides). Pas le profil complet — on n'a pas d'ArtistProfile en V2.
+  /// rapides). La fiche complète vit dans ArtistProfile relation 1-1.
   notes     String?
 
   /// Désactiver = masquer dans les listes par défaut. Soft-delete via
@@ -109,6 +127,68 @@ model Artist {
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  profile   ArtistProfile?
+}
+
+// ─────────────────────────── ARTIST PROFILE (Sprint 2-bis) ───────────────────────────
+// Fiche complète d'identité, structure, RIB et communication d'un artiste.
+// Relation 1-1 avec Artist (optionnelle — créée à la demande via upsert).
+// Champs sensibles (Sécu, IBAN) gérés en masquage à l'affichage (composant InfoField).
+//
+// Schéma repris à l'identique de KuroNeko-App ArtistProfile (cf. AGENTS.md
+// règle "copie fidèle de KN" — Pangee a le même besoin métier pour la
+// gestion paie intermittents + facturation cachets).
+
+model ArtistProfile {
+  id       String @id @default(cuid())
+  artistId String @unique
+  artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  // 1 — Identité civile
+  firstName              String?
+  lastName               String?
+  stageName              String?
+  birthDate              DateTime?
+  birthPlace             String?
+  nationality            String?
+  socialSecurityNumber   String?
+  intermittentNumber     String?
+  sacdNumber             String?
+
+  // 2 — Coordonnées personnelles
+  personalEmail   String?
+  personalPhone   String?
+  homeAddress     String?
+
+  // 3 — Structure de facturation
+  companyName       String?
+  companyLegalForm  String?
+  companySiret      String?
+  companySiren      String?
+  companyVatNumber  String?
+  companyApeCode    String?
+  companyAddress    String?
+  spectacleLicense  String?
+  vatRegime         String?
+
+  // 4 — Coordonnées bancaires
+  bankIban    String?
+  bankBic     String?
+  bankName    String?
+  bankHolder  String?
+
+  // 5 — Communication / Press kit
+  bioShort         String?
+  bioLong          String?
+  pressPhotoUrl    String?
+  websiteUrl       String?
+  instagramHandle  String?
+  youtubeHandle    String?
+  tiktokHandle     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ─────────────────────────── APP RUNTIME ───────────────────────────

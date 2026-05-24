@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ContactFormDialog } from "@/components/contacts/contact-form-dialog";
 import type { KnContact, ContactType } from "@/lib/kn-client";
+import type { VenueOption } from "@/lib/contacts-types";
 
 const TYPE_LABELS: Record<ContactType, string> = {
   ORGANIZER: "Organisateur",
@@ -19,7 +20,13 @@ const TYPE_LABELS: Record<ContactType, string> = {
   OTHER: "Autre",
 };
 
-export function ContactsList({ contacts }: { contacts: KnContact[] }) {
+export function ContactsList({
+  contacts,
+  venues = [],
+}: {
+  contacts: KnContact[];
+  venues?: VenueOption[];
+}) {
   const [editing, setEditing] = useState<KnContact | null>(null);
 
   if (contacts.length === 0) {
@@ -92,7 +99,20 @@ export function ContactsList({ contacts }: { contacts: KnContact[] }) {
         <ContactFormDialog
           open={true}
           onOpenChange={(o) => !o && setEditing(null)}
-          contact={editing}
+          defaults={{
+            id: editing.id,
+            firstName: editing.firstName,
+            lastName: editing.lastName,
+            company: editing.company,
+            city: editing.city,
+            profession: editing.profession,
+            phone: editing.phone,
+            email: editing.email,
+            notes: editing.notes,
+            type: editing.type,
+            venueId: editing.venueId,
+          }}
+          venues={venues}
         />
       )}
     </>
