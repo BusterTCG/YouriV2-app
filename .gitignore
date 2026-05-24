@@ -1,0 +1,64 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+# Exception : on commit .env.example (template documenté, sans secrets).
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# Youri V2
+/prisma/dev.db
+/prisma/dev.db-journal
+/prisma/migrations/dev/
+/backups/*.db
+/backups/*.sqlite
+/backups/*.dump
+!/backups/.gitkeep
+
+# Secrets OAuth Google (ne JAMAIS commit — contiennent client_secret en clair)
+client_secret_*.json
+
+# Uploads utilisateurs (avatars, contrats, etc.) — gérés par backup VPS, pas par git
+/public/uploads/*
+!/public/uploads/.gitkeep
+
+# Cache de Claude Code (état interne, pas du code)
+.claude/scheduled_tasks.lock
+# Préférences locales user (Claude Code) — par convention non versionné
+.claude/settings.local.json
