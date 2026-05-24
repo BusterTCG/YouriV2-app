@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl *)",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(npx prisma *)",
+      "Bash(npx vitest *)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(tasklist *)",
+      "Bash(netstat *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git branch *)",
+      "Bash(git remote *)",
+      "PowerShell(Get-WmiObject *)"
+    ]
+  }
+}

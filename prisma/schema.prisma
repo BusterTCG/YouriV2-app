@@ -1,0 +1,26 @@
+// Youri V2 — Prisma schema
+// Source : docs/architecture-decisions.md § Modèle de données
+// Local : SQLite. Production (VPS) : switch to postgresql via DATABASE_URL.
+//
+// Sprint 0 : datasource + generator + AppSetting (key/value store, sert de
+// smoke test pour la 1re migration et de base future pour les settings runtime).
+// Les modèles métier (User, Artist, Deal, Task, etc.) viennent au Sprint 1+.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── APP RUNTIME ───────────────────────────
+
+/// Key-value store pour les settings runtime (flags features, version
+/// migration, etc.). Sera enrichi au fil des sprints.
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
