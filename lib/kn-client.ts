@@ -42,9 +42,32 @@ export interface KnContact {
   email: string | null;
   type: ContactType;
   venueId: string | null;
+  /** Venue rattachée (nom + ville pour affichage). Null si pas de venue. */
+  venue: { name: string; city: string } | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Compteurs par type, retournés par listContacts pour les badges filtre. */
+export interface KnContactsCounts {
+  all: number;
+  ORGANIZER: number;
+  AGENCY: number;
+  ARTIST: number;
+  PRODUCTION: number;
+  TECHNICAL: number;
+  PRESS: number;
+  BRAND: number;
+  OTHER: number;
+}
+
+export interface KnContactsListResponse {
+  items: KnContact[];
+  total: number;
+  limit: number;
+  offset: number;
+  countsByType: KnContactsCounts;
 }
 
 export interface KnVenueRoom {
@@ -240,12 +263,16 @@ async function knFetch<T>(
 
 export interface ListContactsParams {
   q?: string;
+  /** Filtre par type (ORGANIZER, AGENCY, ARTIST, etc.) — omit pour "all". */
+  type?: ContactType;
   limit?: number;
   offset?: number;
 }
 
-export function listContacts(params: ListContactsParams = {}): Promise<KnList<KnContact>> {
-  return knFetch<KnList<KnContact>>("/api/external/contacts", {
+export function listContacts(
+  params: ListContactsParams = {},
+): Promise<KnContactsListResponse> {
+  return knFetch<KnContactsListResponse>("/api/external/contacts", {
     query: { ...params },
   });
 }
@@ -294,6 +321,10 @@ export function deleteContact(id: string): Promise<void> {
 
 export interface ListVenuesParams {
   q?: string;
+  /** Capacité minimale (inclus). Match Venue.capacity OU VenueRoom.capacity. */
+  capacityMin?: number;
+  /** Capacité maximale (inclus). Match Venue.capacity OU VenueRoom.capacity. */
+  capacityMax?: number;
   limit?: number;
   offset?: number;
 }

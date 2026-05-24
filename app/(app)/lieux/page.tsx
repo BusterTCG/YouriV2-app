@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertTriangle } from "lucide-react";
 import { listVenues, KnApiUnavailableError } from "@/lib/kn-client";
+import { parseVenueQuery } from "@/lib/venue-search";
 import { VenuesList } from "@/components/venues/venues-list";
 import { VenuesSearch } from "@/components/venues/venues-search";
 import { NewVenueButton } from "@/components/venues/new-venue-button";
@@ -37,13 +38,34 @@ export default async function VenuesPage({ searchParams }: PageProps) {
 }
 
 async function VenuesFetcher({ q }: { q: string }) {
+  // Parse multi-token query : "paris +250" → { freeText: "paris", capacityMin: 250 }
+  // Le parseur est COPIE FIDÈLE de KN (cf. lib/venue-search.ts).
+  const parsed = parseVenueQuery(q);
+  const params = {
+    q: parsed.freeText || undefined,
+    capacityMin: parsed.capacityMin,
+    capacityMax: parsed.capacityMax,
+    limit: 100,
+  };
+
   try {
-    const result = await listVenues({ q: q || undefined, limit: 100 });
+    const result = await listVenues(params);
+    const capacityHint =
+      parsed.capacityMin != null && parsed.capacityMax != null
+        ? ` jauge ${parsed.capacityMin}-${parsed.capacityMax}`
+        : parsed.capacityMin != null
+          ? ` jauge ≥ ${parsed.capacityMin}`
+          : parsed.capacityMax != null
+            ? ` jauge ≤ ${parsed.capacityMax}`
+            : "";
     return (
       <>
         <p className="text-xs text-muted-foreground">
           {result.total} lieu{result.total > 1 ? "x" : ""}
           {q && ` pour "${q}"`}
+          {capacityHint && (
+            <span className="text-[--yr-gold]"> · filtre{capacityHint}</span>
+          )}
         </p>
         <VenuesList venues={result.items} />
       </>
