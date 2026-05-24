@@ -1,7 +1,22 @@
 # Architecture Decisions — Youri V2
 
-**Verrouillées le** : 2026-05-24
+**Verrouillées le** : 2026-05-24 (mise à jour 2026-05-25 — règle de duplication KN ajoutée)
 **Source** : décisions tranchées avec Stan en session d'alignement avant Sprint 0
+
+---
+
+## ⚠️ RÈGLE STRUCTURANTE — Youri V2 = copie fidèle de KuroNeko-App
+
+Avant toute feature, **lire la version équivalente côté KN** et la **reproduire à l'identique** (forms, dialogs, recherches multi-token, fiches artistes riches, KPIs, layout, behaviors). KN est la baseline éprouvée et validée — toute simplification = régression UX à retravailler ensuite.
+
+Les seuls écarts autorisés sont ceux explicitement listés dans ce document :
+- Multi-user (User table, sessions, permissions, audit)
+- Multi-artiste sur les deals (DealArtiste)
+- 3 catégories spécifiques (Booking / Prod Exé 15% / Cachets)
+- API HTTP vers KN pour Contact/Venue/VenueRoom
+- Pas de Google Calendar / ICS / FDR / Claude AI / Quick-add (hors scope)
+
+Tout le reste = **COPIE FIDÈLE**. Workflow détaillé dans [`AGENTS.md`](../AGENTS.md).
 
 ---
 
