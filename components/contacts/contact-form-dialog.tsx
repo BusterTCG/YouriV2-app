@@ -49,7 +49,7 @@ import type { ContactType } from "@/lib/kn-client";
  *     → on importe le type depuis @/lib/kn-client
  *   - Les actions wrap l'API KN (lib/actions/contacts.ts) — signature
  *     identique à celle de KN pour rester compatible
- *   - Couleur accent : var(--yr-gold) au lieu de --kn-gold
+ *   - Couleur accent : var(--yr-gold) au lieu de --yr-gold
  */
 
 // ── Form schema (côté client — mêmes règles que le serveur) ──

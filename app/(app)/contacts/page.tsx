@@ -70,7 +70,9 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
 
   return (
     <div className="max-w-5xl space-y-5">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      {/* Header : titre/desc en haut, boutons d'action en dessous. Layout
+          uniforme entre toutes les pages liste (copie fidèle KN). */}
+      <div className="space-y-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wider">
             <Users className="h-3.5 w-3.5" />
@@ -79,11 +81,10 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
           <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
           <p className="text-muted-foreground text-sm">
             Annuaire centralisé : organisateurs, équipe production, presse,
-            marques. Recherche full-text et filtre par type. Partagé avec
-            KuroNeko (single writer authoritatif).
+            marques. Recherche full-text et filtre par type.
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end sm:shrink-0">
+        <div className="flex items-center gap-2 flex-wrap">
           {data && (
             <ContactsExportButton
               contacts={data.items}
