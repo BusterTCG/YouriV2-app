@@ -5,14 +5,28 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import type { BookingDealRow, BookingDealsListData } from "@/lib/deals-list-types";
-import {
-  formatEur,
-  formatPct,
-  dealStatusLabel,
-} from "./deal-helpers";
-import { PaymentStatusPill } from "./payment-status-pill";
-import { consolidateStatus } from "@/lib/consolidate-status";
-import type { PaymentStatus } from "@prisma/client";
+import { formatEur, formatPct, dealStatusLabel } from "./deal-helpers";
+
+/**
+ * Pill statut recap booking (Stan 2026-05-26) : seulement 2 états affichés —
+ * "Encaissé" (vert) si PAID, "En cours" (gris) sinon. Quels que soient les
+ * statuts intermédiaires sous-jacents (TO_INVOICE/VALIDATED/INVOICED/DISPUTE).
+ */
+function RecapStatusPill({ isPaid }: { isPaid: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs whitespace-nowrap",
+        isPaid
+          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+          : "bg-muted/40 text-muted-foreground border-border",
+      )}
+    >
+      <span>{isPaid ? "✅" : "⏳"}</span>
+      <span>{isPaid ? "Encaissé" : "En cours"}</span>
+    </span>
+  );
+}
 
 interface Props {
   deals: BookingDealRow[];
@@ -20,34 +34,31 @@ interface Props {
 }
 
 /**
- * Tableau plat /deals/booking — copie fidèle KuroNeko-App `components/deals/
- * deals-table.tsx`, adapté multi-artiste Youri V2 :
- *   - PAS de colonne Artiste (Stan : "indés que je gère pas").
- *   - 1 ligne = 1 deal consolidé. Statuts St. Artiste / St. Com :
- *     si tous DealArtiste ont le même → ce statut ; sinon → N_A (pill grise
- *     "—"), faut ouvrir la fiche pour éditer par artiste.
- *   - % Com : si tous DealArtiste ont le même % → affiché ; sinon "—".
- *   - Encaiss. : mois consolidé idem.
+ * Tableau récap /deals/booking — modèle Budget/Marge (Stan 2026-05-26).
  *
- * Layout responsive (pattern KN) :
- *   - <xl : table-fixed min-w-[1240px] → scroll horizontal léger
- *   - ≥xl : xl:min-w-0 xl:w-full → compression proportionnelle, pas de scroll
+ * Colonnes : Date / Projet / Statut / Montant (budget) / Artiste (Σ rémus) /
+ * St. Artiste (consolidé) / Divers (Σ charges) / Marge Youri / St. Marge
+ * (= budgetPaymentStatus) / % Marge / Encaiss. (budgetPaidAt) / Notes.
  *
- * Click ligne → fiche détail `/deals/booking/[id]`. Édition inline (Lot suivant).
+ * - PAS de colonne Artiste (Stan : indés que je gère pas).
+ * - PAS de colonne % Com (modèle marge auto, pas de % par artiste).
+ * - 1 ligne = 1 deal. Édition inline desktop (Selects + MonthPicker).
+ * - Cliquer sur la ligne → fiche détail `/deals/booking/[id]`.
  */
 
 const DEAL_COL_WIDTHS = [
-  "w-[68px]", // Date
-  "w-[260px]", // Projet
-  "w-[110px]", // Statut
-  "w-[96px]", // Montant
-  "w-[96px]", // Artiste €
-  "w-[120px]", // St. Artiste
-  "w-[56px]", // % Com
-  "w-[96px]", // Com €
-  "w-[120px]", // St. Com
+  "w-[68px]",  // Date
+  "w-[220px]", // Projet
+  "w-[110px]", // Statut deal
+  "w-[90px]",  // Montant (budget)
+  "w-[90px]",  // Artiste (Σ)
+  "w-[110px]", // St. Artiste
+  "w-[90px]",  // Divers (Σ charges)
+  "w-[90px]",  // Marge Youri
+  "w-[50px]",  // % (entre Marge Youri et St. Marge — Stan 2026-05-26 v2)
+  "w-[110px]", // St. Marge
   "w-[100px]", // Encaiss.
-  "w-[140px]", // Notes
+  "w-[120px]", // Notes
 ];
 
 function DealsListColGroup() {
@@ -74,7 +85,7 @@ export function BookingDealsList({ deals, totals }: Props) {
   return (
     <div className="rounded-md border overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="min-w-[1240px] text-sm table-fixed xl:min-w-0 xl:w-full">
+        <table className="min-w-[1258px] text-sm table-fixed xl:min-w-0 xl:w-full">
           <DealsListColGroup />
           <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground sticky top-0 z-10">
             <tr>
@@ -84,48 +95,23 @@ export function BookingDealsList({ deals, totals }: Props) {
               <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Montant</th>
               <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Artiste</th>
               <th className="text-left px-2 py-2 font-medium whitespace-nowrap">St. Artiste</th>
-              <th className="text-right px-2 py-2 font-medium whitespace-nowrap">% Com</th>
-              <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Com €</th>
-              <th className="text-left px-2 py-2 font-medium whitespace-nowrap">St. Com</th>
+              <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Divers</th>
+              <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Marge Youri</th>
+              <th className="text-center px-2 py-2 font-medium whitespace-nowrap">%</th>
+              <th className="text-left px-2 py-2 font-medium whitespace-nowrap">St. Marge</th>
               <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Encaiss.</th>
               <th className="text-left px-2 py-2 font-medium">Notes</th>
             </tr>
           </thead>
           <tbody>
             {deals.map((deal) => {
-              const cachetCons = consolidateStatus(
-                deal.dealArtistes.map((da) => da.paymentStatus),
-              );
-              const comCons = consolidateStatus(
-                deal.dealArtistes.map((da) => da.commissionStatus),
-              );
-              // Pour la pill, on retombe sur N_A si MIXED (pill grise + "—") +
-              // hint title sur survol. Phase édition affichera "Mixte" non éditable.
-              const cachetForPill: PaymentStatus =
-                cachetCons === "MIXED" ? "N_A" : cachetCons;
-              const comForPill: PaymentStatus =
-                comCons === "MIXED" ? "N_A" : comCons;
+              // Règle Stan 2026-05-26 : St. Artiste consolidé recap = "Payé"
+              // si TOUS les artistes sont PAID, sinon "En cours".
+              const allArtistesPaid =
+                deal.dealArtistes.length > 0 &&
+                deal.dealArtistes.every((da) => da.paymentStatus === "PAID");
+              const artisteRecapStatus = allArtistesPaid ? "PAID" : "TO_INVOICE";
 
-              // % Com consolidé
-              const pctValues = deal.dealArtistes
-                .map((da) => da.commissionPct)
-                .filter((p): p is number => p != null);
-              const uniquePcts = [...new Set(pctValues)];
-              const consolidatedPct = uniquePcts.length === 1 ? uniquePcts[0] : null;
-
-              // Mois encaiss. consolidé
-              const paidDates = deal.dealArtistes
-                .map((da) => (da.commissionPaidAt ? da.commissionPaidAt.getTime() : null))
-                .filter((t): t is number => t !== null);
-              const uniqueDates = [...new Set(paidDates)];
-              const paidLabel =
-                uniqueDates.length === 0
-                  ? "—"
-                  : uniqueDates.length === 1
-                    ? format(new Date(uniqueDates[0]), "MMM", { locale: fr })
-                    : "Multi";
-
-              const grossAmount = deal.totalCachet + deal.totalCommission;
               const dStatus = dealStatusLabel(deal.status);
 
               return (
@@ -143,7 +129,7 @@ export function BookingDealsList({ deals, totals }: Props) {
                     {format(deal.date, "dd/MM/yy", { locale: fr })}
                   </td>
 
-                  {/* Projet (titre + ville/lieu) */}
+                  {/* Projet (titre + ville) */}
                   <td className="px-2 py-2 min-w-0">
                     <div className="font-medium leading-tight truncate">{deal.title}</div>
                     {(deal.venueCity || deal.venueName) && (
@@ -153,67 +139,51 @@ export function BookingDealsList({ deals, totals }: Props) {
                     )}
                   </td>
 
-                  {/* Statut deal — pattern KN brut (emoji + label, pas Badge) */}
-                  <td
-                    className="px-2 py-2 whitespace-nowrap text-xs"
-                    title={dStatus.label}
-                  >
+                  {/* Statut deal — LECTURE SEULE (Stan : édition seulement dans la fiche) */}
+                  <td className="px-2 py-2 whitespace-nowrap text-xs">
                     {dStatus.emoji} {dStatus.label}
                   </td>
 
-                  {/* Montant (= cachet + com) */}
+                  {/* Montant = budget */}
                   <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">
-                    {formatEur(grossAmount)}
+                    {formatEur(deal.budgetAmount)}
                   </td>
 
-                  {/* Artiste (= cachet total) */}
+                  {/* Artiste = Σ artistes */}
                   <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">
-                    {formatEur(deal.totalCachet)}
+                    {formatEur(deal.totalArtistes)}
                   </td>
 
-                  {/* St. Artiste (consolidé) */}
+                  {/* St. Artiste — recap binaire Stan : Encaissé si tous PAID, sinon En cours. */}
                   <td className="px-2 py-2 whitespace-nowrap">
-                    <span
-                      title={
-                        cachetCons === "MIXED"
-                          ? "Statuts mixtes par artiste — ouvrir la fiche pour détail"
-                          : undefined
-                      }
-                    >
-                      <PaymentStatusPill value={cachetForPill} />
-                    </span>
+                    <RecapStatusPill isPaid={allArtistesPaid} />
                   </td>
 
-                  {/* % Com */}
-                  <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums text-xs text-muted-foreground">
-                    {consolidatedPct != null ? formatPct(consolidatedPct) : "—"}
-                  </td>
-
-                  {/* Com € */}
+                  {/* Divers = Σ charges */}
                   <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">
-                    {formatEur(deal.totalCommission)}
+                    {deal.totalCharges > 0 ? formatEur(deal.totalCharges) : "—"}
                   </td>
 
-                  {/* St. Com (consolidé) */}
+                  {/* Marge Youri — en noir (couleur normale, pas accent) */}
+                  <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums font-medium">
+                    {formatEur(deal.margePangee)}
+                  </td>
+
+                  {/* % — entre Marge Youri et St. Marge (Stan 2026-05-26 v2) */}
+                  <td className="px-2 py-2 text-center whitespace-nowrap tabular-nums text-xs text-muted-foreground">
+                    {deal.margePct != null ? formatPct(deal.margePct) : "—"}
+                  </td>
+
+                  {/* St. Marge — recap binaire Stan : Encaissé si budget PAID, sinon En cours. */}
                   <td className="px-2 py-2 whitespace-nowrap">
-                    <span
-                      title={
-                        comCons === "MIXED"
-                          ? "Statuts mixtes par artiste — ouvrir la fiche pour détail"
-                          : undefined
-                      }
-                    >
-                      <PaymentStatusPill value={comForPill} />
-                    </span>
+                    <RecapStatusPill isPaid={deal.budgetPaymentStatus === "PAID"} />
                   </td>
 
-                  {/* Encaiss. (mois) */}
+                  {/* Encaissement = mois budget Youri — LECTURE SEULE */}
                   <td className="px-2 py-2 whitespace-nowrap text-xs tabular-nums">
-                    {uniqueDates.length === 0 ? (
-                      <span className="text-muted-foreground/40">—</span>
-                    ) : (
-                      <span>{paidLabel}</span>
-                    )}
+                    {deal.budgetPaidAt
+                      ? format(deal.budgetPaidAt, "MMM yyyy", { locale: fr })
+                      : <span className="text-muted-foreground/40">—</span>}
                   </td>
 
                   {/* Notes */}
@@ -233,7 +203,6 @@ export function BookingDealsList({ deals, totals }: Props) {
               );
             })}
           </tbody>
-          {/* Pied : totaux (pattern KN) */}
           <tfoot className="bg-muted/60 border-t-2 font-semibold sticky bottom-0">
             <tr>
               <td
@@ -243,31 +212,35 @@ export function BookingDealsList({ deals, totals }: Props) {
                 Total · {totals.count} deal{totals.count > 1 ? "s" : ""}
               </td>
               <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
-                {formatEur(totals.gross)}
+                {formatEur(totals.totalBudget)}
               </td>
               <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
-                {formatEur(totals.totalCachet)}
+                {formatEur(totals.totalArtistes)}
               </td>
               <td />
-              <td />
-              <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap text-[--yr-gold]">
-                {formatEur(totals.totalCommission)}
+              <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
+                {totals.totalCharges > 0 ? formatEur(totals.totalCharges) : "—"}
               </td>
-              <td colSpan={2} className="px-2 py-2.5 text-[11px] text-muted-foreground">
-                {totals.commissionPaid > 0 && (
+              <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
+                {formatEur(totals.totalMarge)}
+              </td>
+              <td />
+              <td className="px-2 py-2.5 text-[11px] text-muted-foreground">
+                {totals.margeRealisee !== 0 && (
                   <span className="text-emerald-600 dark:text-emerald-400">
-                    {formatEur(totals.commissionPaid)} encaissée
+                    {formatEur(totals.margeRealisee)} réalisée
                   </span>
                 )}
-                {totals.commissionPaid > 0 && totals.commissionTodo > 0 && (
+                {totals.margeRealisee !== 0 && totals.margeAttente !== 0 && (
                   <span className="mx-1 text-muted-foreground/50">·</span>
                 )}
-                {totals.commissionTodo > 0 && (
+                {totals.margeAttente !== 0 && (
                   <span className="text-amber-600 dark:text-amber-400">
-                    {formatEur(totals.commissionTodo)} à venir
+                    {formatEur(totals.margeAttente)} en attente
                   </span>
                 )}
               </td>
+              <td />
               <td />
             </tr>
           </tfoot>

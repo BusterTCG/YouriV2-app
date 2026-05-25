@@ -22,11 +22,13 @@ export function consolidateStatus(statuses: PaymentStatus[]): ConsolidatedStatus
   return "MIXED";
 }
 
-/** Label FR pour l'affichage badge. */
+/** Label FR pour l'affichage badge — wording Stan 2026-05-26 (statuts artiste). */
 export const CONSOLIDATED_STATUS_LABELS: Record<ConsolidatedStatus, string> = {
-  TO_INVOICE: "À facturer",
-  INVOICED: "Facturé",
+  TO_INVOICE: "En cours",
+  VALIDATED: "Validé",
+  INVOICED: "Attente Facture",
   PAID: "Payé",
+  DISPUTE: "Litige",
   N_A: "—",
   MIXED: "En cours",
 };
@@ -37,8 +39,10 @@ export const CONSOLIDATED_STATUS_VARIANT: Record<
   "default" | "secondary" | "outline" | "destructive"
 > = {
   TO_INVOICE: "outline",
+  VALIDATED: "secondary",
   INVOICED: "secondary",
   PAID: "default",
+  DISPUTE: "destructive",
   N_A: "outline",
   MIXED: "secondary",
 };

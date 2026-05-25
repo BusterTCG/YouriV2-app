@@ -142,6 +142,7 @@ async function main() {
 
     if (a1 && a2 && stan) {
       // Deal 1 — Booking simple, 1 artiste, LEAD
+      // Budget 2000 € → Artiste 1500 € (75 %) + Charges 100 € = Marge 400 €
       await prisma.deal.create({
         data: {
           category: DealCategory.BOOKING,
@@ -156,22 +157,28 @@ async function main() {
           venueCity: "Paris",
           createdById: stan.id,
           notes: "Date à confirmer après accord cachet.",
+          budgetAmount: 2000,
+          budgetPaymentStatus: PaymentStatus.N_A,
           dealArtistes: {
             create: [
               {
                 artistId: a1.id,
                 cachetAmount: 1500,
+                sharePct: 75,
                 paymentStatus: PaymentStatus.N_A,
-                commissionPct: 10,
-                commissionAmount: 150,
-                commissionStatus: PaymentStatus.N_A,
               },
+            ],
+          },
+          dealCharges: {
+            create: [
+              { label: "Frais déplacement", amount: 100, paymentStatus: PaymentStatus.N_A },
             ],
           },
         },
       });
 
-      // Deal 2 — Plateau multi-artiste, CONFIRME, paiements mixtes
+      // Deal 2 — Plateau multi-artiste, CONFIRME, budget encaissé, paiements mixtes
+      // Budget 3000 € → A1 1200 € (40 %) + A2 800 € (27 %) + Charges 250 € = Marge 750 €
       await prisma.deal.create({
         data: {
           category: DealCategory.BOOKING,
@@ -185,24 +192,30 @@ async function main() {
           venueName: "Estrade",
           venueCity: "Bordeaux",
           createdById: stan.id,
+          budgetAmount: 3000,
+          budgetPaymentStatus: PaymentStatus.PAID,
+          budgetPaidAt: new Date("2026-12-01T12:00:00Z"),
           dealArtistes: {
             create: [
               {
                 artistId: a1.id,
                 cachetAmount: 1200,
+                sharePct: 40,
                 paymentStatus: PaymentStatus.PAID,
-                commissionPct: 10,
-                commissionAmount: 120,
-                commissionStatus: PaymentStatus.INVOICED,
+                paidAt: new Date("2026-12-01T12:00:00Z"),
               },
               {
                 artistId: a2.id,
                 cachetAmount: 800,
+                sharePct: 27,
                 paymentStatus: PaymentStatus.INVOICED,
-                commissionPct: 10,
-                commissionAmount: 80,
-                commissionStatus: PaymentStatus.TO_INVOICE,
               },
+            ],
+          },
+          dealCharges: {
+            create: [
+              { label: "Train Paris-Bordeaux", amount: 180, paymentStatus: PaymentStatus.PAID, paidAt: new Date("2026-11-15T12:00:00Z") },
+              { label: "Repas équipe", amount: 70, paymentStatus: PaymentStatus.TO_INVOICE },
             ],
           },
         },
@@ -223,15 +236,15 @@ async function main() {
             venueCity: "Lille",
             createdById: stan.id,
             notes: "Annulé par l'organisateur (problème de financement).",
+            budgetAmount: 1200,
+            budgetPaymentStatus: PaymentStatus.N_A,
             dealArtistes: {
               create: [
                 {
                   artistId: a3.id,
                   cachetAmount: 900,
+                  sharePct: 75,
                   paymentStatus: PaymentStatus.N_A,
-                  commissionPct: 10,
-                  commissionAmount: 90,
-                  commissionStatus: PaymentStatus.N_A,
                 },
               ],
             },

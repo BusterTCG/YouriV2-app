@@ -55,34 +55,76 @@ export const DEAL_STATUS_VARIANT: Record<DealStatus, BadgeVariant> = {
 };
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
-  TO_INVOICE: "À facturer",
-  INVOICED: "Facturé",
+  TO_INVOICE: "En cours",
+  VALIDATED: "Validé",
+  INVOICED: "Attente Facture",
   PAID: "Payé",
+  DISPUTE: "Litige",
   N_A: "—",
 };
 
 export const PAYMENT_STATUS_VARIANT: Record<PaymentStatus, BadgeVariant> = {
   TO_INVOICE: "outline",
+  VALIDATED: "secondary",
   INVOICED: "secondary",
   PAID: "default",
+  DISPUTE: "destructive",
   N_A: "outline",
 };
 
-/** Emoji pour les statuts paiement (pill, badge, etc.). */
+/** Emoji pour les statuts paiement. */
 export const PAYMENT_STATUS_EMOJI: Record<PaymentStatus, string> = {
   TO_INVOICE: "⏳",
-  INVOICED: "📨",
+  VALIDATED: "👍",
+  INVOICED: "📄",
   PAID: "✅",
+  DISPUTE: "❌",
   N_A: "—",
 };
 
-/** Label FR pour les statuts paiement. */
+/** Label FR pour les statuts paiement (wording artiste Stan 2026-05-26). */
 export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
-  TO_INVOICE: "À facturer",
-  INVOICED: "Facturée",
-  PAID: "Encaissée",
+  TO_INVOICE: "En cours",
+  VALIDATED: "Validé",
+  INVOICED: "Attente Facture",
+  PAID: "Payé",
+  DISPUTE: "Litige",
   N_A: "—",
 };
+
+/**
+ * Options ordonnées pour les Selects inline (tableau récap budget — usage
+ * générique conservé pour compat). Workflow Stan : En cours → Validé →
+ * Attente Facture → Payé.
+ */
+export const PAYMENT_STATUS_OPTIONS: Array<{
+  value: PaymentStatus;
+  emoji: string;
+  label: string;
+}> = [
+  { value: "N_A", emoji: "—", label: "—" },
+  { value: "TO_INVOICE", emoji: "⏳", label: "En cours" },
+  { value: "VALIDATED", emoji: "👍", label: "Validé" },
+  { value: "INVOICED", emoji: "📄", label: "Attente Facture" },
+  { value: "PAID", emoji: "✅", label: "Payé" },
+  { value: "DISPUTE", emoji: "❌", label: "Litige" },
+];
+
+/**
+ * Options ARTISTE Stan 2026-05-26 : 4 statuts spécifiques (sans N_A ni
+ * DISPUTE) — workflow simplifié pour la rémunération artiste.
+ *   En cours → Validé → Attente Facture → Payé
+ */
+export const ARTIST_STATUS_OPTIONS: Array<{
+  value: PaymentStatus;
+  emoji: string;
+  label: string;
+}> = [
+  { value: "TO_INVOICE", emoji: "⏳", label: "En cours" },
+  { value: "VALIDATED", emoji: "👍", label: "Validé" },
+  { value: "INVOICED", emoji: "📄", label: "Attente Facture" },
+  { value: "PAID", emoji: "✅", label: "Payé" },
+];
 
 export function paymentStatusLabel(s: PaymentStatus): { emoji: string; label: string } {
   return { emoji: PAYMENT_STATUS_EMOJI[s], label: PAYMENT_STATUS_LABEL[s] };
@@ -98,8 +140,12 @@ export function paymentStatusClass(s: PaymentStatus): string {
       return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30";
     case "INVOICED":
       return "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30";
+    case "VALIDATED":
+      return "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/30";
     case "TO_INVOICE":
       return "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30";
+    case "DISPUTE":
+      return "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30";
     case "N_A":
     default:
       return "bg-muted/40 text-muted-foreground border-border";

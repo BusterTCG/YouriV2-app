@@ -8,7 +8,7 @@ import { getDealsCategoryRecap } from "@/lib/deals-list";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Deals — Pangee Prod",
+  title: "Deals — Youri Prod",
 };
 
 /**
@@ -63,7 +63,7 @@ function eur(n: number): string {
 
 export default async function DealsPage() {
   const recap = await getDealsCategoryRecap();
-  const byCategory = new Map(recap.map((r) => [r.category, r]));
+  const byCategory = new Map(recap.map((r) => [r.category, r] as const));
 
   return (
     <div className="max-w-5xl space-y-6">
@@ -75,7 +75,7 @@ export default async function DealsPage() {
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">Deals</h1>
           <p className="text-muted-foreground text-sm">
-            Vue d&apos;ensemble des 3 catégories Pangee. Clique sur une carte
+            Vue d&apos;ensemble des 3 catégories Youri. Clique sur une carte
             pour ouvrir la liste filtrée et gérer les deals correspondants.
           </p>
         </div>
@@ -83,7 +83,7 @@ export default async function DealsPage() {
 
       <div className="grid gap-4 sm:grid-cols-3">
         {CATEGORIES.map((cat) => {
-          const data = byCategory.get(cat.category) ?? { count: 0, totalCommission: 0 };
+          const data = byCategory.get(cat.category) ?? { count: 0, totalMarge: 0 };
           const Icon = cat.icon;
           return (
             <Link
@@ -119,10 +119,10 @@ export default async function DealsPage() {
                   </div>
                   <div className="flex items-baseline justify-between border-t pt-2">
                     <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                      Com Pangee
+                      Marge Youri
                     </span>
                     <span className="text-base font-medium tabular-nums text-[--yr-gold]">
-                      {eur(data.totalCommission)}
+                      {eur(data.totalMarge)}
                     </span>
                   </div>
                 </CardContent>

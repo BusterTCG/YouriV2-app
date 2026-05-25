@@ -1,4 +1,4 @@
-import { Briefcase, CheckCircle2, Hourglass, Wallet } from "lucide-react";
+import { Briefcase, CheckCircle2, Hourglass, Percent, Receipt, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatEur } from "@/components/deals/deal-helpers";
 import type { BookingDealsListData } from "@/lib/deals-list-types";
@@ -9,17 +9,17 @@ interface Props {
 }
 
 /**
- * Bloc cumulés — copie fidèle KuroNeko-App `components/deals/deals-totals.tsx`.
+ * Bloc cumulés — refonte modèle Budget/Marge (Stan 2026-05-26).
  *
- * 4 stats sur la sélection courante (filtres appliqués) :
- *   - Montant (brut = cachet + com Pangee)
- *   - Part artiste (somme des cachets)
- *   - Commission Pangee (split encaissée / à venir)
- *   - Taux agent (com / montant en %)
+ * 4 KPI :
+ *   - Budget       — total budgets reçus de l'organisateur
+ *   - Artistes     — total rémunérations versées
+ *   - Charges      — total charges diverses
+ *   - Marge Youri — split réalisée (budget encaissé) vs en attente
  */
 export function DealsTotals({ totals, periodLabel }: Props) {
-  const agentRate =
-    totals.gross > 0 ? (totals.totalCommission / totals.gross) * 100 : null;
+  const margePct =
+    totals.totalBudget > 0 ? (totals.totalMarge / totals.totalBudget) * 100 : null;
 
   return (
     <div className="rounded-md border-2 border-[--yr-gold]/30 bg-card p-4">
@@ -32,16 +32,16 @@ export function DealsTotals({ totals, periodLabel }: Props) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <Stat
           icon={<Briefcase className="h-3.5 w-3.5 text-muted-foreground" />}
-          label="Montant"
-          value={formatEur(totals.gross)}
+          label="Budget"
+          value={formatEur(totals.totalBudget)}
         />
         <Stat
-          icon={<Wallet className="h-3.5 w-3.5 text-muted-foreground" />}
-          label="Part artiste"
-          value={formatEur(totals.totalCachet)}
+          icon={<Sparkles className="h-3.5 w-3.5 text-muted-foreground" />}
+          label="Artistes"
+          value={formatEur(totals.totalArtistes)}
           sub={
             totals.artistOwed > 0 ? (
               <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
@@ -52,21 +52,27 @@ export function DealsTotals({ totals, periodLabel }: Props) {
           }
         />
         <Stat
-          icon={<span className="text-[--yr-gold] text-xs">★</span>}
-          label="Commission Pangee"
-          value={formatEur(totals.totalCommission)}
-          accent
+          icon={<Receipt className="h-3.5 w-3.5 text-muted-foreground" />}
+          label="Charges diverses"
+          value={formatEur(totals.totalCharges)}
+        />
+        <Stat
+          icon={<span className="text-emerald-600 text-xs">★</span>}
+          label="Marge Youri"
+          value={formatEur(totals.totalMarge)}
           sub={
-            totals.totalCommission > 0 ? (
+            totals.totalMarge !== 0 ? (
               <span className="flex items-center gap-2 flex-wrap">
-                <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="h-3 w-3" />
-                  {formatEur(totals.commissionPaid)} encaissée
-                </span>
-                {totals.commissionTodo > 0 && (
+                {totals.margeRealisee !== 0 && (
+                  <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="h-3 w-3" />
+                    {formatEur(totals.margeRealisee)} réalisée
+                  </span>
+                )}
+                {totals.margeAttente !== 0 && (
                   <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
                     <Hourglass className="h-3 w-3" />
-                    {formatEur(totals.commissionTodo)} à venir
+                    {formatEur(totals.margeAttente)} en attente
                   </span>
                 )}
               </span>
@@ -74,13 +80,14 @@ export function DealsTotals({ totals, periodLabel }: Props) {
           }
         />
         <Stat
-          label="Taux agent"
+          icon={<Percent className="h-3.5 w-3.5 text-muted-foreground" />}
+          label="Taux marge"
           value={
-            agentRate != null
-              ? `${(Math.round(agentRate * 10) / 10).toString().replace(".", ",")}%`
+            margePct != null
+              ? `${(Math.round(margePct * 10) / 10).toString().replace(".", ",")}%`
               : "—"
           }
-          sub="Commission ÷ montant"
+          sub="Marge ÷ budget"
         />
       </div>
     </div>
@@ -109,7 +116,7 @@ function Stat({
       <div
         className={cn(
           "text-xl font-semibold tabular-nums truncate",
-          accent && "text-[--yr-gold]",
+          accent && "text-emerald-700 dark:text-emerald-400",
         )}
       >
         {value}

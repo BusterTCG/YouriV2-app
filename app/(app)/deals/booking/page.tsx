@@ -9,11 +9,12 @@ import {
 import { DealsFilters } from "@/components/deals/deals-filters";
 import { DealsTotals } from "@/components/deals/deals-totals";
 import { BookingDealsList } from "@/components/deals/booking-deals-list";
+import { NewDealButton } from "@/components/deals/new-deal-button";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Booking — Pangee Prod",
+  title: "Booking — Youri Prod",
 };
 
 interface BookingPageProps {
@@ -62,15 +63,12 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
           <h1 className="text-2xl font-semibold tracking-tight">Booking</h1>
           <p className="text-muted-foreground text-sm">
             Cession / booking d&apos;artistes auprès d&apos;organisateurs
-            (mono-date). Multi-artiste supporté — cachet + commission Pangee
+            (mono-date). Multi-artiste supporté — cachet + commission Youri
             par artiste avec statuts de paiement indépendants.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Phase 3.5 : ajoutera <NewDealButton /> ici */}
-          <span className="text-xs text-muted-foreground italic">
-            Bouton « + Nouveau deal » à venir Phase 3.5
-          </span>
+          <NewDealButton />
         </div>
       </div>
 

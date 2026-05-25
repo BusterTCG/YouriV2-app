@@ -110,6 +110,15 @@ interface ContactFormDialogProps {
   defaults?: ContactFormDefaults;
   /** Liste des salles disponibles pour le select. Si vide → option cachée. */
   venues?: VenueOption[];
+  /** Callback appelé après création réussie (uniquement, pas en édition).
+   *  Permet aux consumers d'auto-sélectionner le contact créé sans refresh. */
+  onCreated?: (contact: {
+    id: string;
+    firstName: string;
+    lastName: string | null;
+    company: string | null;
+    city: string | null;
+  }) => void;
 }
 
 /**
@@ -122,6 +131,7 @@ export function ContactFormDialog({
   onOpenChange,
   defaults,
   venues = [],
+  onCreated,
 }: ContactFormDialogProps) {
   const isEdit = !!defaults?.id;
   const [pending, startTransition] = useTransition();
@@ -172,6 +182,16 @@ export function ContactFormDialog({
           }
         }
         return;
+      }
+      // Création réussie : remonter les infos au consumer pour auto-select.
+      if (!isEdit && res.data && onCreated) {
+        onCreated({
+          id: res.data.id,
+          firstName: payload.firstName,
+          lastName: payload.lastName,
+          company: payload.company,
+          city: payload.city,
+        });
       }
       onOpenChange(false);
       form.reset();

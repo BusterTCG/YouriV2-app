@@ -63,10 +63,15 @@ enum DealStatus {
 /// - paymentStatus = statut du cachet artiste (ce que l'artiste reçoit)
 /// - commissionStatus = statut de la commission Pangee (ce que Pangee perçoit)
 /// Les 2 sont indépendants car cachet et com sont facturés / payés séparément.
+///
+/// DISPUTE = paiement en litige (impayé contesté). Identique KN. Stan veut
+/// le même wording / mêmes propositions que KN dans les Selects.
 enum PaymentStatus {
   TO_INVOICE
+  VALIDATED
   INVOICED
   PAID
+  DISPUTE
   N_A
 }
 
@@ -288,6 +293,25 @@ model Deal {
   /// parsé, juste affiché. Indépendant de la date pour préserver la flexibilité.
   showTime    String?
 
+  // ── Budget Pangee (modèle 2026-05-26 : budget global vs marge) ──
+  // Stan a refondé le modèle : Pangee touche un budget global de l'organisateur,
+  // paie les artistes (DealArtiste.cachetAmount) et les charges (DealCharge.amount),
+  // et garde la différence = Marge Pangee. Plus de commission % par artiste.
+
+  /// Budget Pangee = montant que l'organisateur paie à Pangee pour ce deal.
+  /// Sert de base au calcul de la Marge Pangee = budget − total artistes − total charges.
+  budgetAmount  Decimal?
+
+  /// Statut du budget côté Pangee (à facturer / facturée / encaissée / litige).
+  /// En UI, sur la fiche deal, exposé comme checkbox simple "Encaissé"
+  /// (true = PAID, false = N_A ou TO_INVOICE). Dans le tableau récap inline,
+  /// Select 5 valeurs comme les autres statuts paiement.
+  budgetPaymentStatus PaymentStatus @default(N_A)
+
+  /// Mois où Pangee a encaissé le budget de l'organisateur (cash-flow réel).
+  /// Sert au filtre période axis="paid" + reporting mensuel marge.
+  budgetPaidAt  DateTime?
+
   // ── Snapshot organisateur (Contact KN distant) ──
   /// ID du Contact KN au moment de la sélection. Refetch via kn-client.
   organizerId      String?
@@ -301,9 +325,18 @@ model Deal {
   venueId    String?
   venueName  String?
   venueCity  String?
+  /// Adresse libre (BAN data.gouv.fr) — utilisée quand le lieu n'est PAS un
+  /// Venue référencé en BDD (ex. booking entreprise). Si venueId est null,
+  /// venueCity est extraite automatiquement depuis cette adresse (regex code
+  /// postal). Cas Stan 2026-05-26 : "booking en entreprise" sans référencer
+  /// le lieu dans l'annuaire.
+  venueAddress String?
 
   // ── Multi-artiste ──
   dealArtistes DealArtiste[]
+
+  // ── Charges diverses (dépenses Pangee) ──
+  dealCharges  DealCharge[]
 
   // ── Audit multi-user ──
   /// User qui a créé ce deal. SetNull si l'user est désactivé (préserve
@@ -351,31 +384,24 @@ model DealArtiste {
   /// (ou les supprimer en cascade soft-delete depuis le Deal parent).
   artist   Artist @relation(fields: [artistId], references: [id], onDelete: Restrict)
 
-  /// Cachet brut de l'artiste — ce qu'il touche en €. Optionnel (None = pas
-  /// encore négocié / cachet non applicable).
+  /// Montant que touche l'artiste pour ce deal (€). Champ DB `cachetAmount`,
+  /// label UI "Montant" (Stan 2026-05-26). Pangee paie ce montant à l'artiste
+  /// depuis le budget reçu de l'organisateur.
   cachetAmount    Decimal?
 
-  /// Statut paiement du cachet artiste (côté artiste — facturé ? payé ?).
+  /// Part de l'artiste sur le budget Pangee (%, ex. 30.0 = 30 %). Optionnel.
+  /// Si renseigné, le montant peut se calculer auto côté UI :
+  /// `cachetAmount = Deal.budgetAmount * sharePct / 100`. L'user peut override
+  /// le montant manuellement (le % reste à titre informatif).
+  sharePct Decimal?
+
+  /// Statut paiement de l'artiste (Pangee a-t-il versé sa rémunération ?).
+  /// Wording identique KN : À facturer / Facturée / Encaissée / Litige / N_A.
   paymentStatus   PaymentStatus @default(N_A)
 
-  /// Taux de commission Pangee (%, ex. 10.0 = 10 %). Optionnel — l'user peut
-  /// saisir directement `commissionAmount` sans le %. Si le % ET le cachet
-  /// sont remplis et qu'aucun montant n'est saisi en override, le montant
-  /// est calculé auto côté UI (cachet * pct / 100). Validé Stan 2026-05-26.
-  commissionPct   Decimal?
-
-  /// Commission Pangee en €. Saisissable directement OU calculé auto depuis
-  /// commissionPct (cf. above). Stocké en BDD comme valeur autoritative —
-  /// ce qui est saisi/affiché est ce qui compte (override possible du %).
-  commissionAmount Decimal?
-
-  /// Statut paiement de la com Pangee (indépendant du cachet artiste).
-  commissionStatus PaymentStatus @default(N_A)
-
-  /// Mois où la commission a été (ou doit être) encaissée par Pangee.
-  /// Utilisé pour le filtre période axis="paid" (cash-flow réel Pangee)
-  /// + reporting mensuel. Pattern repris de KN `Deal.commissionPaidAt`.
-  commissionPaidAt DateTime?
+  /// Mois où l'artiste a été payé par Pangee (cash-flow réel sortant).
+  /// Sert au reporting + filtre période.
+  paidAt    DateTime?
 
   notes     String?
   createdAt DateTime @default(now())
@@ -387,6 +413,42 @@ model DealArtiste {
 
   @@unique([dealId, artistId])
   @@index([artistId])
+  @@index([deletedAt])
+}
+
+/// Charges diverses d'un deal — dépenses Pangee (transports, hôtels, technique,
+/// repas, frais externes). Refonte modèle 2026-05-26 (Stan) : la marge Pangee
+/// est dérivée comme `Deal.budgetAmount - SUM(DealArtiste.cachetAmount)
+/// - SUM(DealCharge.amount)`.
+///
+/// Suit le même pattern de statut paiement / mois encaissement que DealArtiste,
+/// car Pangee paie ces charges à des fournisseurs externes.
+model DealCharge {
+  id       String @id @default(cuid())
+
+  dealId   String
+  deal     Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  /// Libellé court de la charge (ex. "Hôtel Mercure Paris", "Train Paris-Lyon").
+  label    String
+
+  /// Montant de la charge (€).
+  amount   Decimal?
+
+  /// Statut paiement (Pangee a-t-il payé ?).
+  paymentStatus PaymentStatus @default(N_A)
+
+  /// Mois de paiement effectif (cash-flow réel sortant).
+  paidAt   DateTime?
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Soft-delete cascade depuis Deal (idem DealArtiste).
+  deletedAt DateTime?
+
+  @@index([dealId])
   @@index([deletedAt])
 }
 

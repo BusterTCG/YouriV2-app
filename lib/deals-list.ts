@@ -7,23 +7,18 @@ import { getPeriodRange, type PeriodPreset } from "@/lib/period-presets";
 import type {
   BookingDealRow,
   BookingDealArtistRow,
+  BookingDealChargeRow,
   BookingDealsListData,
   DealsListStatus,
 } from "./deals-list-types";
 
 /**
- * Helper de liste des deals Booking — server-only, accès Prisma.
+ * Helper de liste des deals Booking — server-only.
  *
- * Les types et constantes UI vivent dans `deals-list-types.ts` (sans
- * server-only, importable depuis composants client).
- *
- * Adapté de KuroNeko-App `lib/deals-list.ts` avec :
- *   - Filtre strict `category=BOOKING` (Sprint 3)
- *   - Multi-artiste : projection `dealArtistes[]` + agrégats sommés
- *   - Snapshots organizer/venue (pas de relation Prisma)
+ * Modèle 2026-05-26 (Stan) : budget Pangee → réparti en artistes + charges,
+ * marge Pangee = budget - artistes - charges. Filtres status/period adaptés.
  */
 
-// Ré-export pour les pages serveur qui font un seul import
 export {
   STATUS_OPTIONS,
   PERIOD_PRESET_OPTIONS,
@@ -36,47 +31,63 @@ export type {
   DealsListStatus,
   BookingDealRow,
   BookingDealArtistRow,
+  BookingDealChargeRow,
   BookingDealsListData,
   PeriodPreset,
 } from "./deals-list-types";
 
+const ACTIONABLE: PaymentStatus[] = ["TO_INVOICE", "INVOICED", "DISPUTE"];
+
 function statusFilter(status: DealsListStatus): Prisma.DealWhereInput {
   if (status === "all") return {};
-  const ACTIONABLE: PaymentStatus[] = ["TO_INVOICE", "INVOICED"];
   if (status === "todo") {
+    // Au moins une action en attente sur le deal :
+    // - Budget pas encaissé (statut actionnable)
+    // - OU au moins un artiste pas payé
+    // - OU au moins une charge pas payée
     return {
-      dealArtistes: {
-        some: {
-          deletedAt: null,
-          OR: [
-            { paymentStatus: { in: ACTIONABLE } },
-            { commissionStatus: { in: ACTIONABLE } },
-          ],
+      OR: [
+        { budgetPaymentStatus: { in: ACTIONABLE } },
+        {
+          dealArtistes: {
+            some: { deletedAt: null, paymentStatus: { in: ACTIONABLE } },
+          },
         },
-      },
+        {
+          dealCharges: {
+            some: { deletedAt: null, paymentStatus: { in: ACTIONABLE } },
+          },
+        },
+      ],
     };
   }
+  // "paid" : aucune action en attente (tout réglé).
   return {
-    dealArtistes: {
-      none: {
-        deletedAt: null,
-        OR: [
-          { paymentStatus: { in: ACTIONABLE } },
-          { commissionStatus: { in: ACTIONABLE } },
-        ],
+    AND: [
+      { budgetPaymentStatus: { notIn: ACTIONABLE } },
+      {
+        dealArtistes: {
+          none: { deletedAt: null, paymentStatus: { in: ACTIONABLE } },
+        },
       },
-    },
+      {
+        dealCharges: {
+          none: { deletedAt: null, paymentStatus: { in: ACTIONABLE } },
+        },
+      },
+    ],
   };
 }
 
 function artistFilter(artistSlug: string | null): Prisma.DealWhereInput {
   if (!artistSlug || artistSlug === "all") return {};
-  return { dealArtistes: { some: { artist: { slug: artistSlug }, deletedAt: null } } };
+  return {
+    dealArtistes: { some: { artist: { slug: artistSlug }, deletedAt: null } },
+  };
 }
 
 /**
- * Charge la liste de deals Booking filtrée + agrégats.
- * Strictement filtré sur `category=BOOKING` (Sprint 3 — Phase 3.4).
+ * Liste des deals Booking + agrégats. Strict `category=BOOKING`.
  */
 export async function getBookingDealsList(opts: {
   period: PeriodPreset;
@@ -101,10 +112,8 @@ export async function getBookingDealsList(opts: {
     ],
   };
 
-  // Liste des artistes affichés dans le combobox : uniquement ceux qui ont
-  // au moins un deal Booking visible dans la sélection courante (période +
-  // statut), MAIS sans appliquer le filtre artiste lui-même (sinon
-  // l'utilisateur ne peut plus changer de sélection). Stan 2026-05-26.
+  // Liste des artistes du combobox = uniquement ceux ayant ≥1 deal dans la
+  // sélection courante (SANS le filtre artiste lui-même).
   const whereForArtists: Prisma.DealWhereInput = {
     AND: [
       { category: "BOOKING" },
@@ -125,6 +134,9 @@ export async function getBookingDealsList(opts: {
             artist: { select: { id: true, name: true, slug: true, color: true } },
           },
         },
+        dealCharges: {
+          where: { deletedAt: null },
+        },
       },
     }),
     prisma.artist.findMany({
@@ -132,10 +144,7 @@ export async function getBookingDealsList(opts: {
         active: true,
         deletedAt: null,
         dealArtistes: {
-          some: {
-            deletedAt: null,
-            deal: whereForArtists,
-          },
+          some: { deletedAt: null, deal: whereForArtists },
         },
       },
       orderBy: { name: "asc" },
@@ -146,16 +155,26 @@ export async function getBookingDealsList(opts: {
   const deals: BookingDealRow[] = dealsRaw.map((d) => {
     const dealArtistes: BookingDealArtistRow[] = d.dealArtistes.map((da) => ({
       id: da.id,
-      cachetAmount: da.cachetAmount != null ? Number(da.cachetAmount) : null,
+      amount: da.cachetAmount != null ? Number(da.cachetAmount) : null,
+      sharePct: da.sharePct != null ? Number(da.sharePct) : null,
       paymentStatus: da.paymentStatus,
-      commissionPct: da.commissionPct != null ? Number(da.commissionPct) : null,
-      commissionAmount: da.commissionAmount != null ? Number(da.commissionAmount) : null,
-      commissionStatus: da.commissionStatus,
-      commissionPaidAt: da.commissionPaidAt,
+      paidAt: da.paidAt,
+      notes: da.notes,
       artist: da.artist,
     }));
-    const totalCachet = dealArtistes.reduce((acc, x) => acc + (x.cachetAmount ?? 0), 0);
-    const totalCommission = dealArtistes.reduce((acc, x) => acc + (x.commissionAmount ?? 0), 0);
+    const dealCharges: BookingDealChargeRow[] = d.dealCharges.map((c) => ({
+      id: c.id,
+      label: c.label,
+      amount: c.amount != null ? Number(c.amount) : null,
+      paymentStatus: c.paymentStatus,
+      paidAt: c.paidAt,
+      notes: c.notes,
+    }));
+    const totalArtistes = dealArtistes.reduce((acc, x) => acc + (x.amount ?? 0), 0);
+    const totalCharges = dealCharges.reduce((acc, x) => acc + (x.amount ?? 0), 0);
+    const budget = d.budgetAmount != null ? Number(d.budgetAmount) : 0;
+    const margePangee = budget - totalArtistes - totalCharges;
+    const margePct = budget > 0 ? (margePangee / budget) * 100 : null;
     return {
       id: d.id,
       date: d.date,
@@ -170,40 +189,45 @@ export async function getBookingDealsList(opts: {
       venueName: d.venueName,
       venueCity: d.venueCity,
       notes: d.notes,
+      budgetAmount: d.budgetAmount != null ? Number(d.budgetAmount) : null,
+      budgetPaymentStatus: d.budgetPaymentStatus,
+      budgetPaidAt: d.budgetPaidAt,
       dealArtistes,
-      totalCachet,
-      totalCommission,
+      dealCharges,
+      totalArtistes,
+      totalCharges,
+      margePangee,
+      margePct,
     };
   });
 
-  // Agrégats : on exclut les ANNULE des totaux financiers (cf. KN pattern).
-  let gross = 0;
-  let totalCachet = 0;
-  let totalCommission = 0;
-  let commissionPaid = 0;
-  let commissionTodo = 0;
+  // Agrégats globaux : on exclut les ANNULE des totaux financiers.
+  let totalBudget = 0;
+  let totalArtistes = 0;
+  let totalCharges = 0;
+  let totalMarge = 0;
+  let margeRealisee = 0;
+  let margeAttente = 0;
   let artistOwed = 0;
   for (const d of deals) {
     if (d.status === "ANNULE") continue;
-    totalCachet += d.totalCachet;
-    totalCommission += d.totalCommission;
-    gross += d.totalCachet + d.totalCommission;
-    for (const da of d.dealArtistes) {
-      if (da.commissionAmount != null) {
-        if (da.commissionStatus === "PAID") commissionPaid += da.commissionAmount;
-        else if (da.commissionStatus === "TO_INVOICE" || da.commissionStatus === "INVOICED") {
-          commissionTodo += da.commissionAmount;
+    totalBudget += d.budgetAmount ?? 0;
+    totalArtistes += d.totalArtistes;
+    totalCharges += d.totalCharges;
+    totalMarge += d.margePangee;
+    const budgetPaid = d.budgetPaymentStatus === "PAID";
+    if (budgetPaid) {
+      margeRealisee += d.margePangee;
+    } else {
+      margeAttente += d.margePangee;
+    }
+    // "À reverser à l'artiste" : Youri a encaissé le budget mais n'a pas
+    // encore payé l'artiste → cet argent est en trésorerie Youri.
+    if (budgetPaid) {
+      for (const da of d.dealArtistes) {
+        if (da.amount != null && da.paymentStatus !== "PAID") {
+          artistOwed += da.amount;
         }
-      }
-      // "À reverser à l'artiste" : règle cash-flow (cf. KN).
-      // Com encaissée mais cachet pas encore versé → cet argent est dans
-      // la trésorerie de Pangee et doit être reversé.
-      if (
-        da.cachetAmount != null &&
-        da.commissionStatus === "PAID" &&
-        da.paymentStatus !== "PAID"
-      ) {
-        artistOwed += da.cachetAmount;
       }
     }
   }
@@ -212,11 +236,12 @@ export async function getBookingDealsList(opts: {
     deals,
     totals: {
       count: deals.length,
-      gross,
-      totalCachet,
-      totalCommission,
-      commissionPaid,
-      commissionTodo,
+      totalBudget,
+      totalArtistes,
+      totalCharges,
+      totalMarge,
+      margeRealisee,
+      margeAttente,
       artistOwed,
     },
     artists: sortArtistsDiversLast(artistsRaw),
@@ -224,40 +249,50 @@ export async function getBookingDealsList(opts: {
 }
 
 /**
- * Compte les deals + somme commissions par catégorie pour la page parent
- * `/deals` (3 cards Booking / Prod Exé / Cachet).
+ * Récap par catégorie pour la page parent /deals (3 cards Booking / Prod Exé /
+ * Cachet) — affiche le total Marge Pangee par catégorie.
  */
 export async function getDealsCategoryRecap(): Promise<
-  Array<{ category: DealCategory; count: number; totalCommission: number }>
+  Array<{ category: DealCategory; count: number; totalMarge: number }>
 > {
   const grouped = await prisma.deal.findMany({
     where: { deletedAt: null, status: { not: "ANNULE" } },
     select: {
       category: true,
+      budgetAmount: true,
       dealArtistes: {
         where: { deletedAt: null },
-        select: { commissionAmount: true },
+        select: { cachetAmount: true },
+      },
+      dealCharges: {
+        where: { deletedAt: null },
+        select: { amount: true },
       },
     },
   });
 
-  const byCategory = new Map<DealCategory, { count: number; totalCommission: number }>();
+  const byCategory = new Map<DealCategory, { count: number; totalMarge: number }>();
   for (const cat of ["BOOKING", "PROD_EXE", "CACHETS"] as DealCategory[]) {
-    byCategory.set(cat, { count: 0, totalCommission: 0 });
+    byCategory.set(cat, { count: 0, totalMarge: 0 });
   }
   for (const d of grouped) {
     const entry = byCategory.get(d.category)!;
     entry.count += 1;
-    for (const da of d.dealArtistes) {
-      if (da.commissionAmount != null) {
-        entry.totalCommission += Number(da.commissionAmount);
-      }
-    }
+    const budget = d.budgetAmount != null ? Number(d.budgetAmount) : 0;
+    const artistes = d.dealArtistes.reduce(
+      (acc, da) => acc + (da.cachetAmount != null ? Number(da.cachetAmount) : 0),
+      0,
+    );
+    const charges = d.dealCharges.reduce(
+      (acc, c) => acc + (c.amount != null ? Number(c.amount) : 0),
+      0,
+    );
+    entry.totalMarge += budget - artistes - charges;
   }
 
   return Array.from(byCategory.entries()).map(([category, v]) => ({
     category,
     count: v.count,
-    totalCommission: v.totalCommission,
+    totalMarge: v.totalMarge,
   }));
 }
