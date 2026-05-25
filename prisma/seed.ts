@@ -63,8 +63,11 @@ async function main() {
   console.log("  ✓ AppSetting bootstrap-version");
 
   // ─── 3 artistes d'exemple (idempotent par name unique) ───
+  // Règle métier Pangee : à la création d'un artiste, le `name` est
+  // automatiquement utilisé comme `stageName` du ArtistProfile (cf.
+  // createArtist côté server action). On reproduit la même chose au seed.
   for (const artist of ARTISTS) {
-    await prisma.artist.upsert({
+    const created = await prisma.artist.upsert({
       where: { name: artist.name },
       // En update on ne touche pas à color/notes (l'user a pu les personnaliser)
       update: {},
@@ -73,8 +76,16 @@ async function main() {
         slug: slugify(artist.name),
         color: artist.color,
       },
+      select: { id: true },
     });
-    console.log(`  ✓ Artist ${artist.name}`);
+    // Profile idempotent — pré-rempli avec stageName = name s'il n'existe
+    // pas. Si l'user a déjà customisé le profile, on ne touche à rien.
+    await prisma.artistProfile.upsert({
+      where: { artistId: created.id },
+      update: {},
+      create: { artistId: created.id, stageName: artist.name },
+    });
+    console.log(`  ✓ Artist ${artist.name} (+ profile stageName)`);
   }
 
   // ─── 3 users ───

@@ -54,6 +54,18 @@ export async function createArtist(input: unknown): Promise<ActionResult<{ slug:
         color: data.color,
         notes: data.notes ?? null,
         active: data.active,
+        // Règle métier Pangee (validée par Stan 2026-05-26) : le nom de
+        // l'artiste sert AUSSI de "Nom de scène" par défaut. On crée
+        // l'ArtistProfile vide avec stageName pré-rempli, l'user peut
+        // ensuite le customiser depuis l'onglet Infos (ex. nom civil
+        // "Sophie Mercier" → nom de scène "Soso"). Modifier le name
+        // Artist après ne resynchronise PAS le stageName — c'est un
+        // champ indépendant une fois créé.
+        profile: {
+          create: {
+            stageName: data.name,
+          },
+        },
       },
       select: { slug: true },
     });
@@ -109,6 +121,148 @@ export async function updateArtist(
     revalidatePath("/artistes");
     revalidatePath(`/artistes/${updated.slug}`);
     return { slug: updated.slug };
+  });
+}
+
+// ─────────── Avatar : upload / remove / position ───────────
+//
+// Copie fidèle de KuroNeko-App `lib/actions/artists.ts` avec adaptations Youri :
+//   - `requireUser()` au top (multi-user)
+//   - Filter `deletedAt: null` sur les checks d'existence
+//   - `revalidatePath('/artistes/...')` (route française)
+//   - Stockage local `public/uploads/avatars/<artistId>-<ts>.<ext>` (idem KN)
+
+const UPLOAD_DIR = "public/uploads/avatars";
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB (= Next.js serverActions.bodySizeLimit)
+const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+/**
+ * Upload une photo d'avatar pour un artiste. Stocke le fichier dans
+ * `public/uploads/avatars/<artistId>-<ts>.<ext>` et met à jour Artist.avatarUrl.
+ * Le timestamp casse le cache navigateur quand on remplace une photo.
+ */
+export async function uploadArtistAvatar(
+  formData: FormData,
+): Promise<ActionResult<{ avatarUrl: string }>> {
+  return safeAction("uploadArtistAvatar", async () => {
+    await requireUser();
+    const artistId = formData.get("artistId");
+    const file = formData.get("file");
+
+    if (typeof artistId !== "string" || !artistId) {
+      throw new Error("ID artiste manquant");
+    }
+    if (!(file instanceof File)) {
+      throw new Error("Aucun fichier reçu");
+    }
+    if (file.size === 0) {
+      throw new Error("Fichier vide");
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      throw new Error(
+        `Fichier trop lourd (max ${Math.round(MAX_AVATAR_BYTES / 1024 / 1024)} Mo)`,
+      );
+    }
+    if (!ALLOWED_MIME.has(file.type)) {
+      throw new Error("Format non supporté (JPEG, PNG ou WebP uniquement)");
+    }
+
+    const artist = await prisma.artist.findFirst({
+      where: { id: artistId, deletedAt: null },
+      select: { id: true, slug: true },
+    });
+    if (!artist) throw new Error("Artiste introuvable");
+
+    // Import dynamique Node — server action uniquement
+    const { writeFile, mkdir } = await import("node:fs/promises");
+    const path = await import("node:path");
+    const { cwd } = await import("node:process");
+
+    const extByMime: Record<string, string> = {
+      "image/jpeg": "jpg",
+      "image/png": "png",
+      "image/webp": "webp",
+    };
+    const ext = extByMime[file.type] ?? "jpg";
+    const timestamp = Date.now();
+    const fileName = `${artistId}-${timestamp}.${ext}`;
+
+    const absDir = path.join(cwd(), UPLOAD_DIR);
+    const absPath = path.join(absDir, fileName);
+
+    await mkdir(absDir, { recursive: true });
+    const buf = Buffer.from(await file.arrayBuffer());
+    await writeFile(absPath, buf);
+
+    const avatarUrl = `/uploads/avatars/${fileName}`;
+
+    await prisma.artist.update({
+      where: { id: artistId },
+      data: { avatarUrl },
+    });
+    revalidatePath("/artistes");
+    revalidatePath(`/artistes/${artist.slug}`);
+    return { avatarUrl };
+  });
+}
+
+const PositionSchema = z.object({
+  artistId: z.string().min(1),
+  x: z.number(),
+  y: z.number(),
+});
+
+/**
+ * Met à jour la position du recadrage avatar (object-position %). Valeurs
+ * clampées 0-100 côté serveur pour éviter qu'une UI buggée n'écrive des
+ * valeurs aberrantes.
+ */
+export async function updateArtistAvatarPosition(
+  input: z.infer<typeof PositionSchema>,
+): Promise<ActionResult> {
+  return safeAction("updateArtistAvatarPosition", async () => {
+    await requireUser();
+    const parsed = PositionSchema.parse(input);
+    const x = Math.max(0, Math.min(100, parsed.x));
+    const y = Math.max(0, Math.min(100, parsed.y));
+
+    const artist = await prisma.artist.findFirst({
+      where: { id: parsed.artistId, deletedAt: null },
+      select: { slug: true },
+    });
+    if (!artist) throw new Error("Artiste introuvable");
+
+    await prisma.artist.update({
+      where: { id: parsed.artistId },
+      data: { avatarPositionX: x, avatarPositionY: y },
+    });
+    revalidatePath("/artistes");
+    revalidatePath(`/artistes/${artist.slug}`);
+  });
+}
+
+/**
+ * Supprime la photo d'avatar (DB seulement — on laisse le fichier orphelin
+ * sur disque le temps que le navigateur libère son cache).
+ */
+export async function removeArtistAvatar(
+  artistId: string,
+): Promise<ActionResult> {
+  return safeAction("removeArtistAvatar", async () => {
+    await requireUser();
+    if (!artistId) throw new Error("ID artiste manquant");
+    const artist = await prisma.artist.findFirst({
+      where: { id: artistId, deletedAt: null },
+      select: { slug: true },
+    });
+    if (!artist) throw new Error("Artiste introuvable");
+
+    await prisma.artist.update({
+      where: { id: artistId },
+      data: { avatarUrl: null },
+    });
+    revalidatePath("/artistes");
+    revalidatePath(`/artistes/${artist.slug}`);
   });
 }
 

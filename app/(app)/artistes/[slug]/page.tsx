@@ -1,133 +1,108 @@
-import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { notFound } from "next/navigation";
+import { ArrowLeft, Mic2 } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { ArtistTabs } from "@/components/artists/artist-tabs";
+import { ArtistInfoSection } from "@/components/artists/artist-info-section";
+import { ArtistAvatar } from "@/components/artists/artist-avatar";
+import { OverviewSection } from "@/components/artists/overview-section";
 import { ArtistEditButton } from "@/components/artists/artist-edit-button";
 import { ArtistDeleteButton } from "@/components/artists/artist-delete-button";
-import { formatFr } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
-interface PageProps {
+interface ArtistPageProps {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }
 
 /**
- * Fiche artiste — Sprint 2 : infos de base (nom, couleur, notes, statut).
+ * Fiche artiste détail — copie fidèle de KuroNeko-App
+ * `app/(app)/artists/[slug]/page.tsx` (cf. AGENTS.md règle copie fidèle).
  *
- * Sprint 3+ : ajoutera onglets/sections pour :
- *   - Deals associés (via DealArtiste)
- *   - Stats (cachets totaux, prochain show)
- *   - Tâches en cours liées
+ * Adaptations Youri V2 :
+ *   - `where: { slug, deletedAt: null }` (soft-delete Youri en plus de active).
+ *   - Onglet "Vue d'ensemble" = placeholder Sprint 3 (model Deal Pangee à venir).
+ *   - Pas de bandeau "Mémoire IA" / bioShort warning (pas d'AI dans V2).
+ *   - Boutons Edit/Delete artiste exposés côté header (n'existent pas dans
+ *     KN car édition via le bouton "Modifier" qui rouvre new-artist-button
+ *     pattern — à harmoniser plus tard si besoin).
  */
-export default async function ArtistDetailPage({ params }: PageProps) {
+export default async function ArtistPage({ params, searchParams }: ArtistPageProps) {
   const { slug } = await params;
+  const sp = await searchParams;
+  const tab = sp.tab || "overview";
 
   const artist = await prisma.artist.findFirst({
     where: { slug, deletedAt: null },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      color: true,
-      notes: true,
-      active: true,
-      createdAt: true,
-      updatedAt: true,
+    include: {
+      profile: true,
     },
   });
-
   if (!artist) notFound();
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="max-w-6xl space-y-6">
       <div>
-        <Button asChild variant="ghost" size="sm" className="mb-2 -ml-3">
-          <Link href="/artistes">
-            <ChevronLeft className="h-4 w-4" />
-            Tous les artistes
-          </Link>
-        </Button>
+        <Link
+          href="/artistes"
+          className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+        >
+          <ArrowLeft className="h-3 w-3" /> Tous les artistes
+        </Link>
+      </div>
 
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div
-              className="h-16 w-16 rounded-full"
-              style={{ backgroundColor: artist.color }}
-              aria-hidden
-            />
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-3xl font-bold tracking-tight">{artist.name}</h1>
-                {!artist.active && <Badge variant="secondary">Inactif</Badge>}
-              </div>
-              <p className="text-sm text-muted-foreground">/artistes/{artist.slug}</p>
+      {/* Header : avatar + titre en haut, boutons d'action sur une ligne
+          dédiée en dessous. Layout uniforme avec les pages liste
+          (/contacts, /lieux, /artistes). */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-4">
+          <ArtistAvatar
+            editable
+            artistId={artist.id}
+            name={artist.name}
+            color={artist.color}
+            avatarUrl={artist.avatarUrl}
+            positionX={artist.avatarPositionX}
+            positionY={artist.avatarPositionY}
+            sizeClass="h-14 w-14"
+            textClass="text-lg"
+          />
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wider">
+              <Mic2 className="h-3.5 w-3.5" />
+              Artiste · /{artist.slug}
             </div>
+            <h1 className="text-2xl font-semibold tracking-tight">{artist.name}</h1>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <ArtistEditButton artist={artist} />
-            <ArtistDeleteButton id={artist.id} />
-          </div>
+        </div>
+        {/* Actions méta de l'artiste (nom/couleur/notes/active). La fiche
+            ArtistProfile riche (30 champs) est éditée depuis l'onglet Infos. */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <ArtistEditButton
+            artist={{
+              id: artist.id,
+              name: artist.name,
+              color: artist.color,
+              notes: artist.notes,
+              active: artist.active,
+            }}
+          />
+          <ArtistDeleteButton id={artist.id} />
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Notes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {artist.notes ? (
-              <p className="whitespace-pre-wrap text-sm">{artist.notes}</p>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Aucune note. Clique &quot;Modifier&quot; pour en ajouter.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+      <ArtistTabs slug={artist.slug} />
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Métadonnées</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Créé</span>
-              <span>{formatFr(artist.createdAt, "short")}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Modifié</span>
-              <span>{formatFr(artist.updatedAt, "short")}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Couleur</span>
-              <span className="flex items-center gap-2 font-mono text-xs">
-                <span
-                  className="h-3 w-3 rounded-full border"
-                  style={{ backgroundColor: artist.color }}
-                />
-                {artist.color}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {tab === "overview" && <OverviewSection artistName={artist.name} />}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Deals & tâches</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Cette section affichera les deals (Booking / Prod Exé / Cachets) et tâches en
-            cours liés à cet artiste — à partir du Sprint 3.
-          </p>
-        </CardContent>
-      </Card>
+      {tab === "info" && (
+        <ArtistInfoSection
+          artistId={artist.id}
+          artistName={artist.name}
+          profile={artist.profile}
+        />
+      )}
     </div>
   );
 }
