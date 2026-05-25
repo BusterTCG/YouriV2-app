@@ -35,6 +35,24 @@ This version (Next.js 16) has breaking changes — APIs, conventions, and file s
 
 **Tout le reste = COPIE FIDÈLE de KN**.
 
+# RÈGLE Git — commit & push UNIQUEMENT après validation Stan
+
+**Pas de `git commit` ni `git push` tant que Stan n'a pas testé et validé** que le sprint (ou la feature livrée) fonctionne correctement.
+
+## Workflow
+
+1. **Coder le sprint** → modifs strictement locales (filesystem uniquement)
+2. **Présenter le récap final** : "voilà ce qui est fait, voilà comment tester"
+3. **Stan teste** localement (desktop + iPhone via tunnel cloudflared)
+4. **Validation explicite Stan** : "ok ça marche" / "go commit"
+5. **Alors** : `git add` + `git commit` + `git push` (1 commit propre par sprint, ou structuré en commits thématiques si très gros)
+6. Si Stan trouve un bug → corriger en local, re-tester, validation, ENSUITE commit
+
+## Exceptions
+
+- **Fin de session sans validation** : push avec mention "WIP sprint X" si risque de perte. À mentionner explicitement.
+- **Sprint préalable touchant 2 repos** (KN + Youri) : on commit/push KN avant que Youri puisse tester l'intégration. Côté Youri : on attend validation.
+
 # Project conventions — Youri V2
 
 Before writing any code, **read these documents** in `docs/`. They contain decisions verrouillées par Stan et conventions techniques éprouvées sur KuroNeko-App :

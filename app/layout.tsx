@@ -5,7 +5,10 @@ import "./globals.css";
 
 const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-inter",
+  // Variable doit être `--font-sans` pour matcher globals.css copié de KN
+  // (Tailwind v4 lit `--font-sans` via @theme inline). Si on met une autre
+  // variable, font-sans tombe en fallback serif (bug Stan 2026-05-25).
+  variable: "--font-sans",
   display: "swap",
 });
 

@@ -62,7 +62,7 @@ export default async function ArtistDetailPage({ params }: PageProps) {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-3xl font-bold tracking-tight">{artist.name}</h1>
-                {!artist.active && <Badge variant="muted">Inactif</Badge>}
+                {!artist.active && <Badge variant="secondary">Inactif</Badge>}
               </div>
               <p className="text-sm text-muted-foreground">/artistes/{artist.slug}</p>
             </div>

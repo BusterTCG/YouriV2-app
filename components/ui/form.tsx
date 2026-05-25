@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Label as LabelPrimitive, Slot } from "radix-ui";
+import * as LabelPrimitive from "@radix-ui/react-label";
+import { Slot } from "@radix-ui/react-slot";
 import {
   Controller,
   FormProvider,
@@ -14,13 +15,6 @@ import {
 
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
-
-/**
- * shadcn Form components (Radix UI + react-hook-form integration).
- * Copié quasi à l'identique de KuroNeko-App — seuls les imports radix-ui
- * ont été ajustés (package mega "radix-ui" vs sous-packages
- * "@radix-ui/react-*" — KN utilise le second, Youri V2 le premier).
- */
 
 const Form = FormProvider;
 
@@ -97,10 +91,10 @@ function FormLabel({ className, ...props }: React.ComponentProps<typeof LabelPri
   );
 }
 
-function FormControl({ ...props }: React.ComponentProps<typeof Slot.Root>) {
+function FormControl({ ...props }: React.ComponentProps<typeof Slot>) {
   const { error, formItemId, formDescriptionId, formMessageId } = useFormField();
   return (
-    <Slot.Root
+    <Slot
       data-slot="form-control"
       id={formItemId}
       aria-describedby={

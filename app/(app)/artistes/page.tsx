@@ -77,7 +77,7 @@ export default async function ArtistsPage() {
                       </p>
                     </div>
                     {!artist.active && (
-                      <Badge variant="muted" className="shrink-0">
+                      <Badge variant="secondary" className="shrink-0">
                         Inactif
                       </Badge>
                     )}
