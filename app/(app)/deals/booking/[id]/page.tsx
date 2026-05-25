@@ -141,15 +141,11 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
 
         {/* Boutons d'action — pattern KN */}
         <div className="flex items-center gap-2 flex-wrap pt-1">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled
-            title="À venir Phase 3.7 — Feuille de route"
-          >
-            <FileText className="mr-1.5 h-3.5 w-3.5" />
-            Ouvrir la FDR
+          <Button asChild type="button" variant="outline" size="sm">
+            <Link href={`/deals/booking/${deal.id}/fdr`}>
+              <FileText className="mr-1.5 h-3.5 w-3.5" />
+              Ouvrir la FDR
+            </Link>
           </Button>
           <DealActions
             deal={{

@@ -75,6 +75,42 @@ enum PaymentStatus {
   N_A
 }
 
+// ─────────────────────────── FDR / Feuille de route (Sprint 3.7) ───────────────────────────
+//
+// Reprise fidèle du modèle KN `EventBriefing` (cf. AGENTS.md règle copie
+// fidèle KN). Adaptations Youri V2 :
+//   - Pas de tables Hotel/Restaurant/Venue locales : tout en free-text +
+//     adresse BAN (Venue vit côté KN distant, snapshot pattern).
+//   - Pas de relation Contact locale : BriefingContact stocke `contactId`
+//     snapshot KN + champs inline (Pangee veut éviter de polluer l'annuaire
+//     pour les rôles ponctuels VTC/runner).
+//   - Multi-artiste : 1 FDR commune au deal (Stan validé 2026-05-26),
+//     envoyée à tous les artistes du deal.
+//   - Catégorie BOOKING uniquement pour Sprint 3.7 — PROD_EXE/CACHETS
+//     viendront aux Sprints 4/5.
+
+enum BriefingStatus {
+  DRAFT
+  COMPLETE
+  SENT
+}
+
+enum TravelDirection {
+  OUTBOUND
+  RETURN
+  INTER
+}
+
+enum BriefingRole {
+  PRODUCTION
+  REGISSEUR
+  VTC
+  TOUR_MANAGER
+  ORGANISATEUR
+  TECHNICIEN
+  AUTRE
+}
+
 // ─────────────────────────── USERS (Sprint 1) ───────────────────────────
 
 /// Compte utilisateur Pangee Prod. 3 seedés au bootstrap :
@@ -338,6 +374,12 @@ model Deal {
   // ── Charges diverses (dépenses Pangee) ──
   dealCharges  DealCharge[]
 
+  // ── Feuille de route (Sprint 3.7) ──
+  /// 1-1 optionnel : la FDR n'existe que si l'user l'a ouverte au moins
+  /// une fois (auto-création via ensureBriefingWithPrefill). Cascade
+  /// delete suit le soft-delete du Deal côté server action.
+  briefing     EventBriefing?
+
   // ── Audit multi-user ──
   /// User qui a créé ce deal. SetNull si l'user est désactivé (préserve
   /// l'historique sans casser la contrainte FK).
@@ -450,6 +492,133 @@ model DealCharge {
 
   @@index([dealId])
   @@index([deletedAt])
+}
+
+// ─────────────────────────── FDR / Feuille de route (Sprint 3.7) ───────────────────────────
+//
+// Copie fidèle du modèle KN `EventBriefing` adaptée Youri (cf. enums
+// BriefingStatus/BriefingRole/TravelDirection en haut de fichier).
+//
+// Pattern snapshot pour Venue + Contact : Pangee n'a pas de tables locales
+// (annuaire vit côté KN distant). Pour les contacts on stocke `contactId`
+// snapshot + champs inline (toujours peuplés — soit copiés depuis KN, soit
+// saisis libre pour les rôles ponctuels VTC/runner).
+
+/// Feuille de route d'un deal Booking. 1-1 avec Deal. Créée à la demande
+/// via `ensureBriefingWithPrefill(dealId)` — la FDR vide n'existe pas tant
+/// que l'user n'a pas ouvert la page /fdr.
+model EventBriefing {
+  id     String @id @default(cuid())
+  dealId String @unique
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  // ── Snapshot lieu (Venue KN distant — pattern identique Deal) ──
+  venueId   String?
+  venueName String?
+  venueCity String?
+
+  showTime    String?
+  /// Heure des balances (sound check / mise en place). Texte libre.
+  balanceTime String?
+
+  // ── Hébergement (free-text + adresse BAN data.gouv.fr) ──
+  hotelName    String?
+  hotelAddress String?
+
+  // ── Restauration (free-text + adresse BAN + flag "pris en charge") ──
+  /// `restaurantCovered=true` couvre le cas "le client paye le restau mais
+  /// on n'a pas encore l'adresse exacte" — utile pour indiquer à l'artiste
+  /// que le repas est OK sans préciser le lieu.
+  restaurantName    String?
+  restaurantAddress String?
+  restaurantCovered Boolean @default(false)
+
+  // ── Per diem (indemnité repas) ──
+  perDiemFlag   Boolean  @default(false)
+  perDiemAmount Decimal?
+
+  // ── Relations ──
+  travels  BriefingTravel[]
+  contacts BriefingContact[]
+
+  // ── Notes libres + status workflow ──
+  notes  String?
+  status BriefingStatus @default(DRAFT)
+
+  /// Date du dernier envoi par email aux artistes (UTC). Sert au badge
+  /// "Envoyée le X" + permet de bloquer un renvoi accidentel.
+  sentAt DateTime?
+
+  /// Soft-delete pour cohérence avec Deal (cascade côté server action).
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([deletedAt])
+}
+
+/// Trajet rattaché à une FDR (aller / retour / inter-étapes).
+/// `runs` stocke une liste JSON de transferts (taxi, voiture) attachés
+/// au trajet — voir commentaire détaillé sur le champ.
+model BriefingTravel {
+  id         String          @id @default(cuid())
+  briefingId String
+  briefing   EventBriefing   @relation(fields: [briefingId], references: [id], onDelete: Cascade)
+
+  direction   TravelDirection
+  date        DateTime
+  fromStation String
+  fromTime    String
+  toStation   String
+  toTime      String
+  comment     String?
+
+  /// "Runs" (transferts) optionnels — voiture / VTC.
+  ///
+  /// Stocké en JSON : `Array<{ location: string, time: string }>` — plusieurs
+  /// runs par trajet (ex. gare → hôtel puis hôtel → salle).
+  ///
+  /// Sémantique selon `direction` :
+  ///   - OUTBOUND : suite de pickups APRÈS l'arrivée
+  ///   - RETURN   : suite de pickups AVANT le départ
+  ///   - INTER    : transferts libres entre étapes
+  runs Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([briefingId])
+}
+
+/// Contact rattaché à une FDR avec un rôle métier (production, régisseur,
+/// VTC, tour manager, organisateur, technicien, autre).
+///
+/// Pattern snapshot annuaire KN :
+///   - `contactId` non null = snapshot d'un Contact KN distant (refetch
+///     possible via kn-client si besoin de rafraîchir les coordonnées)
+///   - `contactId` null = saisie libre "inline" (rôle ponctuel — runner,
+///     VTC qui change à chaque date — pas la peine de polluer l'annuaire KN)
+/// Dans les 2 cas, les champs `firstName/lastName/...` sont peuplés (soit
+/// copiés depuis KN au moment de la sélection, soit saisis manuellement).
+model BriefingContact {
+  id         String @id @default(cuid())
+  briefingId String
+  briefing   EventBriefing @relation(fields: [briefingId], references: [id], onDelete: Cascade)
+
+  contactId String?
+
+  firstName String?
+  lastName  String?
+  company   String?
+  phone     String?
+  email     String?
+
+  role BriefingRole
+
+  createdAt DateTime @default(now())
+
+  @@index([briefingId])
 }
 
 // ─────────────────────────── APP RUNTIME ───────────────────────────
