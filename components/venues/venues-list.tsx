@@ -1,70 +1,112 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, MapPin, Users as UsersIcon } from "lucide-react";
+import { Building2, MapPin, Users, Briefcase, Pencil } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { VenueFormDialog } from "@/components/venues/venue-form-dialog";
-import type { KnVenue } from "@/lib/kn-client";
+import { VenueFormDialog } from "./venue-form-dialog";
+import type { VenueListItem } from "@/lib/venues-local";
 
-export function VenuesList({ venues }: { venues: KnVenue[] }) {
-  const [editing, setEditing] = useState<KnVenue | null>(null);
+interface Props {
+  venues: VenueListItem[];
+}
+
+/**
+ * Liste des lieux sous forme de cartes — copie fidèle de KuroNeko-App
+ * (cf. `KuroNeko-App/components/venues/venues-list.tsx`). Clic sur une carte
+ * → ouvre le dialog en mode édition.
+ *
+ * Pour un lieu multi-salles, on affiche le nombre de salles (badge) + un
+ * preview compact des sous-salles avec leur jauge en bas. Pour un lieu mono-
+ * salle, on affiche directement la jauge.
+ */
+export function VenuesList({ venues }: Props) {
+  const [editing, setEditing] = useState<VenueListItem | null>(null);
 
   if (venues.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <p className="text-sm text-muted-foreground">Aucun lieu pour cette recherche.</p>
-        </CardContent>
-      </Card>
+      <div className="rounded-md border border-dashed py-12 text-center text-sm text-muted-foreground">
+        Aucun lieu pour l&apos;instant. Clique sur{" "}
+        <span className="font-medium text-foreground">Nouveau lieu</span> pour
+        en créer un.
+      </div>
     );
   }
 
   return (
     <>
-      <div className="space-y-2">
-        {venues.map((venue) => (
-          <Card key={venue.id} className="transition-shadow hover:shadow-sm">
-            <CardContent className="flex items-start justify-between gap-4 py-4">
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-medium">{venue.name}</p>
-                  <span className="text-sm text-muted-foreground">· {venue.city}</span>
-                  {venue.capacity != null && (
-                    <Badge variant="muted">
-                      <UsersIcon className="mr-1 h-3 w-3" />
-                      {venue.capacity}
-                    </Badge>
-                  )}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {venues.map((v) => (
+          <Card
+            key={v.id}
+            className="hover:bg-accent/40 hover:border-foreground/30 transition-colors cursor-pointer"
+            onClick={() => setEditing(v)}
+          >
+            <CardContent className="space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Building2 className="h-3.5 w-3.5 text-[--yr-gold] shrink-0" />
+                  <div className="font-semibold truncate">{v.name}</div>
                 </div>
-                {venue.address && (
-                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <MapPin className="h-3 w-3" />
-                    {venue.address}
-                  </p>
-                )}
-                {venue.rooms.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {venue.rooms.length} sous-salle{venue.rooms.length > 1 ? "s" : ""} :{" "}
-                    {venue.rooms.map((r) => r.name).join(", ")}
-                  </p>
-                )}
-                {venue.notes && (
-                  <p className="line-clamp-2 text-xs text-muted-foreground">{venue.notes}</p>
+                {v.rooms.length > 0 ? (
+                  <Badge variant="outline" className="shrink-0 tabular-nums">
+                    {v.rooms.length} salle{v.rooms.length > 1 ? "s" : ""}
+                  </Badge>
+                ) : (
+                  v.capacity != null && (
+                    <Badge variant="outline" className="shrink-0 tabular-nums">
+                      {v.capacity} pl
+                    </Badge>
+                  )
                 )}
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setEditing(venue)}>
-                <Pencil className="h-4 w-4" />
-              </Button>
+
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <MapPin className="h-3 w-3 shrink-0" />
+                <span className="truncate">{v.city}</span>
+              </div>
+
+              {/* Pills compactes par sous-salle, affichées seulement en multi-salles
+                  (sinon la jauge du lieu suffit). */}
+              {v.rooms.length > 0 && (
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {v.rooms.map((r) => (
+                    <span
+                      key={r.id}
+                      className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border bg-muted/40 text-muted-foreground"
+                      title={r.notes ?? undefined}
+                    >
+                      <span className="font-medium text-foreground/80">
+                        {r.name}
+                      </span>
+                      {r.capacity != null && (
+                        <span className="tabular-nums">· {r.capacity}</span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 text-[11px] text-muted-foreground pt-1 border-t">
+                <span className="inline-flex items-center gap-1">
+                  <Users className="h-3 w-3" />
+                  {v.contactsCount} contact{v.contactsCount > 1 ? "s" : ""}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Briefcase className="h-3 w-3" />
+                  {v.dealsCount} deal{v.dealsCount > 1 ? "s" : ""}
+                </span>
+                <span className="ml-auto">
+                  <Pencil className="h-3 w-3 opacity-50" />
+                </span>
+              </div>
             </CardContent>
           </Card>
         ))}
       </div>
-
       {editing && (
         <VenueFormDialog
-          open={true}
+          open
           onOpenChange={(o) => !o && setEditing(null)}
           venue={editing}
         />

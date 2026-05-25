@@ -88,6 +88,11 @@ export interface KnVenue {
   capacity: number | null;
   notes: string | null;
   rooms: KnVenueRoom[];
+  /**
+   * Nombre de contacts rattachés à ce lieu côté annuaire KN.
+   * Source authoritative : `_count.contacts` côté KN.
+   */
+  contactsCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -339,12 +344,27 @@ export function getVenue(id: string): Promise<KnVenue> {
   return knFetch<KnVenue>(`/api/external/venues/${encodeURIComponent(id)}`);
 }
 
+/**
+ * Sous-salle en payload de create/update venue. `id` présent = update d'une
+ * room existante ; `id` absent = création. Côté KN, le PATCH effectue le
+ * diff (delete rooms BDD absents de la liste + update existants + create
+ * nouveaux) en transaction.
+ */
+export interface VenueRoomInput {
+  id?: string;
+  name: string;
+  capacity?: number | null;
+  notes?: string | null;
+}
+
 export interface CreateVenueInput {
   name: string;
   city: string;
   address?: string | null;
   capacity?: number | null;
   notes?: string | null;
+  /** Sous-salles à créer en même temps que le lieu (mode composite). */
+  rooms?: VenueRoomInput[];
 }
 
 export function createVenue(input: CreateVenueInput): Promise<KnVenue> {
@@ -357,6 +377,16 @@ export function updateVenue(id: string, input: UpdateVenueInput): Promise<KnVenu
   return knFetch<KnVenue>(`/api/external/venues/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: input,
+  });
+}
+
+/**
+ * Hard delete d'un lieu côté KN (rooms cascade, deals/contacts → SetNull).
+ * Cf. `app/api/external/venues/[id]/route.ts § DELETE`.
+ */
+export function deleteVenue(id: string): Promise<void> {
+  return knFetch<void>(`/api/external/venues/${encodeURIComponent(id)}`, {
+    method: "DELETE",
   });
 }
 
