@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import {
   dealStatusLabel,
   DEAL_STATUS_LABELS,
+  formatShowTime,
 } from "@/components/deals/deal-helpers";
 import { DealBudgetSection } from "@/components/deals/deal-budget-section";
 import { DealArtistsSection } from "@/components/deals/deal-artists-section";
@@ -121,7 +122,7 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
           {deal.showTime && (
             <span className="inline-flex items-center gap-1.5">
               <Clock className="h-3.5 w-3.5" />
-              {deal.showTime}
+              {formatShowTime(deal.showTime)}
             </span>
           )}
           {deal.venueCity && (

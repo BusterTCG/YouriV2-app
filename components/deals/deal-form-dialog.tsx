@@ -186,11 +186,13 @@ export function DealFormDialog({ open, onOpenChange, deal }: Props) {
                   <Label htmlFor="showTime" className="text-xs uppercase tracking-wider">
                     Heure
                   </Label>
+                  {/* Stan 2026-05-26 : format xx:xx uniforme dans l'app
+                      (input type="time" force HH:MM en stockage + affichage). */}
                   <Input
                     id="showTime"
+                    type="time"
                     value={showTime}
                     onChange={(e) => setShowTime(e.target.value)}
-                    placeholder="20h30"
                     disabled={pending}
                   />
                 </div>

@@ -1,6 +1,8 @@
 "use server";
 
-import { BriefingRole, BriefingStatus } from "@prisma/client";
+import { BriefingRole, BriefingStatus, Prisma } from "@prisma/client";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
 import { safeAction, type ActionResult } from "@/lib/errors";
@@ -41,6 +43,7 @@ export async function ensureBriefingWithPrefill(
         venueId: true,
         venueName: true,
         venueCity: true,
+        venueAddress: true,
         showTime: true,
         organizerId: true,
         organizerName: true,
@@ -57,15 +60,17 @@ export async function ensureBriefingWithPrefill(
         venueId: true,
         venueName: true,
         venueCity: true,
+        venueAddress: true,
         showTime: true,
       },
     });
     const created = !existing;
 
     // 3. Upsert avec patch sélectif :
-    //    - À la création : on copie tout ce qu'on a sur le deal.
+    //    - À la création : on copie tout ce qu'on a sur le deal (lieu KN
+    //      snapshot + adresse libre BAN — les 2 sources sont reprises).
     //    - À l'update : on ne touche QUE les champs vides côté FDR pour ne
-    //      pas écraser un override manuel.
+    //      pas écraser un override manuel (Stan 2026-05-26 : "info complète").
     const briefing = await prisma.eventBriefing.upsert({
       where: { dealId },
       update: {
@@ -75,6 +80,11 @@ export async function ensureBriefingWithPrefill(
               venueName: deal.venueName,
               venueCity: deal.venueCity,
             }
+          : {}),
+        ...(existing &&
+        (!existing.venueAddress || existing.venueAddress.length === 0) &&
+        deal.venueAddress
+          ? { venueAddress: deal.venueAddress }
           : {}),
         ...(existing && (!existing.showTime || existing.showTime.length === 0) && deal.showTime
           ? { showTime: deal.showTime }
@@ -86,6 +96,7 @@ export async function ensureBriefingWithPrefill(
         venueId: deal.venueId ?? null,
         venueName: deal.venueName ?? null,
         venueCity: deal.venueCity ?? null,
+        venueAddress: deal.venueAddress ?? null,
         showTime: deal.showTime ?? null,
       },
     });
@@ -127,5 +138,74 @@ export async function ensureBriefingWithPrefill(
     }
 
     return { briefingId: briefing.id, created };
+  });
+}
+
+// ──────────────────────── Update champs simples (Lot B1) ────────────────────────
+//
+// Patch partiel des champs "scalaires" de la FDR : lieu (snapshot), heures,
+// hôtel, restaurant, per diem, notes, status. Les CRUD travels/contacts
+// vivent dans leurs propres actions (Lot B2/B3).
+//
+// Pattern KN : chaque champ sauve indépendamment via `autoSave(patch)` au
+// blur — l'indicateur "Sauvegarde…/Sauvegardé/Erreur" en haut de l'éditeur
+// donne le feedback. Pas de bouton "Enregistrer" global.
+
+const UpdateBriefingSchema = z.object({
+  briefingId: z.string().min(1),
+  patch: z.object({
+    venueId: z.string().nullable().optional(),
+    venueName: z.string().max(200).nullable().optional(),
+    venueCity: z.string().max(120).nullable().optional(),
+    venueAddress: z.string().max(300).nullable().optional(),
+    showTime: z.string().max(20).nullable().optional(),
+    balanceTime: z.string().max(20).nullable().optional(),
+    hotelName: z.string().max(200).nullable().optional(),
+    hotelAddress: z.string().max(300).nullable().optional(),
+    restaurantName: z.string().max(200).nullable().optional(),
+    restaurantAddress: z.string().max(300).nullable().optional(),
+    restaurantCovered: z.boolean().optional(),
+    perDiemFlag: z.boolean().optional(),
+    perDiemAmount: z.union([z.number().nonnegative(), z.literal(null)]).optional(),
+    notes: z.string().max(5000).nullable().optional(),
+    status: z.nativeEnum(BriefingStatus).optional(),
+  }),
+});
+
+export async function updateBriefing(
+  input: z.infer<typeof UpdateBriefingSchema>,
+): Promise<ActionResult> {
+  return safeAction("updateBriefing", async () => {
+    await requireUser();
+    const { briefingId, patch } = UpdateBriefingSchema.parse(input);
+    if (!briefingId) throw new Error("briefingId manquant");
+
+    // Construit le data Prisma en n'incluant que les champs explicitement
+    // fournis (undefined = on ne touche pas).
+    const data: Prisma.EventBriefingUpdateInput = {};
+    if (patch.venueId !== undefined) data.venueId = patch.venueId;
+    if (patch.venueName !== undefined) data.venueName = patch.venueName;
+    if (patch.venueCity !== undefined) data.venueCity = patch.venueCity;
+    if (patch.venueAddress !== undefined) data.venueAddress = patch.venueAddress;
+    if (patch.showTime !== undefined) data.showTime = patch.showTime;
+    if (patch.balanceTime !== undefined) data.balanceTime = patch.balanceTime;
+    if (patch.hotelName !== undefined) data.hotelName = patch.hotelName;
+    if (patch.hotelAddress !== undefined) data.hotelAddress = patch.hotelAddress;
+    if (patch.restaurantName !== undefined) data.restaurantName = patch.restaurantName;
+    if (patch.restaurantAddress !== undefined)
+      data.restaurantAddress = patch.restaurantAddress;
+    if (patch.restaurantCovered !== undefined)
+      data.restaurantCovered = patch.restaurantCovered;
+    if (patch.perDiemFlag !== undefined) data.perDiemFlag = patch.perDiemFlag;
+    if (patch.perDiemAmount !== undefined) data.perDiemAmount = patch.perDiemAmount;
+    if (patch.notes !== undefined) data.notes = patch.notes;
+    if (patch.status !== undefined) data.status = patch.status;
+
+    const updated = await prisma.eventBriefing.update({
+      where: { id: briefingId },
+      data,
+      select: { dealId: true },
+    });
+    revalidatePath(`/deals/booking/${updated.dealId}/fdr`);
   });
 }

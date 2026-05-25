@@ -54,6 +54,40 @@ export function formatPct(
   return `${(Math.round(n * 10) / 10).toString().replace(".", ",")}%`;
 }
 
+/**
+ * Normalise un format heure pour l'affichage uniforme `HH:MM`
+ * (Stan 2026-05-26 : "mettre le format xx:xx dans toute l'application").
+ *
+ * Accepte :
+ *   - `"20:30"` → `"20:30"` (déjà valide)
+ *   - `"20h30"` / `"20H30"` / `"20h"` / `"20"` → `"20:30"` / `"20:00"` / `"20:00"`
+ *   - `null` / `""` / format inconnu → chaîne vide (l'appelant décide du fallback)
+ *
+ * Sert UNIQUEMENT à l'affichage de valeurs legacy stockées en texte libre
+ * (ex. seed avec "20h30"). Les inputs sont désormais `<input type="time">`
+ * qui forcent le format HH:MM côté écriture.
+ */
+export function formatShowTime(s: string | null | undefined): string {
+  if (!s) return "";
+  const trimmed = s.trim();
+  if (/^\d{2}:\d{2}$/.test(trimmed)) return trimmed;
+  // "20h30" / "9h" / "20H30" / "9 h 30"
+  const m = trimmed.match(/^(\d{1,2})\s*[hH]\s*(\d{0,2})$/);
+  if (m) {
+    const h = m[1].padStart(2, "0");
+    const mm = (m[2] || "00").padStart(2, "0").slice(0, 2);
+    return `${h}:${mm}`;
+  }
+  // "20" seul → "20:00"
+  if (/^\d{1,2}$/.test(trimmed)) {
+    return `${trimmed.padStart(2, "0")}:00`;
+  }
+  // Format inconnu (ex. "doors 19h / show 20h") → on garde tel quel pour
+  // ne pas perdre l'info. L'user pourra ressaisir au format HH:MM via le
+  // form (type="time" forcera le bon format).
+  return trimmed;
+}
+
 /** Variant Badge shadcn (default / secondary / outline / destructive). */
 export type BadgeVariant = "default" | "secondary" | "outline" | "destructive";
 

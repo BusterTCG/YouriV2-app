@@ -12,6 +12,8 @@ import {
 import { prisma } from "@/lib/db";
 import { ensureBriefingWithPrefill } from "@/lib/actions/briefings";
 import { artistInitials } from "@/lib/artists";
+import { formatShowTime } from "@/components/deals/deal-helpers";
+import { BriefingEditor } from "@/components/briefings/briefing-editor";
 
 export const dynamic = "force-dynamic";
 
@@ -108,16 +110,11 @@ export default async function FdrPage({ params }: PageProps) {
               {deal.dealArtistes.length > 1 ? "s" : ""}
             </span>
           )}
-          <span className="text-muted-foreground/40">·</span>
-          <span className="inline-flex items-center gap-1 rounded-md border bg-muted/20 px-2 py-0.5 text-[10px] uppercase tracking-wider font-medium">
-            {briefing.status === "DRAFT" && "📝 Brouillon"}
-            {briefing.status === "COMPLETE" && "✅ Complète"}
-            {briefing.status === "SENT" && "📧 Envoyée"}
-          </span>
         </div>
       </div>
 
-      {/* Liste des artistes destinataires (affichage seul, pas d'édition) */}
+      {/* Liste des artistes destinataires (affichage seul, pas d'édition).
+          Sert de rappel visuel : la FDR sera envoyée à ces personnes. */}
       {deal.dealArtistes.length > 0 && (
         <div className="rounded-md border bg-muted/10 p-4">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2 flex items-center gap-1.5">
@@ -144,48 +141,36 @@ export default async function FdrPage({ params }: PageProps) {
         </div>
       )}
 
-      {/* Placeholder éditeur Lot B */}
-      <div className="rounded-md border-2 border-dashed border-muted-foreground/30 bg-muted/10 p-8 text-center space-y-3">
-        <FileText className="h-10 w-10 text-muted-foreground/40 mx-auto" />
-        <div>
-          <h2 className="text-base font-semibold mb-1">
-            Éditeur FDR — à venir Lot B
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            La FDR a été créée (id <code className="text-xs bg-muted/40 px-1 rounded">{briefing.id.slice(0, 8)}…</code>)
-            avec un prefill depuis le deal :
-          </p>
-        </div>
-        <ul className="text-xs text-muted-foreground space-y-1 text-left max-w-md mx-auto">
-          <li>
-            <strong>Lieu :</strong>{" "}
-            {briefing.venueName ?? <em>(non renseigné)</em>}
-            {briefing.venueCity && <> · {briefing.venueCity}</>}
-          </li>
-          <li>
-            <strong>Heure show :</strong>{" "}
-            {briefing.showTime ?? <em>(non renseignée)</em>}
-          </li>
-          <li>
-            <strong>Contacts auto-ajoutés :</strong>{" "}
-            {briefing.contacts.length === 0
-              ? <em>aucun</em>
-              : briefing.contacts.map((c) => `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || c.company || "—").join(", ")}
-          </li>
-          <li>
-            <strong>Trajets :</strong>{" "}
-            {briefing.travels.length === 0
-              ? <em>aucun</em>
-              : `${briefing.travels.length} trajet(s)`}
-          </li>
-        </ul>
-        <p className="text-[11px] text-muted-foreground/70 italic pt-2">
-          Lot B livrera l&apos;éditeur inline complet (lieu / hôtel / restaurant
-          / per diem / trajets / contacts / notes) au pattern KN show.
-          <br />
-          Puis Lot C — génération PDF, Lot D — envoi mail aux artistes.
-        </p>
-      </div>
+      {/* Éditeur FDR — Lot B1 : sections Spectacle / Hébergement / Notes.
+          Trajets (Lot B2) et Contacts (Lot B3) en placeholder pour l'instant. */}
+      <BriefingEditor
+        briefing={{
+          id: briefing.id,
+          showTime: briefing.showTime,
+          balanceTime: briefing.balanceTime,
+          venueId: briefing.venueId,
+          venueName: briefing.venueName,
+          venueCity: briefing.venueCity,
+          venueAddress: briefing.venueAddress,
+          hotelName: briefing.hotelName,
+          hotelAddress: briefing.hotelAddress,
+          restaurantName: briefing.restaurantName,
+          restaurantAddress: briefing.restaurantAddress,
+          restaurantCovered: briefing.restaurantCovered,
+          perDiemFlag: briefing.perDiemFlag,
+          perDiemAmount: briefing.perDiemAmount
+            ? Number(briefing.perDiemAmount)
+            : null,
+          notes: briefing.notes,
+          status: briefing.status,
+        }}
+        showTimeFromDeal={formatShowTime(deal.showTime)}
+        artistName={
+          deal.dealArtistes.length === 1
+            ? deal.dealArtistes[0].artist.name
+            : `les artistes du deal`
+        }
+      />
     </div>
   );
 }

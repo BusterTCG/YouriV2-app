@@ -516,6 +516,12 @@ model EventBriefing {
   venueId   String?
   venueName String?
   venueCity String?
+  /// Adresse libre (free-text + BAN data.gouv.fr) — copiée depuis Deal.venueAddress
+  /// au prefill, ou complétée à la main sur la FDR. Couvre les 2 cas Pangee :
+  ///   - Lieu de l'annuaire KN : l'adresse complète n'est pas forcément en BDD
+  ///   - Booking entreprise sans lieu KN : seule source d'adresse
+  /// Stan 2026-05-26 : "reprendre l'info complète depuis le deal".
+  venueAddress String?
 
   showTime    String?
   /// Heure des balances (sound check / mise en place). Texte libre.
