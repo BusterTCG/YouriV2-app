@@ -197,6 +197,52 @@ export async function removeDealArtist(id: string): Promise<ActionResult> {
   });
 }
 
+// ───────── Search roster artistes Pangee (pour ajout sur deal) ─────────
+
+export interface PangeeArtistOption {
+  id: string;
+  name: string;
+  slug: string;
+  color: string;
+  avatarUrl: string | null;
+}
+
+/**
+ * Liste les artistes Pangee actifs (active=true + non soft-deleted), avec
+ * exclusion optionnelle d'IDs déjà rattachés au deal. Utilisé par le
+ * combobox d'ajout sur la fiche détail. Tri français case-insensitive.
+ *
+ * Pangee gère < 100 artistes — pas de pagination ni de recherche serveur
+ * (la recherche se fait côté client dans le CommandInput shadcn).
+ */
+export async function listPangeeArtists(
+  excludeIds: string[] = [],
+): Promise<ActionResult<PangeeArtistOption[]>> {
+  return safeAction("listPangeeArtists", async () => {
+    await requireUser();
+    const items = await prisma.artist.findMany({
+      where: {
+        deletedAt: null,
+        active: true,
+        ...(excludeIds.length > 0 ? { id: { notIn: excludeIds } } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        color: true,
+        avatarUrl: true,
+      },
+    });
+    // Tri français case-insensitive (Divers reste en queue si présent)
+    return items.sort((a, b) => {
+      if (a.slug === "divers") return 1;
+      if (b.slug === "divers") return -1;
+      return a.name.localeCompare(b.name, "fr");
+    });
+  });
+}
+
 // ───────── Search annuaire KN (pour ContactPicker + VenuePicker) ─────────
 
 /** Recherche contacts depuis l'annuaire KN distant (via kn-client). Limit 50. */

@@ -79,7 +79,7 @@ export function DealResultSection({
           </div>
           {margePct != null && (
             <div className="text-xs text-muted-foreground tabular-nums">
-              {formatPct(margePct)} du budget
+              {formatPct(margePct, { integer: true })} du budget
             </div>
           )}
         </div>

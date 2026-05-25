@@ -1,6 +1,6 @@
 import { Briefcase, CheckCircle2, Hourglass, Percent, Receipt, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatEur } from "@/components/deals/deal-helpers";
+import { formatEur, formatPct } from "@/components/deals/deal-helpers";
 import type { BookingDealsListData } from "@/lib/deals-list-types";
 
 interface Props {
@@ -82,11 +82,7 @@ export function DealsTotals({ totals, periodLabel }: Props) {
         <Stat
           icon={<Percent className="h-3.5 w-3.5 text-muted-foreground" />}
           label="Taux marge"
-          value={
-            margePct != null
-              ? `${(Math.round(margePct * 10) / 10).toString().replace(".", ",")}%`
-              : "—"
-          }
+          value={formatPct(margePct, { integer: true })}
           sub="Marge ÷ budget"
         />
       </div>

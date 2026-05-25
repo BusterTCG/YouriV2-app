@@ -39,8 +39,18 @@ export const DEAL_STATUS_DISPLAY: Record<DealStatus, string> = {
   ANNULE: "❌ Annulé",
 };
 
-export function formatPct(n: number | null | undefined): string {
+/**
+ * Format un pourcentage. Par défaut 1 décimale (utile pour la répartition
+ * % par artiste sur la fiche détail — ex. "33,3%").
+ * Pass `{ integer: true }` pour arrondir à l'entier (utilisé sur le recap
+ * booking pour le taux de marge — Stan 2026-05-26 : pas de décimal).
+ */
+export function formatPct(
+  n: number | null | undefined,
+  opts?: { integer?: boolean },
+): string {
   if (n == null) return "—";
+  if (opts?.integer) return `${Math.round(n)}%`;
   return `${(Math.round(n * 10) / 10).toString().replace(".", ",")}%`;
 }
 

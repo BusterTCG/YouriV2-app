@@ -171,7 +171,7 @@ export function BookingDealsList({ deals, totals }: Props) {
 
                   {/* % — entre Marge Youri et St. Marge (Stan 2026-05-26 v2) */}
                   <td className="px-2 py-2 text-center whitespace-nowrap tabular-nums text-xs text-muted-foreground">
-                    {deal.margePct != null ? formatPct(deal.margePct) : "—"}
+                    {deal.margePct != null ? formatPct(deal.margePct, { integer: true }) : "—"}
                   </td>
 
                   {/* St. Marge — recap binaire Stan : Encaissé si budget PAID, sinon En cours. */}

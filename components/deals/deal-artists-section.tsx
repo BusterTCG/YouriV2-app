@@ -2,14 +2,15 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { TrendingDown } from "lucide-react";
+import { TrendingDown, Trash2 } from "lucide-react";
 import type { BookingDealArtistRow } from "@/lib/deals-list-types";
-import { updateDealArtiste } from "@/lib/actions/deals";
+import { updateDealArtiste, removeDealArtist } from "@/lib/actions/deals";
 import { formatPct } from "./deal-helpers";
 import { ArtistStatusSelect } from "./artist-status-select";
 import { MoneyInput } from "./money-input";
 import { artistInitials } from "@/lib/artists";
 import { DealSectionHeader } from "./deal-section-header";
+import { ArtistRosterPicker } from "./artist-roster-picker";
 
 /**
  * Section Artistes — copie fidèle KN show § Section "CHARGES" (rouge),
@@ -33,6 +34,7 @@ interface Props {
 
 export function DealArtistsSection({ dealId, budgetAmount, artistes }: Props) {
   const total = artistes.reduce((acc, a) => acc + (a.amount ?? 0), 0);
+  const excludeIds = artistes.map((a) => a.artist.id);
 
   return (
     <section className="space-y-1.5">
@@ -53,10 +55,8 @@ export function DealArtistsSection({ dealId, budgetAmount, artistes }: Props) {
             <ArtistRow key={a.id} row={a} budgetAmount={budgetAmount} />
           ))
         )}
-        <div className="px-3 py-2 bg-muted/20">
-          <span className="text-[11px] italic text-muted-foreground">
-            Ajout/suppression d&apos;artistes — à venir Lot suivant.
-          </span>
+        <div className="px-3 py-2 flex justify-end bg-muted/20">
+          <ArtistRosterPicker dealId={dealId} excludeIds={excludeIds} />
         </div>
       </div>
     </section>
@@ -70,7 +70,8 @@ function ArtistRow({
   row: BookingDealArtistRow;
   budgetAmount: number | null;
 }) {
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  const [removing, startRemoveTransition] = useTransition();
 
   /**
    * Montant ↔ % interconnectés (Stan 2026-05-26) :
@@ -106,6 +107,12 @@ function ArtistRow({
         await updateDealArtiste({ id: row.id, notes: next });
       });
     }
+  }
+  function handleRemove() {
+    if (!confirm(`Retirer ${row.artist.name} de ce deal ?`)) return;
+    startRemoveTransition(async () => {
+      await removeDealArtist(row.id);
+    });
   }
 
   return (
@@ -153,6 +160,17 @@ function ArtistRow({
           className="h-8 w-full rounded-md border bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-foreground/20"
         />
       </div>
+
+      {/* Supprimer (pattern identique aux charges) */}
+      <button
+        type="button"
+        onClick={handleRemove}
+        disabled={removing}
+        title={`Retirer ${row.artist.name} de ce deal`}
+        className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
