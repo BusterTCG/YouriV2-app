@@ -13,44 +13,27 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 import { createArtist } from "@/lib/actions/artists";
 
-/** Palette de couleurs proposées pour un nouvel artiste — cohérente avec les
- *  couleurs déjà seedées et CATEGORY_COLORS du reporting. */
-const COLOR_PALETTE = [
-  "#cc785c", // orange Anthropic
-  "#7c3aed", // violet
-  "#2563eb", // bleu
-  "#10b981", // émeraude
-  "#d4a93a", // or KN
-  "#e11d48", // rose
-  "#0891b2", // cyan
-  "#f59e0b", // amber
-  "#64748b", // ardoise
-];
-
-function pickRandomColor(): string {
-  return COLOR_PALETTE[Math.floor(Math.random() * COLOR_PALETTE.length)];
-}
-
 /**
- * Bouton « + Nouvel artiste » + Dialog pour saisir nom + couleur.
+ * Bouton « + Nouvel artiste » + Dialog pour saisir le nom.
+ *
+ * Couleur : Pangee Prod a une couleur unique pour tous les artistes (cf.
+ * lib/artists-constants.ts PANGEE_ARTIST_COLOR + règle Stan 2026-05-26 :
+ * "50+ artistes = pas la peine d'avoir des couleurs"). Pas de palette
+ * dans le dialog — juste le nom.
  *
  * Workflow :
  *   1. Click → ouvre Dialog
- *   2. User tape un nom + choisit une couleur (palette de 9, défaut random)
- *   3. Submit → server action createArtist → redirige vers /artistes/<slug>
- *
- * Le slug est généré côté serveur depuis le nom (slugify + dedupe).
- * La photo s'ajoute ensuite directement depuis la fiche artiste (rond → upload).
+ *   2. User tape un nom
+ *   3. Submit → server action createArtist (couleur forcée serveur)
+ *      → redirige vers /artistes/<slug>
  */
 export function NewArtistButton() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
-  const [color, setColor] = useState(pickRandomColor());
   const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(e?: React.FormEvent) {
@@ -58,14 +41,12 @@ export function NewArtistButton() {
     if (!name.trim() || pending) return;
     setError(null);
     startTransition(async () => {
-      const res = await createArtist({ name: name.trim(), color });
+      const res = await createArtist({ name: name.trim() });
       if (!res.ok) {
         setError(res.error);
         return;
       }
-      // Reset puis redirige vers la fiche du nouvel artiste
       setName("");
-      setColor(pickRandomColor());
       setOpen(false);
       router.push(`/artistes/${res.data!.slug}`);
     });
@@ -75,10 +56,7 @@ export function NewArtistButton() {
     setOpen(next);
     if (!next) {
       setError(null);
-      if (!pending) {
-        setName("");
-        setColor(pickRandomColor());
-      }
+      if (!pending) setName("");
     }
   }
 
@@ -117,31 +95,6 @@ export function NewArtistButton() {
                 disabled={pending}
                 maxLength={100}
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                Couleur
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {COLOR_PALETTE.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setColor(c)}
-                    disabled={pending}
-                    className={cn(
-                      "h-8 w-8 rounded-full transition-all",
-                      "ring-offset-2 ring-offset-background",
-                      color === c
-                        ? "ring-2 ring-foreground scale-110"
-                        : "ring-0 hover:ring-2 hover:ring-foreground/30",
-                    )}
-                    style={{ backgroundColor: c }}
-                    aria-label={`Choisir la couleur ${c}`}
-                  />
-                ))}
-              </div>
             </div>
 
             {error && (

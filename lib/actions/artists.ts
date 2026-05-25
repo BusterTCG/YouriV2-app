@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { uniqueSlug } from "@/lib/slug";
+import { PANGEE_ARTIST_COLOR } from "@/lib/artists-constants";
 
 /**
  * Server actions CRUD pour les artistes Youri (local).
@@ -14,15 +15,17 @@ import { uniqueSlug } from "@/lib/slug";
  *   - MEMBER fait TOUT — pas de check rôle ici.
  *   - L'audit log tracera qui a fait quoi (intégré au Sprint 10 — pour
  *     l'instant on stocke juste createdAt/updatedAt).
+ *
+ * Règle Pangee 2026-05-26 : couleur d'artiste forcée à PANGEE_ARTIST_COLOR
+ * (Stan gère 50+ artistes, pas de couleur distincte par artiste). On accepte
+ * le champ `color` dans le schéma Zod pour rétro-compat mais on ignore la
+ * valeur reçue à la création/modif.
  */
 
 // ─────────── Validation ───────────
 
-const HEX_COLOR_RE = /^#([0-9a-fA-F]{6})$/;
-
 const ArtistBaseSchema = z.object({
   name: z.string().trim().min(1, "Nom requis").max(120),
-  color: z.string().regex(HEX_COLOR_RE, "Couleur HEX attendue (#RRGGBB)").default("#6366f1"),
   notes: z.string().max(2000).optional().nullable(),
   active: z.boolean().default(true),
 });
@@ -51,7 +54,7 @@ export async function createArtist(input: unknown): Promise<ActionResult<{ slug:
       data: {
         name: data.name,
         slug,
-        color: data.color,
+        color: PANGEE_ARTIST_COLOR,
         notes: data.notes ?? null,
         active: data.active,
         // Règle métier Pangee (validée par Stan 2026-05-26) : le nom de
@@ -111,7 +114,8 @@ export async function updateArtist(
       data: {
         ...(patch.name !== undefined ? { name: patch.name } : {}),
         ...(nextSlug !== undefined ? { slug: nextSlug } : {}),
-        ...(patch.color !== undefined ? { color: patch.color } : {}),
+        // `color` n'est plus modifiable depuis l'UI (règle Pangee 2026-05-26).
+        // On ignore patch.color s'il arrive (rétro-compat client cache).
         ...(patch.notes !== undefined ? { notes: patch.notes ?? null } : {}),
         ...(patch.active !== undefined ? { active: patch.active } : {}),
       },

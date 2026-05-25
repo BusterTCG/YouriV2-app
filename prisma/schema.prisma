@@ -34,6 +34,42 @@ enum AuthSource {
   PASSWORD
 }
 
+/// Catégorie d'un deal Pangee. 3 valeurs (vs 5 côté KN — cf. règles V2) :
+/// - BOOKING : cession/booking d'artistes auprès d'organisateurs (mono-date)
+/// - PROD_EXE : production exécutive 15 % (multi-date, Sprint 4)
+/// - CACHETS : gestion paie intermittents (multi-date, Sprint 5)
+/// Sprint 3 = BOOKING uniquement. L'enum complet est créé dès Phase 3.1
+/// pour éviter une migration future. Les filtres `/deals/booking` etc.
+/// sélectionnent strictement par catégorie.
+enum DealCategory {
+  BOOKING
+  PROD_EXE
+  CACHETS
+}
+
+/// Statut d'un deal — workflow manuel simple (cf. décision archi B1 verrouillée).
+/// - LEAD : prospect / négociation amont
+/// - EN_COURS : négociation avancée mais pas signée
+/// - CONFIRME : deal signé / confirmé
+/// - ANNULE : pas fait (négo échouée ou annulation post-confirmation)
+enum DealStatus {
+  LEAD
+  EN_COURS
+  CONFIRME
+  ANNULE
+}
+
+/// Statut de paiement — utilisé pour les 2 niveaux par artiste sur DealArtiste :
+/// - paymentStatus = statut du cachet artiste (ce que l'artiste reçoit)
+/// - commissionStatus = statut de la commission Pangee (ce que Pangee perçoit)
+/// Les 2 sont indépendants car cachet et com sont facturés / payés séparément.
+enum PaymentStatus {
+  TO_INVOICE
+  INVOICED
+  PAID
+  N_A
+}
+
 // ─────────────────────────── USERS (Sprint 1) ───────────────────────────
 
 /// Compte utilisateur Pangee Prod. 3 seedés au bootstrap :
@@ -71,6 +107,10 @@ model User {
   lastAuthSource AuthSource?
   lastLoginAt    DateTime?
 
+  /// Relations d'audit — quel user a créé quel deal (multi-user audit léger).
+  /// Sprint 10 ajoutera un AuditEntry plus complet pour les actions update/delete.
+  dealsCreated   Deal[] @relation("DealCreatedBy")
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -99,8 +139,12 @@ model Artist {
   /// Unique. Si l'user crée 2 fois "Jean Dupont", le slug aura un suffixe -2.
   slug      String    @unique
 
-  /// Couleur d'identification (badges, chips, agenda futur). Hex.
-  color     String    @default("#6366f1")
+  /// Couleur d'identification (badges, chips, avatar). Hex.
+  /// Pangee gère 50+ artistes — pas de couleurs distinctes par artiste
+  /// (cf. règle 2026-05-26, lib/artists-constants.ts PANGEE_ARTIST_COLOR).
+  /// On garde le champ en BDD pour compat / option future, mais l'UI
+  /// force toujours la même couleur à la création/modif.
+  color     String    @default("#2563eb")
 
   /// URL relative vers la photo d'avatar uploadée (ex. "/uploads/avatars/<id>-<ts>.jpg").
   /// Null = pas de photo, on affiche le fallback initiales+couleur. Fichier stocké
@@ -128,7 +172,10 @@ model Artist {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  profile   ArtistProfile?
+  profile      ArtistProfile?
+  /// Deals où cet artiste apparaît (jointure DealArtiste avec cachet + com
+  /// + statuts paiement individuels). Sprint 3+.
+  dealArtistes DealArtiste[]
 }
 
 // ─────────────────────────── ARTIST PROFILE (Sprint 2-bis) ───────────────────────────
@@ -189,6 +236,158 @@ model ArtistProfile {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────── DEALS (Sprint 3) ───────────────────────────
+//
+// Sprint 3 ne gère que `category=BOOKING` (mono-date). PROD_EXE (Sprint 4) et
+// CACHETS (Sprint 5) sont multi-date — on ajoutera une table DealDate jointe
+// à ce moment-là. L'enum DealCategory inclut déjà les 3 valeurs pour éviter
+// une migration future.
+//
+// Pattern annuaire = snapshot (cf. project-youri-v2 décisions verrouillées) :
+// Deal stocke organizerId/Name/Company/City + venueId/Name/City. Pas de
+// relation Prisma — l'annuaire vit côté KN (lib/kn-client). On refetch via
+// API KN uniquement quand l'user clique "Modifier ce contact" / "ce lieu".
+//
+// Multi-artiste : relation DealArtiste avec cachet + commission + 2 statuts
+// paiement par artiste (cachet payé indépendant de com Pangee payée).
+//
+// Multi-user audit : createdById sur Deal (qui a créé). Sprint 10 ajoutera
+// un AuditEntry plus complet pour update/delete.
+//
+// Soft-delete : deletedAt sur Deal et DealArtiste. Cascade côté server action
+// (pas Prisma cascade qui supprimerait vraiment).
+
+/// Deal Pangee — entité métier centrale du Sprint 3+. Représente une opération
+/// commerciale (booking, prod exécutive, cachets) avec 1-N artistes.
+model Deal {
+  id          String       @id @default(cuid())
+
+  /// Catégorie discriminante (BOOKING / PROD_EXE / CACHETS). Sprint 3 = BOOKING
+  /// uniquement. Filtre strict côté pages `/deals/<categorie>`.
+  category    DealCategory
+
+  /// Workflow simple manuel (LEAD → EN_COURS → CONFIRME / ANNULE).
+  /// L'user passe les statuts à la main depuis la fiche deal.
+  status      DealStatus   @default(LEAD)
+
+  /// Titre court du deal (ex. "Nordine Ganso @ Comedy Club Paris").
+  /// Souvent généré auto depuis artiste(s) + lieu, modifiable.
+  title       String
+
+  /// Description / contexte libre (notes commerciales en amont, terms négociés).
+  description String?
+
+  /// Date principale du deal. Pour BOOKING (mono-date) c'est LA date du show.
+  /// Pour PROD_EXE/CACHETS (multi-date) c'est la 1re date — la liste complète
+  /// sera stockée dans DealDate (Sprint 4+).
+  date        DateTime
+
+  /// Heure du show — texte libre ("20h30", "doors 19h / show 20h"). Pas
+  /// parsé, juste affiché. Indépendant de la date pour préserver la flexibilité.
+  showTime    String?
+
+  // ── Snapshot organisateur (Contact KN distant) ──
+  /// ID du Contact KN au moment de la sélection. Refetch via kn-client.
+  organizerId      String?
+  /// Nom complet snapshotté (firstName + lastName concaténés ou company).
+  /// Désync acceptable avec KN jusqu'au prochain "Modifier ce contact".
+  organizerName    String?
+  organizerCompany String?
+  organizerCity    String?
+
+  // ── Snapshot lieu (Venue KN distant) ──
+  venueId    String?
+  venueName  String?
+  venueCity  String?
+
+  // ── Multi-artiste ──
+  dealArtistes DealArtiste[]
+
+  // ── Audit multi-user ──
+  /// User qui a créé ce deal. SetNull si l'user est désactivé (préserve
+  /// l'historique sans casser la contrainte FK).
+  createdById  String?
+  createdBy    User?  @relation("DealCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  /// Soft-delete (règle B3 verrouillée). Cascade vers DealArtiste côté
+  /// server action — pas Prisma onDelete qui supprimerait définitivement.
+  deletedAt DateTime?
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([deletedAt])
+  @@index([category])
+  @@index([date])
+}
+
+/// Jointure Deal × Artist avec champs financiers individuels.
+///
+/// Un deal Pangee peut concerner 1-N artistes (1 le plus souvent, 2-3 pour
+/// les plateaux). Chaque artiste a son cachet + sa com Pangee + des statuts
+/// paiement indépendants.
+///
+/// La com Pangee GLOBALE du deal est calculée à la volée (`SUM(commissionAmount)`).
+/// Pas stockée sur Deal pour éviter la désync.
+///
+/// Decimal pour les montants — préserve la précision (Prisma sur SQLite
+/// stocke en TEXT, sur Postgres en numeric).
+///
+/// Contrainte d'unicité (dealId, artistId) : un artiste ne peut apparaître
+/// qu'une fois par deal. Pour ajouter le même artiste avec 2 cachets
+/// différents, créer 2 deals séparés.
+model DealArtiste {
+  id       String @id @default(cuid())
+
+  dealId   String
+  deal     Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  artistId String
+  /// onDelete: Restrict — bloque la suppression d'un Artist si des DealArtiste
+  /// actifs le référencent. L'user doit "détacher" l'artiste des deals avant
+  /// (ou les supprimer en cascade soft-delete depuis le Deal parent).
+  artist   Artist @relation(fields: [artistId], references: [id], onDelete: Restrict)
+
+  /// Cachet brut de l'artiste — ce qu'il touche en €. Optionnel (None = pas
+  /// encore négocié / cachet non applicable).
+  cachetAmount    Decimal?
+
+  /// Statut paiement du cachet artiste (côté artiste — facturé ? payé ?).
+  paymentStatus   PaymentStatus @default(N_A)
+
+  /// Taux de commission Pangee (%, ex. 10.0 = 10 %). Optionnel — l'user peut
+  /// saisir directement `commissionAmount` sans le %. Si le % ET le cachet
+  /// sont remplis et qu'aucun montant n'est saisi en override, le montant
+  /// est calculé auto côté UI (cachet * pct / 100). Validé Stan 2026-05-26.
+  commissionPct   Decimal?
+
+  /// Commission Pangee en €. Saisissable directement OU calculé auto depuis
+  /// commissionPct (cf. above). Stocké en BDD comme valeur autoritative —
+  /// ce qui est saisi/affiché est ce qui compte (override possible du %).
+  commissionAmount Decimal?
+
+  /// Statut paiement de la com Pangee (indépendant du cachet artiste).
+  commissionStatus PaymentStatus @default(N_A)
+
+  /// Mois où la commission a été (ou doit être) encaissée par Pangee.
+  /// Utilisé pour le filtre période axis="paid" (cash-flow réel Pangee)
+  /// + reporting mensuel. Pattern repris de KN `Deal.commissionPaidAt`.
+  commissionPaidAt DateTime?
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Soft-delete cascade depuis Deal (set par server action quand Deal
+  /// est soft-delete). Permet de restaurer tout l'arbre depuis /trash.
+  deletedAt DateTime?
+
+  @@unique([dealId, artistId])
+  @@index([artistId])
+  @@index([deletedAt])
 }
 
 // ─────────────────────────── APP RUNTIME ───────────────────────────

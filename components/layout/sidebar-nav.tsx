@@ -23,11 +23,30 @@ export function SidebarNav({ isAdmin, onItemClick }: SidebarNavProps) {
         const visibleItems = group.items.filter((item) => !item.adminOnly || isAdmin);
         if (visibleItems.length === 0) return null;
 
+        const groupHeaderActive =
+          group.href != null &&
+          (pathname === group.href || pathname.startsWith(group.href + "/"));
+
         return (
           <div key={group.label} className="flex flex-col gap-1">
-            <h3 className="px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {group.label}
-            </h3>
+            {group.href ? (
+              <Link
+                href={group.href}
+                onClick={onItemClick}
+                className={cn(
+                  "px-3 text-xs font-semibold uppercase tracking-wide transition-colors",
+                  groupHeaderActive
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {group.label}
+              </Link>
+            ) : (
+              <h3 className="px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {group.label}
+              </h3>
+            )}
             {visibleItems.map((item) => {
               const isActive =
                 pathname === item.href ||

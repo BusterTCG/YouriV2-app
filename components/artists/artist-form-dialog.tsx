@@ -32,13 +32,15 @@ interface ArtistFormDialogProps {
 /**
  * Dialog form create/update d'un artiste.
  * Mode déterminé par la présence de `artist` (update) ou son absence (create).
+ *
+ * Pas de champ couleur : Pangee a une couleur d'artiste unique (cf.
+ * lib/artists-constants.ts + règle Stan 2026-05-26).
  */
 export function ArtistFormDialog({ open, onOpenChange, artist }: ArtistFormDialogProps) {
   const router = useRouter();
   const isEdit = artist != null;
 
   const [name, setName] = useState(artist?.name ?? "");
-  const [color, setColor] = useState(artist?.color ?? "#6366f1");
   const [notes, setNotes] = useState(artist?.notes ?? "");
   const [active, setActive] = useState(artist?.active ?? true);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +51,7 @@ export function ArtistFormDialog({ open, onOpenChange, artist }: ArtistFormDialo
     setError(null);
 
     startTransition(async () => {
-      const payload = { name: name.trim(), color, notes: notes.trim() || null, active };
+      const payload = { name: name.trim(), notes: notes.trim() || null, active };
       const res = isEdit
         ? await updateArtist({ id: artist.id, patch: payload })
         : await createArtist(payload);
@@ -91,28 +93,6 @@ export function ArtistFormDialog({ open, onOpenChange, artist }: ArtistFormDialo
               placeholder="Ex : Jean Dupont"
               disabled={isPending}
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="color">Couleur d&apos;identification</Label>
-            <div className="flex items-center gap-3">
-              <input
-                id="color"
-                type="color"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                className="h-10 w-16 cursor-pointer rounded border"
-                disabled={isPending}
-              />
-              <Input
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                placeholder="#6366f1"
-                pattern="^#[0-9a-fA-F]{6}$"
-                className="font-mono"
-                disabled={isPending}
-              />
-            </div>
           </div>
 
           <div className="space-y-2">

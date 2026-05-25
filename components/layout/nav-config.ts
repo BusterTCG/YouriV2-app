@@ -33,6 +33,12 @@ export interface NavItem {
 
 export interface NavGroup {
   label: string;
+  /**
+   * Si renseigné, le label du groupe devient un Link cliquable vers ce href
+   * (en plus d'afficher les items en dessous). Utilisé pour les groupes qui
+   * ont une page parent — ex. "Deals" → /deals (3 cards récap).
+   */
+  href?: string;
   items: NavItem[];
 }
 
@@ -46,10 +52,11 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "Deals",
+    href: "/deals", // page parent avec 3 cards récap (Booking / Prod Exé / Cachet)
     items: [
-      { label: "Booking", href: "/booking", icon: Briefcase, placeholder: true },
-      { label: "Prod Exé", href: "/prod-executive", icon: TrendingUp, placeholder: true },
-      { label: "Cachets", href: "/cachets", icon: Wallet, placeholder: true },
+      { label: "Booking", href: "/deals/booking", icon: Briefcase },
+      { label: "Prod Exé", href: "/deals/prod-executive", icon: TrendingUp, placeholder: true },
+      { label: "Cachets", href: "/deals/cachets", icon: Wallet, placeholder: true },
     ],
   },
   {
