@@ -31,9 +31,33 @@ export default async function ArtistsPage() {
       avatarPositionX: true,
       avatarPositionY: true,
       active: true,
+      // Phase 3.6+ — compteur deals réel (filtré soft-delete + non annulés)
+      // pour aligner avec la fiche artiste Vue d'ensemble.
+      _count: {
+        select: {
+          dealArtistes: {
+            where: {
+              deletedAt: null,
+              deal: { deletedAt: null, status: { not: "ANNULE" } },
+            },
+          },
+        },
+      },
     },
   });
-  const artists = sortArtistsDiversLast(artistsRaw);
+  const artists = sortArtistsDiversLast(
+    artistsRaw.map((a) => ({
+      id: a.id,
+      name: a.name,
+      slug: a.slug,
+      color: a.color,
+      avatarUrl: a.avatarUrl,
+      avatarPositionX: a.avatarPositionX,
+      avatarPositionY: a.avatarPositionY,
+      active: a.active,
+      dealsCount: a._count.dealArtistes,
+    })),
+  );
 
   return (
     <div className="max-w-5xl space-y-6">

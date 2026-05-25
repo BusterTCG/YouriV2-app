@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Mic2 } from "lucide-react";
 import { prisma } from "@/lib/db";
+import { getArtistOverviewRows } from "@/lib/artist-overview";
 import { ArtistTabs } from "@/components/artists/artist-tabs";
 import { ArtistInfoSection } from "@/components/artists/artist-info-section";
 import { ArtistAvatar } from "@/components/artists/artist-avatar";
@@ -40,6 +41,12 @@ export default async function ArtistPage({ params, searchParams }: ArtistPagePro
     },
   });
   if (!artist) notFound();
+
+  // Phase 3.6 — fetch les rows brutes pour la Vue d'ensemble (filtre période
+  // côté client via le selector). On ne le fait que pour l'onglet "overview"
+  // pour éviter la query inutile quand l'user est sur "info".
+  const overviewRows =
+    tab === "overview" ? await getArtistOverviewRows(artist.id) : null;
 
   return (
     <div className="max-w-6xl space-y-6">
@@ -94,7 +101,13 @@ export default async function ArtistPage({ params, searchParams }: ArtistPagePro
 
       <ArtistTabs slug={artist.slug} />
 
-      {tab === "overview" && <OverviewSection artistName={artist.name} />}
+      {tab === "overview" && overviewRows && (
+        <OverviewSection
+          rows={overviewRows}
+          artistName={artist.name}
+          totalDealsCount={overviewRows.length}
+        />
+      )}
 
       {tab === "info" && (
         <ArtistInfoSection

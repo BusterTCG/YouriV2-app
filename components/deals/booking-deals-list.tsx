@@ -225,18 +225,18 @@ export function BookingDealsList({ deals, totals }: Props) {
                 {formatEur(totals.totalMarge)}
               </td>
               <td />
-              <td className="px-2 py-2.5 text-[11px] text-muted-foreground">
+              <td className="px-2 py-2.5 text-[11px] text-muted-foreground whitespace-nowrap">
                 {totals.margeRealisee !== 0 && (
-                  <span className="text-emerald-600 dark:text-emerald-400">
-                    {formatEur(totals.margeRealisee)} réalisée
+                  <span className="text-emerald-600 dark:text-emerald-400 tabular-nums">
+                    {formatEur(totals.margeRealisee)} encaissée
                   </span>
                 )}
                 {totals.margeRealisee !== 0 && totals.margeAttente !== 0 && (
                   <span className="mx-1 text-muted-foreground/50">·</span>
                 )}
                 {totals.margeAttente !== 0 && (
-                  <span className="text-amber-600 dark:text-amber-400">
-                    {formatEur(totals.margeAttente)} en attente
+                  <span className="text-amber-600 dark:text-amber-400 tabular-nums">
+                    {formatEur(totals.margeAttente)} à venir
                   </span>
                 )}
               </td>

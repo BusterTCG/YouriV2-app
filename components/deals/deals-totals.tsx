@@ -66,13 +66,13 @@ export function DealsTotals({ totals, periodLabel }: Props) {
                 {totals.margeRealisee !== 0 && (
                   <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
                     <CheckCircle2 className="h-3 w-3" />
-                    {formatEur(totals.margeRealisee)} réalisée
+                    {formatEur(totals.margeRealisee)} encaissée
                   </span>
                 )}
                 {totals.margeAttente !== 0 && (
                   <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
                     <Hourglass className="h-3 w-3" />
-                    {formatEur(totals.margeAttente)} en attente
+                    {formatEur(totals.margeAttente)} à venir
                   </span>
                 )}
               </span>

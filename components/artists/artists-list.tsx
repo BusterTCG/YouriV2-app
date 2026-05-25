@@ -36,6 +36,9 @@ export interface ArtistListItem {
   avatarPositionX: number;
   avatarPositionY: number;
   active: boolean;
+  /** Nombre de deals où l'artiste est rattaché (filtré soft-delete + non
+   *  annulés). Calculé côté server via _count.dealArtistes. Phase 3.6+. */
+  dealsCount: number;
 }
 
 interface Props {
@@ -148,10 +151,12 @@ export function ArtistsList({ artists }: Props) {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {/* KPIs deals/tâches : placeholder Sprint 3 (model Deal Pangee)
-                      + Sprint 6 (model Task). Pour l'instant 0 figés. */}
+                  {/* Compteur deals branché Phase 3.6+ (Stan).
+                      Tâches : placeholder 0 figé (Sprint 6 — model Task). */}
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>0 deals</span>
+                    <span>
+                      {artist.dealsCount} deal{artist.dealsCount > 1 ? "s" : ""}
+                    </span>
                     <span>·</span>
                     <span>0 tâches</span>
                   </div>
