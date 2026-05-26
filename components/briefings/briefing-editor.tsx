@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import {
   CheckCircle2,
   Clock,
+  Eye,
   Hotel,
   Loader2,
   StickyNote,
@@ -12,6 +14,7 @@ import {
   Users,
   Utensils,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { BriefingStatus } from "@prisma/client";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -77,6 +80,8 @@ export interface BriefingEditorData {
   /** Adresse libre BAN — copiée depuis Deal.venueAddress au prefill,
    *  éditable sur la FDR. Stan 2026-05-26 : "info complète". */
   venueAddress: string | null;
+  /** Jauge / capacité du lieu (auto-remplie au pick venue, modifiable). */
+  capacity: number | null;
   hotelName: string | null;
   hotelAddress: string | null;
   restaurantName: string | null;
@@ -89,6 +94,8 @@ export interface BriefingEditorData {
 }
 
 interface Props {
+  /** ID du deal — sert au lien "Visualiser" vers /print/fdr/[id]. */
+  dealId: string;
   briefing: BriefingEditorData;
   /** Heure du show depuis Deal — affichée en lecture seule (source de vérité). */
   showTimeFromDeal: string | null;
@@ -104,10 +111,10 @@ interface Props {
 }
 
 export function BriefingEditor({
+  dealId,
   briefing,
   showTimeFromDeal,
   // artistName conservée en signature — sera utilisée au Lot D (envoi mail).
-  // Préfixée _ pour signaler "intentionnellement non utilisée pour l'instant".
   artistName: _artistName,
   travels,
   eventDate,
@@ -128,6 +135,9 @@ export function BriefingEditor({
       : null,
   );
   const [venueAddress, setVenueAddress] = useState(briefing.venueAddress ?? "");
+  const [capacity, setCapacity] = useState<string>(
+    briefing.capacity != null ? String(briefing.capacity) : "",
+  );
   const [hotelName, setHotelName] = useState(briefing.hotelName ?? "");
   const [hotelAddress, setHotelAddress] = useState(briefing.hotelAddress ?? "");
   const [restaurantName, setRestaurantName] = useState(
@@ -172,11 +182,27 @@ export function BriefingEditor({
 
   function handleVenueChange(next: VenueSnapshot | null) {
     setVenue(next);
-    autoSave({
+    // Stan 2026-05-26 : au pick d'un lieu KN, on copie l'adresse + la
+    // jauge dans la FDR. **Override systématique** — choisir un lieu KN
+    // est un signal explicite "remplace par cette donnée KN" (sinon
+    // l'user ne voit pas remonter l'info si la FDR avait déjà une vieille
+    // saisie). Si le lieu KN n'a pas d'adresse renseignée, on met null
+    // et on laisse l'user saisir à la main (un message d'info s'affiche).
+    const patch: Parameters<typeof updateBriefing>[0]["patch"] = {
       venueId: next?.id ?? null,
       venueName: next?.name ?? null,
       venueCity: next?.city ?? null,
-    });
+    };
+    if (next) {
+      const nextAddress = next.address ?? null;
+      patch.venueAddress = nextAddress;
+      setVenueAddress(nextAddress ?? "");
+      if (next.capacity != null) {
+        patch.capacity = next.capacity;
+        setCapacity(String(next.capacity));
+      }
+    }
+    autoSave(patch);
   }
 
   function handleStatusChange(s: BriefingStatus) {
@@ -218,19 +244,46 @@ export function BriefingEditor({
             · {STATUS_META[status].hint}
           </span>
         </div>
-        <SaveIndicator state={saveState} error={saveError} />
+        <div className="flex items-center gap-3 flex-wrap">
+          <SaveIndicator state={saveState} error={saveError} />
+          {/* Visualiser → ouvre /print/fdr/[id]?preview=1 dans un nouvel
+              onglet. Lot C2 ajoutera "Imprimer / PDF" (Puppeteer) à côté. */}
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            title="Visualiser l'aperçu de la FDR (mise en page imprimable)"
+          >
+            <Link
+              href={`/print/fdr/${dealId}?preview=1`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Eye className="h-4 w-4 mr-1.5" />
+              Visualiser
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Section : Spectacle */}
       <Section icon={<Theater />} title="Spectacle">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Salle">
-            <VenuePicker value={venue} onChange={handleVenueChange} />
+            {/* h-8 pour matcher la taille des Inputs (Stan 2026-05-26).
+                L'override de l'adresse / jauge se fait automatiquement
+                au pick du lieu via handleVenueChange — pas de bouton
+                refresh manuel (Stan : "pas utile en prod"). */}
+            <VenuePicker
+              value={venue}
+              onChange={handleVenueChange}
+              className="h-8 text-sm"
+            />
           </Field>
           <Field label="Heure du show">
-            {/* Lecture seule — source de vérité = deal.showTime. Pour modifier,
-                l'user édite la fiche deal (évite double saisie + désynchro). */}
-            <div className="h-9 inline-flex items-center gap-1.5 rounded-md border bg-muted/30 px-3 text-sm tabular-nums w-full">
+            {/* Lecture seule — source de vérité = deal.showTime.
+                h-8 pour matcher les Inputs (Stan 2026-05-26). */}
+            <div className="h-8 inline-flex items-center gap-1.5 rounded-md border bg-muted/30 px-3 text-sm tabular-nums w-full">
               <Clock className="h-3.5 w-3.5 text-muted-foreground" />
               <span
                 className={cn(
@@ -257,10 +310,8 @@ export function BriefingEditor({
             />
           </Field>
           {/* Adresse complète du lieu — Stan 2026-05-26 :
-              "reprendre l'info complète du deal". Couvre les 2 cas :
-              lieu KN référencé (adresse pas forcément en BDD) + booking
-              entreprise avec seulement l'adresse libre. Prefill depuis
-              Deal.venueAddress côté ensureBriefingWithPrefill. */}
+              "reprendre l'info complète du deal" + auto-fill depuis
+              lieu KN si choisi. */}
           <Field label="Adresse du lieu" className="sm:col-span-2">
             <AddressAutocomplete
               value={venueAddress}
@@ -269,6 +320,42 @@ export function BriefingEditor({
                 autoSave({ venueAddress: v || null });
               }}
               placeholder="N° et rue (autocomplete BAN data.gouv.fr)…"
+            />
+            {/* Indice si un lieu KN est choisi mais qu'il n'a pas d'adresse
+                renseignée côté annuaire. Permet à Stan de comprendre pourquoi
+                rien n'a remonté quand il a sélectionné le lieu. */}
+            {venue && !venueAddress && (
+              <p className="text-[11px] text-amber-700 dark:text-amber-400 italic mt-1">
+                ⚠ Ce lieu n&apos;a pas d&apos;adresse renseignée dans
+                l&apos;annuaire KN. Saisis-la ci-dessus, ou complète-la
+                directement depuis{" "}
+                <a
+                  href="http://localhost:3000/lieux"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-amber-900"
+                >
+                  /lieux KN
+                </a>
+                .
+              </p>
+            )}
+          </Field>
+          {/* Jauge — auto-remplie depuis lieu KN, modifiable manuellement
+              (Stan 2026-05-26). */}
+          <Field label="Jauge (capacité)">
+            <Input
+              type="number"
+              min={0}
+              value={capacity}
+              onChange={(e) => setCapacity(e.target.value)}
+              onBlur={() =>
+                autoSave({
+                  capacity: capacity ? Number(capacity) : null,
+                })
+              }
+              placeholder="—"
+              className="text-sm"
             />
           </Field>
         </div>

@@ -165,6 +165,7 @@ const UpdateBriefingSchema = z.object({
     venueAddress: z.string().max(300).nullable().optional(),
     showTime: z.string().max(20).nullable().optional(),
     balanceTime: z.string().max(20).nullable().optional(),
+    capacity: z.union([z.number().int().nonnegative(), z.literal(null)]).optional(),
     hotelName: z.string().max(200).nullable().optional(),
     hotelAddress: z.string().max(300).nullable().optional(),
     restaurantName: z.string().max(200).nullable().optional(),
@@ -194,6 +195,7 @@ export async function updateBriefing(
     if (patch.venueAddress !== undefined) data.venueAddress = patch.venueAddress;
     if (patch.showTime !== undefined) data.showTime = patch.showTime;
     if (patch.balanceTime !== undefined) data.balanceTime = patch.balanceTime;
+    if (patch.capacity !== undefined) data.capacity = patch.capacity;
     if (patch.hotelName !== undefined) data.hotelName = patch.hotelName;
     if (patch.hotelAddress !== undefined) data.hotelAddress = patch.hotelAddress;
     if (patch.restaurantName !== undefined) data.restaurantName = patch.restaurantName;

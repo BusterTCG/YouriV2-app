@@ -20,11 +20,24 @@ import { searchKnVenues } from "@/lib/actions/deals";
 import { cn } from "@/lib/utils";
 import type { KnVenue } from "@/lib/kn-client";
 
-/** VenuePicker — combobox avec recherche depuis l'annuaire KN (lib/kn-client). */
+/** VenuePicker — combobox avec recherche depuis l'annuaire KN (lib/kn-client).
+ *
+ * Stan 2026-05-26 : enrichi avec `address` + `capacity` snapshot pour la FDR :
+ *   - `address` : adresse complète du lieu KN (utilisée pour le champ
+ *     "Adresse du lieu" de la FDR sans avoir à re-saisir)
+ *   - `capacity` : jauge du lieu KN (utilisée pour le champ "Jauge" FDR)
+ * Ces champs sont OPTIONNELS côté snapshot pour rester compatible avec les
+ * callers qui n'en ont pas besoin (form deal de base) — ils ne changent pas
+ * le contrat existant.
+ */
 export interface VenueSnapshot {
   id: string;
   name: string;
   city: string;
+  /** Adresse complète (optionnel — peuplé si dispo côté annuaire KN). */
+  address?: string | null;
+  /** Jauge / capacité (optionnel — peuplé si dispo côté annuaire KN). */
+  capacity?: number | null;
 }
 
 interface Props {
@@ -51,7 +64,15 @@ export function VenuePicker({ value, onChange, className }: Props) {
   }, [query, open]);
 
   function pick(v: KnVenue) {
-    onChange({ id: v.id, name: v.name, city: v.city });
+    // Stan 2026-05-26 : on peuple aussi address + capacity pour que la FDR
+    // récupère l'info complète automatiquement (sans re-fetch côté caller).
+    onChange({
+      id: v.id,
+      name: v.name,
+      city: v.city,
+      address: v.address ?? null,
+      capacity: v.capacity ?? null,
+    });
     setOpen(false);
   }
 

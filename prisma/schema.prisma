@@ -527,6 +527,11 @@ model EventBriefing {
   /// Heure des balances (sound check / mise en place). Texte libre.
   balanceTime String?
 
+  /// Jauge (capacité du lieu). Auto-remplie depuis Venue KN au pick du lieu,
+  /// modifiable à la main (cas booking sans lieu KN ou capacité différente
+  /// de la jauge par défaut du lieu).
+  capacity    Int?
+
   // ── Hébergement (free-text + adresse BAN data.gouv.fr) ──
   hotelName    String?
   hotelAddress String?

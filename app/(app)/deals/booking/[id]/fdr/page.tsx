@@ -145,6 +145,7 @@ export default async function FdrPage({ params }: PageProps) {
           + B3 (contacts). Reste à venir : Lot C (génération PDF) et
           Lot D (envoi mail aux artistes). */}
       <BriefingEditor
+        dealId={id}
         briefing={{
           id: briefing.id,
           showTime: briefing.showTime,
@@ -153,6 +154,7 @@ export default async function FdrPage({ params }: PageProps) {
           venueName: briefing.venueName,
           venueCity: briefing.venueCity,
           venueAddress: briefing.venueAddress,
+          capacity: briefing.capacity,
           hotelName: briefing.hotelName,
           hotelAddress: briefing.hotelAddress,
           restaurantName: briefing.restaurantName,

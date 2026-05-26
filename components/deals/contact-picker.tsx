@@ -32,6 +32,10 @@ export interface ContactSnapshot {
   name: string;
   company: string | null;
   city: string | null;
+  /** Téléphone (snapshot KN, peut être null si le contact n'en a pas). */
+  phone?: string | null;
+  /** Email (snapshot KN, peut être null). */
+  email?: string | null;
 }
 
 interface Props {
@@ -60,11 +64,15 @@ export function ContactPicker({ value, onChange, className }: Props) {
 
   function pick(c: KnContact) {
     const fullName = [c.firstName, c.lastName].filter(Boolean).join(" ").trim() || c.company || "—";
+    // Stan 2026-05-26 : on peuple aussi phone + email pour que la FDR
+    // récupère le numéro automatiquement (sans re-fetch côté caller).
     onChange({
       id: c.id,
       name: fullName,
       company: c.company,
       city: c.city,
+      phone: c.phone,
+      email: c.email,
     });
     setOpen(false);
   }
