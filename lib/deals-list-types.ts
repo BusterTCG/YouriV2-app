@@ -27,7 +27,7 @@ export type DealsListStatus = "all" | "todo" | "paid";
 
 export const STATUS_OPTIONS: Array<{ value: DealsListStatus; label: string; emoji?: string }> = [
   { value: "all", label: "Tous" },
-  { value: "todo", label: "En attente", emoji: "⏳" },
+  { value: "todo", label: "En cours", emoji: "⏳" },
   { value: "paid", label: "Encaissé", emoji: "✅" },
 ];
 
@@ -120,7 +120,10 @@ export interface BookingDealsListData {
 }
 
 export const DEFAULT_PERIOD: PeriodPreset = "all";
-export const DEFAULT_STATUS: DealsListStatus = "all";
+// Stan 2026-05-26 : par défaut on filtre sur les deals "En cours" (= non
+// encaissés). L'user qui ouvre /deals/booking voit en priorité ce qu'il
+// reste à boucler.
+export const DEFAULT_STATUS: DealsListStatus = "todo";
 
 export function parsePeriod(v: string | undefined): PeriodPreset {
   return parsePeriodPreset(v, DEFAULT_PERIOD);

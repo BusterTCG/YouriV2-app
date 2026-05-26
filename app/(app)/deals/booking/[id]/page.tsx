@@ -11,16 +11,13 @@ import {
 } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { Button } from "@/components/ui/button";
-import {
-  dealStatusLabel,
-  DEAL_STATUS_LABELS,
-  formatShowTime,
-} from "@/components/deals/deal-helpers";
+import { formatShowTime } from "@/components/deals/deal-helpers";
 import { DealBudgetSection } from "@/components/deals/deal-budget-section";
 import { DealArtistsSection } from "@/components/deals/deal-artists-section";
 import { DealChargesSection } from "@/components/deals/deal-charges-section";
 import { DealResultSection } from "@/components/deals/deal-result-section";
 import { DealActions } from "@/components/deals/deal-actions";
+import { DealStatusInline } from "@/components/deals/deal-status-inline";
 import {
   DealManagementFeesSection,
   type DealManagementFeeRow,
@@ -93,6 +90,13 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
   const totalArtistes = artistes.reduce((acc, a) => acc + (a.amount ?? 0), 0);
   const totalCharges = charges.reduce((acc, c) => acc + (c.amount ?? 0), 0);
   const isEncaisse = deal.budgetPaymentStatus === "PAID";
+  // Prérequis amont pour le tag "Dispo pour paiement" sur la section MF
+  const allArtistesPaid =
+    artistes.length === 0 ||
+    artistes.every((a) => a.paymentStatus === "PAID");
+  const allChargesPaid =
+    charges.length === 0 ||
+    charges.every((c) => c.paymentStatus === "PAID");
 
   // Marge Youri brute (base de calcul des management fees) :
   // Budget − Artistes − Charges. La marge nette Pangee (après MF) est
@@ -111,9 +115,7 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
       notes: mf.notes,
     }),
   );
-  const totalMf = managementFees.reduce((acc, m) => acc + (m.amount ?? 0), 0);
 
-  const dStatus = dealStatusLabel(deal.status);
   const organizerLabel = deal.organizerName ?? "Sans organisateur";
 
   return (
@@ -159,12 +161,7 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
               {deal.venueCity}
             </span>
           )}
-          <span className="inline-flex items-center gap-1.5">
-            <span>{dStatus.emoji}</span>
-            {DEAL_STATUS_LABELS[deal.status]}
-          </span>
-          <span className="text-muted-foreground/40">·</span>
-          <span>Booking</span>
+          <DealStatusInline dealId={deal.id} value={deal.status} />
         </div>
 
         {/* Boutons d'action — pattern KN */}
@@ -227,6 +224,8 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
         margeYouri={margeYouriBrute}
         fees={managementFees}
         isEncaisse={isEncaisse}
+        allArtistesPaid={allArtistesPaid}
+        allChargesPaid={allChargesPaid}
       />
 
       {/* Notes deal globales */}

@@ -132,7 +132,7 @@ function ChargeRow({ row }: { row: BookingDealChargeRow }) {
         <MoneyInput value={row.amount} onCommit={commitAmount} />
       </div>
 
-      {/* Toggle Payé */}
+      {/* Toggle Payé (charges = sortie cash → "Payé", pas "Encaissé") */}
       <div className="w-36 shrink-0">
         <PaidToggle
           isOn={row.paymentStatus === "PAID"}

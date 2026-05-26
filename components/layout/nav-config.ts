@@ -8,6 +8,7 @@ import {
   Users,
   MapPin,
   BarChart3,
+  HandCoins,
   Settings,
   Trash2,
   type LucideIcon,
@@ -57,6 +58,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Booking", href: "/deals/booking", icon: Briefcase },
       { label: "Prod Exé", href: "/deals/prod-executive", icon: TrendingUp, placeholder: true },
       { label: "Cachets", href: "/deals/cachets", icon: Wallet, placeholder: true },
+      { label: "Management fees", href: "/deals/management-fees", icon: HandCoins },
     ],
   },
   {

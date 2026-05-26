@@ -167,6 +167,13 @@ model User {
   lastAuthSource AuthSource?
   lastLoginAt    DateTime?
 
+  /// Clé d'identification dans lib/pangee-team.ts (stan / certe / angath /
+  /// null). Sert au pré-filtrage de la page /deals/management-fees sur
+  /// l'associé connecté (Stan 2026-05-26). Migration future task #47 :
+  /// remplacer lib/pangee-team.ts par un fetch dynamique des users avec
+  /// pangeeKey défini.
+  pangeeKey      String?
+
   /// Relations d'audit — quel user a créé quel deal (multi-user audit léger).
   /// Sprint 10 ajoutera un AuditEntry plus complet pour les actions update/delete.
   dealsCreated   Deal[] @relation("DealCreatedBy")

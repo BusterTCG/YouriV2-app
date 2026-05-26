@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { listContacts, listVenues, type KnContact, type KnVenue } from "@/lib/kn-client";
+import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
 
 /**
  * Server actions /deals — édition inline tableau + actions CRUD.
@@ -128,7 +129,7 @@ export async function updateDealMeta(
   });
 }
 
-/** Soft-delete deal + cascade DealArtiste + DealCharge. Redirige vers la liste. */
+/** Soft-delete deal + cascade DealArtiste + DealCharge + DealManagementFee. */
 export async function softDeleteDeal(id: string): Promise<ActionResult> {
   return safeAction("softDeleteDeal", async () => {
     await requireUser();
@@ -138,8 +139,11 @@ export async function softDeleteDeal(id: string): Promise<ActionResult> {
       prisma.deal.update({ where: { id }, data: { deletedAt: now } }),
       prisma.dealArtiste.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
       prisma.dealCharge.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
+      // Cascade MF — alignement avec la doc du model (audit 2026-05-26).
+      prisma.dealManagementFee.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
     ]);
     revalidatePath("/deals/booking");
+    revalidatePath("/deals/management-fees");
   });
 }
 
@@ -177,6 +181,7 @@ export async function addDealArtist(
       },
       select: { id: true },
     });
+    await recomputeMfForDeal(dealId);
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${dealId}`);
     return { id: created.id };
@@ -192,6 +197,7 @@ export async function removeDealArtist(id: string): Promise<ActionResult> {
       data: { deletedAt: new Date() },
       select: { dealId: true },
     });
+    await recomputeMfForDeal(da.dealId);
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${da.dealId}`);
   });
@@ -283,6 +289,9 @@ export async function setDealStatus(
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${dealId}`);
     revalidatePath("/deals");
+    // La page liste MF exclut les deals ANNULE — invalider son cache si le
+    // statut change vers/depuis ANNULE (audit 2026-05-26).
+    revalidatePath("/deals/management-fees");
   });
 }
 
@@ -441,6 +450,10 @@ export async function updateDealBudget(
     if (paidAt !== undefined) data.budgetPaidAt = paidAt;
 
     await prisma.deal.update({ where: { id: dealId }, data });
+    // Recalcule les MF si le budget a changé (cf. helper).
+    if (amount !== undefined) {
+      await recomputeMfForDeal(dealId);
+    }
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${dealId}`);
   });
@@ -508,6 +521,10 @@ export async function updateDealArtiste(
       data,
       select: { dealId: true },
     });
+    // Si le cachet (montant artiste) change, la marge bouge → recalc MF.
+    if (cachetAmount !== undefined) {
+      await recomputeMfForDeal(da.dealId);
+    }
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${da.dealId}`);
   });
@@ -537,6 +554,9 @@ export async function addDealCharge(
       },
       select: { id: true },
     });
+    if (amount !== undefined && amount !== null) {
+      await recomputeMfForDeal(dealId);
+    }
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${dealId}`);
     return { id: charge.id };
@@ -587,6 +607,9 @@ export async function updateDealCharge(
       data,
       select: { dealId: true },
     });
+    if (amount !== undefined) {
+      await recomputeMfForDeal(charge.dealId);
+    }
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${charge.dealId}`);
   });
@@ -601,6 +624,7 @@ export async function removeDealCharge(id: string): Promise<ActionResult> {
       data: { deletedAt: new Date() },
       select: { dealId: true },
     });
+    await recomputeMfForDeal(charge.dealId);
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${charge.dealId}`);
   });

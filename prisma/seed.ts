@@ -32,18 +32,21 @@ const USERS = [
     name: "Stan",
     role: UserRole.ADMIN,
     color: "#7c3aed", // violet
+    pangeeKey: "stan",
   },
   {
     email: "certe@pangeeprod.com",
     name: "Certe",
     role: UserRole.MEMBER,
     color: "#0ea5e9", // bleu cyan
+    pangeeKey: "certe",
   },
   {
     email: "angath@pangeeprod.com",
     name: "Angath",
     role: UserRole.MEMBER,
     color: "#f59e0b", // amber
+    pangeeKey: "angath",
   },
 ] as const;
 
@@ -112,6 +115,7 @@ async function main() {
         role: user.role,
         color: user.color,
         active: true,
+        pangeeKey: user.pangeeKey,
       },
       create: {
         email: user.email,
@@ -119,6 +123,7 @@ async function main() {
         role: user.role,
         color: user.color,
         passwordHash,
+        pangeeKey: user.pangeeKey,
       },
     });
     console.log(`  ✓ User ${user.name} (${user.role})`);

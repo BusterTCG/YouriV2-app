@@ -23,6 +23,9 @@ export interface CurrentUser {
   role: UserRole;
   color: string;
   active: boolean;
+  /** Clé associé Pangee (stan / certe / angath / null). Sert au pré-filtrage
+   *  de la page /deals/management-fees sur l'associé connecté. */
+  pangeeKey: string | null;
 }
 
 /**
@@ -42,6 +45,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
       role: true,
       color: true,
       active: true,
+      pangeeKey: true,
     },
   });
 

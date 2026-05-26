@@ -119,7 +119,7 @@ export async function setManagementFeePool(
     }
 
     revalidatePath(`/deals/booking/${dealId}`);
-    revalidatePath("/management-fees");
+    revalidatePath("/deals/management-fees");
   });
 }
 
@@ -169,6 +169,10 @@ export async function updateManagementFee(
           const now = new Date();
           data.paidAt = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 12));
         }
+      } else if (!isPaye && paidAt === undefined) {
+        // Stan 2026-05-26 : repasser en "En cours" doit effacer la date
+        // de paiement (sinon elle reste figée à l'ancien mois, faux historique).
+        data.paidAt = null;
       }
     }
     if (paidAt !== undefined) data.paidAt = paidAt;
@@ -180,7 +184,7 @@ export async function updateManagementFee(
       select: { dealId: true },
     });
     revalidatePath(`/deals/booking/${fee.dealId}`);
-    revalidatePath("/management-fees");
+    revalidatePath("/deals/management-fees");
   });
 }
 
@@ -218,6 +222,6 @@ export async function recomputeManagementFeeAmounts(
       });
     }
     revalidatePath(`/deals/booking/${dealId}`);
-    revalidatePath("/management-fees");
+    revalidatePath("/deals/management-fees");
   });
 }

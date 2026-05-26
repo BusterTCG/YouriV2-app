@@ -48,7 +48,14 @@ interface Props {
   /** Marge Youri brute (avant MF) — base de calcul des montants MF. */
   margeYouri: number;
   fees: DealManagementFeeRow[];
+  /** Budget encaissé (paymentStatus = PAID). */
   isEncaisse: boolean;
+  /** Tous les artistes du deal sont payés (paymentStatus = PAID sur chaque
+   *  DealArtiste actif). Sert au tag "Dispo pour paiement" — on ne paye les
+   *  MF que quand tout l'amont est OK. */
+  allArtistesPaid: boolean;
+  /** Toutes les charges du deal sont payées (paymentStatus = PAID). */
+  allChargesPaid: boolean;
 }
 
 const ROLE_LABELS: Record<ManagementFeeRole, string> = {
@@ -64,8 +71,16 @@ const ROLE_ICONS: Record<
   WORK: Users2,
 };
 
-/** Pool % par défaut pour chaque catégorie (Stan 2026-05-26 : 15% chacun). */
-const DEFAULT_POOL_PCT = 15;
+/**
+ * Pool % par défaut PAR catégorie (Stan 2026-05-26 v2) :
+ *   - APPORT (apport d'affaires) : 10%
+ *   - WORK   (travail effectif)  : 15%
+ * Modifiable au cas par cas via l'input compact dans le header du bloc.
+ */
+const DEFAULT_POOL_PCT: Record<ManagementFeeRole, number> = {
+  APPORT: 10,
+  WORK: 15,
+};
 
 export function DealManagementFeesSection({
   dealId,
@@ -73,6 +88,8 @@ export function DealManagementFeesSection({
   margeYouri,
   fees,
   isEncaisse,
+  allArtistesPaid,
+  allChargesPaid,
 }: Props) {
   // Tri alphabétique par firstName de l'associé (Stan 2026-05-26).
   // L'ordre dans PANGEE_TEAM est déjà alphabétique → on l'utilise comme
@@ -84,15 +101,27 @@ export function DealManagementFeesSection({
 
   const apportFees = fees.filter((f) => f.role === "APPORT").sort(sortByAssociate);
   const workFees = fees.filter((f) => f.role === "WORK").sort(sortByAssociate);
-  const total = fees.reduce((acc, f) => acc + (f.amount ?? 0), 0);
-  const margeNette = margeYouri - total;
 
   // Si la marge Youri est négative ou nulle, pas de management fees
   // (Stan 2026-05-26 : on ne reverse rien quand le deal est dans le rouge).
   const noMfReason = margeYouri <= 0;
+  const rawTotal = fees.reduce((acc, f) => acc + (f.amount ?? 0), 0);
+  const total = noMfReason ? 0 : rawTotal;
+  const margeNette = margeYouri - total;
   const paidCount = fees.filter((f) => f.paymentStatus === "PAID").length;
   const allPaid = fees.length > 0 && paidCount === fees.length;
   const pendingCount = fees.length - paidCount;
+
+  /** Tag "Dispo pour paiement" (Stan 2026-05-26) : le deal est prêt à
+   *  régler ses MF si TOUT l'amont est OK :
+   *   - Budget encaissé par Pangee
+   *   - Tous les artistes payés
+   *   - Toutes les charges payées
+   *   - Marge Youri positive (sinon pas de MF du tout)
+   *  Tant qu'au moins une condition n'est pas remplie, on n'a pas le cash
+   *  ou on a un risque → pas la peine de reverser les MF tout de suite. */
+  const isReadyToPay =
+    isEncaisse && allArtistesPaid && allChargesPaid && !noMfReason;
 
   return (
     <section className="space-y-1.5">
@@ -100,16 +129,23 @@ export function DealManagementFeesSection({
         icon={<TrendingDown className="h-4 w-4 text-red-500" />}
         title="📉 💼 Management fees"
         subtitle={
-          fees.length > 0 && (
-            <SectionStatusBadge
-              done={allPaid}
-              label={
-                allPaid
-                  ? "Tout payé"
-                  : `${pendingCount} en cours / ${fees.length}`
-              }
-            />
-          )
+          <div className="inline-flex items-center gap-1.5 flex-wrap">
+            {isReadyToPay && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+                ✓ Dispo pour paiement
+              </span>
+            )}
+            {fees.length > 0 && (
+              <SectionStatusBadge
+                done={allPaid}
+                label={
+                  allPaid
+                    ? "Tout payé"
+                    : `${pendingCount} en cours / ${fees.length}`
+                }
+              />
+            )}
+          </div>
         }
         total={total}
         totalAccent="negative"
@@ -196,13 +232,14 @@ function ManagementFeeBlock({
   const [pending, startTransition] = useTransition();
   const Icon = ROLE_ICONS[role];
 
-  // Pool % actuel = somme des sharePct si fees présentes, sinon défaut 10%
+  // Pool % actuel = somme des sharePct si fees présentes, sinon le défaut
+  // de la catégorie (APPORT 10% / WORK 15%).
+  // Stan 2026-05-26 : pas de décimale dans les % affichés → on round à l'entier.
+  // Le calcul interne du sharePct (et donc du amount) garde sa précision.
   const currentPoolPct =
     fees.length > 0
-      ? Math.round(
-          fees.reduce((acc, f) => acc + Number(f.sharePct), 0) * 100,
-        ) / 100
-      : DEFAULT_POOL_PCT;
+      ? Math.round(fees.reduce((acc, f) => acc + Number(f.sharePct), 0))
+      : DEFAULT_POOL_PCT[role];
   const [poolPct, setPoolPct] = useState<string>(String(currentPoolPct));
   const selectedKeys = new Set(fees.map((f) => f.associateKey));
 
@@ -321,12 +358,9 @@ function ManagementFeeRow({ fee }: { fee: DealManagementFeeRow }) {
       {/* Nom */}
       <span className="font-medium w-20 shrink-0">{displayName}</span>
 
-      {/* Part % */}
+      {/* Part % — entier sans décimale (Stan 2026-05-26) */}
       <span className="text-muted-foreground text-xs w-10 shrink-0 text-right">
-        {Number(fee.sharePct).toLocaleString("fr-FR", {
-          maximumFractionDigits: 2,
-        })}
-        %
+        {Math.round(Number(fee.sharePct))}%
       </span>
 
       {/* Montant € */}
@@ -334,12 +368,12 @@ function ManagementFeeRow({ fee }: { fee: DealManagementFeeRow }) {
         {formatEur(fee.amount ?? 0)}
       </span>
 
-      {/* Statut binaire toggle "En cours / Payé" */}
+      {/* PaidToggle manuel — Stan coche quand il a versé le cash à l'associé */}
       <div className="w-32 shrink-0">
         <PaidToggle
           isOn={fee.paymentStatus === "PAID"}
           onToggle={togglePaye}
-          label="Payé"
+          label="Encaissé"
           className="w-full justify-center"
         />
       </div>
