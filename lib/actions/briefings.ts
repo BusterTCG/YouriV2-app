@@ -309,3 +309,103 @@ export async function deleteTravel(id: string): Promise<ActionResult> {
     revalidatePath(`/deals/booking/${travel.briefing.dealId}/fdr`);
   });
 }
+
+// ──────────────────────────── Contacts FDR (Lot B3) ────────────────────────────
+//
+// 2 modes d'ajout (Stan + copie fidèle KN) :
+//   1. "linked" — snapshot d'un contact annuaire KN distant. On stocke
+//      `contactId` + coordonnées copiées au moment de la sélection. Refetch
+//      possible via kn-client si besoin de rafraîchir.
+//   2. "inline" — saisie libre (runner, VTC du jour…). `contactId = null`,
+//      coordonnées vivent directement sur BriefingContact. Rôle ponctuel,
+//      pas de pollution de l'annuaire KN.
+//
+// Affichage transparent : la card lit `contactId != null ? "snapshot" : "inline"`
+// pour décider d'un éventuel badge "Ponctuel".
+
+const AddBriefingContactSchema = z.object({
+  briefingId: z.string().min(1),
+  // Snapshot du contact KN (refetch possible via kn-client)
+  contactId: z.string().min(1),
+  firstName: z.string().max(80).nullable().optional(),
+  lastName: z.string().max(80).nullable().optional(),
+  company: z.string().max(120).nullable().optional(),
+  phone: z.string().max(40).nullable().optional(),
+  email: z.string().max(120).nullable().optional(),
+  role: z.nativeEnum(BriefingRole),
+});
+
+export async function addBriefingContact(
+  input: z.infer<typeof AddBriefingContactSchema>,
+): Promise<ActionResult> {
+  return safeAction("addBriefingContact", async () => {
+    await requireUser();
+    const data = AddBriefingContactSchema.parse(input);
+    const bc = await prisma.briefingContact.create({
+      data: {
+        briefingId: data.briefingId,
+        contactId: data.contactId,
+        firstName: data.firstName ?? null,
+        lastName: data.lastName ?? null,
+        company: data.company ?? null,
+        phone: data.phone ?? null,
+        email: data.email ?? null,
+        role: data.role,
+      },
+      select: { briefing: { select: { dealId: true } } },
+    });
+    revalidatePath(`/deals/booking/${bc.briefing.dealId}/fdr`);
+  });
+}
+
+const AddBriefingInlineContactSchema = z.object({
+  briefingId: z.string().min(1),
+  role: z.nativeEnum(BriefingRole),
+  firstName: z.string().trim().min(1, "Prénom requis").max(80),
+  lastName: z.string().max(80).nullable().optional(),
+  company: z.string().max(120).nullable().optional(),
+  phone: z.string().max(40).nullable().optional(),
+  email: z.string().max(120).nullable().optional(),
+});
+
+/**
+ * Ajoute un contact "ponctuel" sans toucher à l'annuaire KN.
+ * Cas typique : runner, VTC du jour, technicien externe.
+ * `contactId` reste NULL → marqueur "inline" côté affichage.
+ */
+export async function addBriefingInlineContact(
+  input: z.infer<typeof AddBriefingInlineContactSchema>,
+): Promise<ActionResult> {
+  return safeAction("addBriefingInlineContact", async () => {
+    await requireUser();
+    const data = AddBriefingInlineContactSchema.parse(input);
+    const bc = await prisma.briefingContact.create({
+      data: {
+        briefingId: data.briefingId,
+        role: data.role,
+        firstName: data.firstName,
+        lastName: data.lastName?.trim() || null,
+        company: data.company?.trim() || null,
+        phone: data.phone?.trim() || null,
+        email: data.email?.trim() || null,
+        // contactId reste null → marqueur "inline"
+      },
+      select: { briefing: { select: { dealId: true } } },
+    });
+    revalidatePath(`/deals/booking/${bc.briefing.dealId}/fdr`);
+  });
+}
+
+export async function removeBriefingContact(
+  id: string,
+): Promise<ActionResult> {
+  return safeAction("removeBriefingContact", async () => {
+    await requireUser();
+    if (!id) throw new Error("id manquant");
+    const bc = await prisma.briefingContact.delete({
+      where: { id },
+      select: { briefing: { select: { dealId: true } } },
+    });
+    revalidatePath(`/deals/booking/${bc.briefing.dealId}/fdr`);
+  });
+}

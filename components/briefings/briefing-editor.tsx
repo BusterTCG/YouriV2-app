@@ -20,6 +20,10 @@ import { VenuePicker, type VenueSnapshot } from "@/components/deals/venue-picker
 import { cn } from "@/lib/utils";
 import { updateBriefing } from "@/lib/actions/briefings";
 import { TravelsSection, type TravelRow } from "./travels-section";
+import {
+  ContactsSection,
+  type BriefingContactRow,
+} from "./contacts-section";
 
 /**
  * Éditeur FDR — Sprint 3.7 Lot B1 (Stan 2026-05-26).
@@ -95,15 +99,20 @@ interface Props {
   eventDate: Date;
   /** Ville du show — sert au pré-remplissage GARE DE {ville}. */
   showCity: string;
+  /** Contacts rattachés à la FDR (Lot B3). */
+  contacts: BriefingContactRow[];
 }
 
 export function BriefingEditor({
   briefing,
   showTimeFromDeal,
-  artistName,
+  // artistName conservée en signature — sera utilisée au Lot D (envoi mail).
+  // Préfixée _ pour signaler "intentionnellement non utilisée pour l'instant".
+  artistName: _artistName,
   travels,
   eventDate,
   showCity,
+  contacts,
 }: Props) {
   const [pending, startTransition] = useTransition();
 
@@ -279,7 +288,7 @@ export function BriefingEditor({
                 value={hotelName}
                 onChange={(e) => setHotelName(e.target.value)}
                 onBlur={() => autoSave({ hotelName: hotelName || null })}
-                placeholder="Ex. Mercure, Ibis Centre…"
+                placeholder=""
                 className="text-sm"
               />
             </Field>
@@ -321,7 +330,7 @@ export function BriefingEditor({
                 onBlur={() =>
                   autoSave({ restaurantName: restaurantName || null })
                 }
-                placeholder="Ex. Bouillon Pigalle…"
+                placeholder=""
                 className="text-sm"
               />
             </Field>
@@ -380,12 +389,9 @@ export function BriefingEditor({
         />
       </Section>
 
-      {/* Section : Contacts — placeholder Lot B3 */}
+      {/* Section : Contacts — Lot B3 (picker annuaire KN + saisie ponctuelle) */}
       <Section icon={<Users />} title="Contacts">
-        <div className="rounded-md border border-dashed bg-muted/10 p-4 text-sm text-muted-foreground italic text-center">
-          Édition des contacts — à venir Lot B3 (picker annuaire KN + saisie
-          inline avec rôles production / régisseur / VTC / etc.).
-        </div>
+        <ContactsSection briefingId={briefing.id} rows={contacts} />
       </Section>
 
       {/* Section : Notes */}
@@ -395,7 +401,9 @@ export function BriefingEditor({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           onBlur={() => autoSave({ notes: notes || null })}
-          placeholder={`Briefing ${artistName}\n\nÉlément technique, repas, contacts urgents…`}
+          // text-sm strict — cohérence avec les inputs FDR (sinon text-base
+          // sur viewport < md, plus gros que le reste du doc).
+          className="text-sm"
         />
         <p className="text-[11px] text-muted-foreground mt-1">
           Sauvegarde automatique à chaque modification.

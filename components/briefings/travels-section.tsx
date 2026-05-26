@@ -564,7 +564,7 @@ function TravelFormShell({
           <Input
             value={fromStation}
             onChange={(e) => setFromStation(e.target.value)}
-            placeholder="ex. PARIS GARE DE L'EST"
+            placeholder=""
             className="h-8 text-sm"
           />
         </Field>
@@ -572,7 +572,7 @@ function TravelFormShell({
           <Input
             value={toStation}
             onChange={(e) => setToStation(e.target.value)}
-            placeholder="ex. METZ"
+            placeholder=""
             className="h-8 text-sm"
           />
         </Field>
@@ -585,7 +585,7 @@ function TravelFormShell({
         <Input
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          placeholder="ex. TGV 9856, billet OUI.SNCF"
+          placeholder=""
           className="h-8 text-sm"
         />
       </Field>
@@ -678,7 +678,7 @@ function RunsSection({
                 <Input
                   value={run.location}
                   onChange={(e) => update(idx, { location: e.target.value })}
-                  placeholder="ex. Hôtel Mercure"
+                  placeholder=""
                   className="h-8 text-sm"
                 />
               </Field>

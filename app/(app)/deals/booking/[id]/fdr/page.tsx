@@ -141,8 +141,9 @@ export default async function FdrPage({ params }: PageProps) {
         </div>
       )}
 
-      {/* Éditeur FDR — Lot B1 (spectacle/héberg/notes) + Lot B2 (trajets).
-          Contacts (Lot B3) reste en placeholder pour l'instant. */}
+      {/* Éditeur FDR — Lots B1 (spectacle/héberg/notes) + B2 (trajets)
+          + B3 (contacts). Reste à venir : Lot C (génération PDF) et
+          Lot D (envoi mail aux artistes). */}
       <BriefingEditor
         briefing={{
           id: briefing.id,
@@ -192,6 +193,16 @@ export default async function FdrPage({ params }: PageProps) {
         }))}
         eventDate={deal.date}
         showCity={briefing.venueCity ?? deal.venueCity ?? ""}
+        contacts={briefing.contacts.map((c) => ({
+          id: c.id,
+          contactId: c.contactId,
+          firstName: c.firstName,
+          lastName: c.lastName,
+          company: c.company,
+          phone: c.phone,
+          email: c.email,
+          role: c.role,
+        }))}
       />
     </div>
   );

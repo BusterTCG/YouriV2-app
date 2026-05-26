@@ -14,6 +14,7 @@ import {
   type VenueOption,
 } from "@/lib/contacts-types";
 import type { KnContact } from "@/lib/kn-client";
+import { formatPhone, phoneHref } from "@/lib/format-phone";
 
 interface Props {
   contacts: KnContact[];
@@ -173,12 +174,12 @@ function ContactCard({
             <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
               {contact.phone && (
                 <a
-                  href={`tel:${contact.phone}`}
+                  href={`tel:${phoneHref(contact.phone)}`}
                   onClick={(e) => e.stopPropagation()}
                   className="inline-flex items-center gap-1 hover:text-foreground transition-colors tabular-nums"
                 >
                   <Phone className="h-3 w-3" />
-                  {contact.phone}
+                  {formatPhone(contact.phone)}
                 </a>
               )}
               {contact.email && (

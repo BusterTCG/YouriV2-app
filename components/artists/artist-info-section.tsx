@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { InfoField } from "./info-field";
+import { formatPhone } from "@/lib/format-phone";
 import { ArtistInfoForm, type ArtistInfoFormDefaults } from "./artist-info-form";
 import { ArtistInfoExport } from "./artist-info-export";
 
@@ -78,7 +79,10 @@ export function ArtistInfoSection({ artistId, artistName, profile }: ArtistInfoS
           <Section title="Coordonnées personnelles">
             <Grid>
               <InfoField label="Email perso" value={profile?.personalEmail} />
-              <InfoField label="Téléphone" value={profile?.personalPhone} />
+              <InfoField
+                label="Téléphone"
+                value={formatPhone(profile?.personalPhone)}
+              />
               <InfoField label="Adresse résidence" value={profile?.homeAddress} />
             </Grid>
           </Section>
