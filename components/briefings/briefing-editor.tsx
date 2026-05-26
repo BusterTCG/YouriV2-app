@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   CheckCircle2,
   Clock,
+  Download,
   Eye,
   Hotel,
   Loader2,
@@ -262,6 +263,23 @@ export function BriefingEditor({
               <Eye className="h-4 w-4 mr-1.5" />
               Visualiser
             </Link>
+          </Button>
+          {/* Télécharger PDF — endpoint Puppeteer qui génère un PDF binaire
+              à partir de la vue print, avec un nom de fichier propre
+              (FDR Artistes - Lieu DDMMYY.pdf). Lot C2. */}
+          <Button
+            asChild
+            size="sm"
+            title="Télécharger la FDR en PDF (généré côté serveur)"
+          >
+            <a
+              href={`/api/fdr-pdf/${dealId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Download className="h-4 w-4 mr-1.5" />
+              Télécharger PDF
+            </a>
           </Button>
         </div>
       </div>
