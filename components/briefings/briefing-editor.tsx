@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   CheckCircle2,
@@ -9,12 +9,15 @@ import {
   Eye,
   Hotel,
   Loader2,
+  Mail,
   StickyNote,
   Theater,
   Train,
   Users,
   Utensils,
 } from "lucide-react";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import type { BriefingStatus } from "@prisma/client";
 import { Input } from "@/components/ui/input";
@@ -28,6 +31,10 @@ import {
   ContactsSection,
   type BriefingContactRow,
 } from "./contacts-section";
+import {
+  SendBriefingDialog,
+  type SendDialogArtiste,
+} from "./send-briefing-dialog";
 
 /**
  * Éditeur FDR — Sprint 3.7 Lot B1 (Stan 2026-05-26).
@@ -97,6 +104,8 @@ export interface BriefingEditorData {
 interface Props {
   /** ID du deal — sert au lien "Visualiser" vers /print/fdr/[id]. */
   dealId: string;
+  /** Titre du deal — pré-remplissage du sujet mail. */
+  dealTitle: string;
   briefing: BriefingEditorData;
   /** Heure du show depuis Deal — affichée en lecture seule (source de vérité). */
   showTimeFromDeal: string | null;
@@ -109,18 +118,26 @@ interface Props {
   showCity: string;
   /** Contacts rattachés à la FDR (Lot B3). */
   contacts: BriefingContactRow[];
+  /** Artistes du deal pour le dialog "Envoyer la FDR" (Lot D). */
+  sendDialogArtistes: SendDialogArtiste[];
+  /** Date du dernier envoi mail (sentAt) — pour le badge "Envoyée le X". */
+  sentAt: Date | null;
 }
 
 export function BriefingEditor({
   dealId,
+  dealTitle,
   briefing,
   showTimeFromDeal,
-  // artistName conservée en signature — sera utilisée au Lot D (envoi mail).
+  // artistName conservée en signature pour compat — utilisée par les
+  // sous-composants (Notes placeholder retiré) mais pas directement ici.
   artistName: _artistName,
   travels,
   eventDate,
   showCity,
   contacts,
+  sendDialogArtistes,
+  sentAt,
 }: Props) {
   const [pending, startTransition] = useTransition();
 
@@ -156,6 +173,15 @@ export function BriefingEditor({
   );
   const [notes, setNotes] = useState(briefing.notes ?? "");
   const [status, setStatus] = useState<BriefingStatus>(briefing.status);
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+
+  // Resync status quand briefing.status change en props — cas où une action
+  // server-side modifie le status sans passer par l'éditeur (ex. envoi mail
+  // qui passe le status à SENT). Sans ce useEffect, le state local reste
+  // figé après router.refresh().
+  useEffect(() => {
+    setStatus(briefing.status);
+  }, [briefing.status]);
 
   // ─ Indicateur d'auto-save ─
   const [saveState, setSaveState] = useState<
@@ -264,11 +290,10 @@ export function BriefingEditor({
               Visualiser
             </Link>
           </Button>
-          {/* Télécharger PDF — endpoint Puppeteer qui génère un PDF binaire
-              à partir de la vue print, avec un nom de fichier propre
-              (FDR Artistes - Lieu DDMMYY.pdf). Lot C2. */}
+          {/* Télécharger PDF — endpoint Puppeteer (Lot C2) */}
           <Button
             asChild
+            variant="outline"
             size="sm"
             title="Télécharger la FDR en PDF (généré côté serveur)"
           >
@@ -278,11 +303,35 @@ export function BriefingEditor({
               rel="noopener noreferrer"
             >
               <Download className="h-4 w-4 mr-1.5" />
-              Télécharger PDF
+              PDF
             </a>
+          </Button>
+          {/* Envoyer FDR aux artistes — dialog Lot D */}
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setSendDialogOpen(true)}
+            title="Envoyer la FDR par mail aux artistes (PJ PDF auto)"
+          >
+            <Mail className="h-4 w-4 mr-1.5" />
+            Envoyer FDR
           </Button>
         </div>
       </div>
+
+      {/* Badge "Envoyée le X" — visible si la FDR a déjà été envoyée au moins une fois */}
+      {sentAt && (
+        <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+          <Mail className="h-3.5 w-3.5" />
+          <span>
+            FDR envoyée le{" "}
+            <strong>
+              {format(sentAt, "EEEE d MMMM yyyy 'à' HH:mm", { locale: fr })}
+            </strong>
+            . Tu peux la renvoyer en cliquant sur « Envoyer FDR » ci-dessus.
+          </span>
+        </div>
+      )}
 
       {/* Section : Spectacle */}
       <Section icon={<Theater />} title="Spectacle">
@@ -514,6 +563,21 @@ export function BriefingEditor({
           Sauvegarde automatique à chaque modification.
         </p>
       </Section>
+
+      {/* Dialog d'envoi mail (Lot D) — monté toujours dans le DOM, ouverture
+          contrôlée par sendDialogOpen. */}
+      <SendBriefingDialog
+        open={sendDialogOpen}
+        onOpenChange={setSendDialogOpen}
+        briefingId={briefing.id}
+        dealId={dealId}
+        dealTitle={dealTitle}
+        dealDate={eventDate}
+        venueLabel={
+          briefing.venueName ?? briefing.venueCity ?? showCity ?? null
+        }
+        artistes={sendDialogArtistes}
+      />
     </div>
   );
 }

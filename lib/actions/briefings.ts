@@ -7,10 +7,15 @@ import {
   TravelDirection,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { cookies, headers } from "next/headers";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
 import { safeAction, type ActionResult } from "@/lib/errors";
+import { generateFdrPdf } from "@/lib/fdr-pdf";
+import { sendMail } from "@/lib/mailer";
 
 /**
  * Server actions FDR (Feuille de route) — copie fidèle KN adaptée Pangee.
@@ -396,6 +401,197 @@ export async function addBriefingInlineContact(
     });
     revalidatePath(`/deals/booking/${bc.briefing.dealId}/fdr`);
   });
+}
+
+// ──────────────────────────── Envoi mail FDR (Lot D) ────────────────────────────
+//
+// Génère le PDF de la FDR + l'envoie par mail aux artistes choisis via
+// Resend. Met à jour briefing.sentAt + briefing.status = SENT.
+//
+// Dépendances :
+//   - lib/fdr-pdf.ts pour générer le PDF (Puppeteer)
+//   - lib/mailer.ts pour Resend (avec fallback dev sans clé)
+//   - cookies()/headers() de Next pour récupérer la session utilisateur
+//     courante (à forwarder à Puppeteer pour bypass le middleware auth)
+
+/**
+ * Pièce jointe additionnelle encodée en base64 (le client convertit le File
+ * via FileReader.readAsDataURL avant d'envoyer). Le PDF de la FDR lui-même
+ * est généré côté server, séparément — pas besoin de l'envoyer ici.
+ */
+const AdditionalAttachmentSchema = z.object({
+  filename: z.string().min(1).max(200),
+  contentBase64: z.string().min(1),
+  mimeType: z.string().max(120).optional().nullable(),
+});
+
+const SendBriefingSchema = z.object({
+  briefingId: z.string().min(1),
+  /** IDs des dealArtistes destinataires (ceux cochés dans le dialog). */
+  dealArtisteIds: z.array(z.string().min(1)).min(1, "Au moins 1 destinataire"),
+  subject: z.string().trim().min(1, "Sujet requis").max(200),
+  /** Corps du mail — accepté en texte brut, on convertit en HTML basique. */
+  body: z.string().trim().min(1, "Corps requis").max(5000),
+  /** Pièces jointes additionnelles (billets de train, fiche technique, etc.)
+   *  Le PDF de la FDR est ajouté automatiquement par le server. */
+  additionalAttachments: z
+    .array(AdditionalAttachmentSchema)
+    .max(10, "Maximum 10 pièces jointes")
+    .optional()
+    .default([]),
+});
+
+export async function sendBriefingByEmail(
+  input: z.infer<typeof SendBriefingSchema>,
+): Promise<ActionResult<{ sentTo: string[] }>> {
+  return safeAction("sendBriefingByEmail", async () => {
+    await requireUser();
+    const { briefingId, dealArtisteIds, subject, body, additionalAttachments } =
+      SendBriefingSchema.parse(input);
+
+    // 1. Récup briefing + deal + dealArtistes + artist profiles
+    const briefing = await prisma.eventBriefing.findUnique({
+      where: { id: briefingId },
+      select: {
+        id: true,
+        dealId: true,
+        deal: {
+          select: {
+            id: true,
+            title: true,
+            date: true,
+            venueCity: true,
+            venueName: true,
+            dealArtistes: {
+              where: {
+                deletedAt: null,
+                id: { in: dealArtisteIds },
+              },
+              include: {
+                artist: {
+                  select: {
+                    id: true,
+                    name: true,
+                    profile: { select: { personalEmail: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!briefing) throw new Error("FDR introuvable");
+
+    // 2. Filtre les destinataires qui ont un email valide
+    const recipients: Array<{ name: string; email: string }> = [];
+    for (const da of briefing.deal.dealArtistes) {
+      const email = da.artist.profile?.personalEmail?.trim();
+      if (email) {
+        recipients.push({ name: da.artist.name, email });
+      }
+    }
+    if (recipients.length === 0) {
+      throw new Error(
+        "Aucun destinataire n'a d'email renseigné. Complète personalEmail dans la fiche artiste avant l'envoi.",
+      );
+    }
+
+    // 3. Récupère la session user pour la forwarder à Puppeteer (bypass auth)
+    const cookieStore = await cookies();
+    const sessionToken = cookieStore.get("youri-session")?.value;
+    if (!sessionToken) {
+      throw new Error(
+        "Session expirée — reconnecte-toi avant d'envoyer la FDR.",
+      );
+    }
+
+    // 4. Construit l'origin absolu depuis les headers de la requête entrante
+    const hdrs = await headers();
+    const proto = hdrs.get("x-forwarded-proto") ?? "http";
+    const host = hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "localhost:3001";
+    const origin = `${proto}://${host}`;
+
+    // 5. Génère le PDF (Puppeteer)
+    const { buffer, filename } = await generateFdrPdf(
+      briefing.dealId,
+      origin,
+      sessionToken,
+    );
+
+    // 6. Envoie le mail (1 mail multi-destinataires — tous en TO, pas BCC)
+    const htmlBody = body
+      .split(/\r?\n/)
+      .map((line) => `<p style="margin:0 0 0.5em 0;">${escapeHtml(line)}</p>`)
+      .join("");
+    const dateStr = format(briefing.deal.date, "EEEE d MMMM yyyy", {
+      locale: fr,
+    });
+    const html = `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif; color: #1a2540; max-width: 600px;">
+  <div style="background: #1a2540; color: white; padding: 16px 24px; border-radius: 6px 6px 0 0;">
+    <div style="color: #d4a93a; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; font-weight: bold;">Pangee Prod</div>
+    <h1 style="margin: 4px 0 0 0; font-size: 18px; font-weight: bold;">Feuille de route — ${escapeHtml(briefing.deal.title)}</h1>
+    <div style="font-size: 13px; color: rgba(255,255,255,0.85); margin-top: 4px;">
+      ${dateStr}${briefing.deal.venueCity ? ` · ${escapeHtml(briefing.deal.venueCity)}` : ""}
+    </div>
+  </div>
+  <div style="padding: 16px 24px; background: #fafafa; border: 1px solid #e5e5e5; border-top: none; border-radius: 0 0 6px 6px;">
+    ${htmlBody}
+    <p style="margin-top: 16px; font-size: 12px; color: #666;">
+      📎 Feuille de route en pièce jointe (PDF).
+    </p>
+  </div>
+</div>
+    `.trim();
+
+    // PJ : PDF FDR auto + documents additionnels (billets, fiche tech, etc.)
+    // Stan 2026-05-26 — pattern KN. Décode chaque base64 en Buffer pour
+    // Resend (ils acceptent Buffer ou base64 string directement).
+    const attachments = [
+      {
+        filename: `${filename}.pdf`,
+        content: Buffer.from(buffer),
+      },
+      ...additionalAttachments.map((a) => ({
+        filename: a.filename,
+        content: Buffer.from(a.contentBase64, "base64"),
+      })),
+    ];
+
+    const res = await sendMail({
+      to: recipients.map((r) => r.email),
+      subject,
+      html,
+      text: body,
+      attachments,
+    });
+    if (!res.ok) {
+      throw new Error(`Envoi mail échoué : ${res.error}`);
+    }
+
+    // 7. Update briefing.sentAt + status = SENT
+    await prisma.eventBriefing.update({
+      where: { id: briefingId },
+      data: {
+        sentAt: new Date(),
+        status: BriefingStatus.SENT,
+      },
+    });
+    revalidatePath(`/deals/booking/${briefing.dealId}/fdr`);
+
+    return { sentTo: recipients.map((r) => r.email) };
+  });
+}
+
+/** Échappe les caractères HTML dangereux pour l'inlining dans le body mail. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 export async function removeBriefingContact(

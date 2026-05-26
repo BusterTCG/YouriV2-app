@@ -44,7 +44,16 @@ export default async function FdrPage({ params }: PageProps) {
       dealArtistes: {
         where: { deletedAt: null },
         include: {
-          artist: { select: { id: true, name: true, slug: true, color: true } },
+          artist: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              color: true,
+              // ArtistProfile.personalEmail pour le dialog d'envoi mail (Lot D)
+              profile: { select: { personalEmail: true } },
+            },
+          },
         },
       },
       briefing: {
@@ -146,6 +155,14 @@ export default async function FdrPage({ params }: PageProps) {
           Lot D (envoi mail aux artistes). */}
       <BriefingEditor
         dealId={id}
+        dealTitle={deal.title}
+        sentAt={briefing.sentAt}
+        sendDialogArtistes={deal.dealArtistes.map((da) => ({
+          dealArtisteId: da.id,
+          artistName: da.artist.name,
+          artistSlug: da.artist.slug,
+          email: da.artist.profile?.personalEmail?.trim() || null,
+        }))}
         briefing={{
           id: briefing.id,
           showTime: briefing.showTime,
