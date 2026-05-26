@@ -34,11 +34,15 @@ export interface PangeeMember {
   defaultRole: BriefingRole;
 }
 
-/** Membres de l'équipe Pangee Prod (Stan / Certe / Angath). */
+/**
+ * Membres de l'équipe Pangee Prod — **ordre alphabétique** par firstName
+ * (Stan 2026-05-26). Tout caller qui itère sur PANGEE_TEAM aura les chips /
+ * listes / pickers triés alphabétiquement par défaut.
+ */
 export const PANGEE_TEAM: PangeeMember[] = [
   {
-    key: "stan",
-    firstName: "Stan",
+    key: "angath",
+    firstName: "Angath",
     lastName: "",
     phone: "",
     defaultRole: "PRODUCTION",
@@ -51,8 +55,8 @@ export const PANGEE_TEAM: PangeeMember[] = [
     defaultRole: "PRODUCTION",
   },
   {
-    key: "angath",
-    firstName: "Angath",
+    key: "stan",
+    firstName: "Stan",
     lastName: "",
     phone: "",
     defaultRole: "PRODUCTION",

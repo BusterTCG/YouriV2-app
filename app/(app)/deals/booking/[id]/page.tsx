@@ -21,6 +21,10 @@ import { DealArtistsSection } from "@/components/deals/deal-artists-section";
 import { DealChargesSection } from "@/components/deals/deal-charges-section";
 import { DealResultSection } from "@/components/deals/deal-result-section";
 import { DealActions } from "@/components/deals/deal-actions";
+import {
+  DealManagementFeesSection,
+  type DealManagementFeeRow,
+} from "@/components/deals/deal-management-fees-section";
 import type { BookingDealArtistRow, BookingDealChargeRow } from "@/lib/deals-list-types";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +61,10 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
         where: { deletedAt: null },
         orderBy: { createdAt: "asc" },
       },
+      managementFees: {
+        where: { deletedAt: null },
+        orderBy: [{ role: "asc" }, { createdAt: "asc" }],
+      },
       createdBy: { select: { name: true } },
     },
   });
@@ -85,6 +93,25 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
   const totalArtistes = artistes.reduce((acc, a) => acc + (a.amount ?? 0), 0);
   const totalCharges = charges.reduce((acc, c) => acc + (c.amount ?? 0), 0);
   const isEncaisse = deal.budgetPaymentStatus === "PAID";
+
+  // Marge Youri brute (base de calcul des management fees) :
+  // Budget − Artistes − Charges. La marge nette Pangee (après MF) est
+  // calculée et affichée dans DealResultSection.
+  const margeYouriBrute =
+    (budgetAmount ?? 0) - totalArtistes - totalCharges;
+  const managementFees: DealManagementFeeRow[] = deal.managementFees.map(
+    (mf) => ({
+      id: mf.id,
+      role: mf.role,
+      associateKey: mf.associateKey,
+      sharePct: Number(mf.sharePct),
+      amount: mf.amount != null ? Number(mf.amount) : null,
+      paymentStatus: mf.paymentStatus,
+      paidAt: mf.paidAt,
+      notes: mf.notes,
+    }),
+  );
+  const totalMf = managementFees.reduce((acc, m) => acc + (m.amount ?? 0), 0);
 
   const dStatus = dealStatusLabel(deal.status);
   const organizerLabel = deal.organizerName ?? "Sans organisateur";
@@ -188,6 +215,17 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
         budgetAmount={budgetAmount}
         totalArtistes={totalArtistes}
         totalCharges={totalCharges}
+        isEncaisse={isEncaisse}
+      />
+
+      {/* Management fees — reversement Pangee aux associés (Stan 2026-05-26).
+          Section APRÈS la marge Youri pour clarté visuelle + footer
+          "Marge nette Pangee" qui montre ce qui reste vraiment après MF. */}
+      <DealManagementFeesSection
+        dealId={deal.id}
+        budgetAmount={budgetAmount ?? 0}
+        margeYouri={margeYouriBrute}
+        fees={managementFees}
         isEncaisse={isEncaisse}
       />
 

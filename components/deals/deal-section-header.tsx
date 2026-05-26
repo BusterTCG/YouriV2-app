@@ -11,12 +11,13 @@ import { formatEur } from "./deal-helpers";
  *   <span className="text-base font-bold tabular-nums text-emerald-600/red-600">{total €}</span>
  */
 interface Props {
-  /** Icon coloré à gauche du titre (ex. <TrendingUp className="h-4 w-4 text-emerald-500" />). */
+  /** Icon coloré à gauche du titre. */
   icon?: React.ReactNode;
-  /** Titre uppercase (ex. "BUDGET", "ARTISTES", "CHARGES DIVERSES"). */
+  /** Titre uppercase. */
   title: string;
-  /** Sous-titre gris discret (ex. "Tout ce qui rentre dans le CA Youri."). */
-  subtitle?: string;
+  /** Indicateur de statut à droite du titre (badge "✅ Tout payé" / "⏳ N en cours").
+   *  Stan 2026-05-26 : remplace les anciens textes d'aide qui polluaient l'UI. */
+  subtitle?: React.ReactNode;
   /** Total numérique de la section. */
   total: number;
   /** "positive" → vert, "negative" → rouge, undefined → neutre. */
@@ -31,11 +32,7 @@ export function DealSectionHeader({ icon, title, subtitle, total, totalAccent }:
           {icon}
           {title}
         </h2>
-        {subtitle && (
-          <span className="text-[11px] text-muted-foreground truncate">
-            {subtitle}
-          </span>
-        )}
+        {subtitle && <>{subtitle}</>}
       </div>
       <div className="text-right">
         <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mr-2">

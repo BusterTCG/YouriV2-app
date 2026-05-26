@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { PaidToggle } from "./paid-toggle";
 import { MoneyInput } from "./money-input";
 import { DealSectionHeader } from "./deal-section-header";
+import { SectionStatusBadge } from "./section-status-badge";
 import { EditableLabel } from "./editable-label";
 
 /**
@@ -34,6 +35,9 @@ interface Props {
 export function DealChargesSection({ dealId, charges }: Props) {
   const [adding, startAddTransition] = useTransition();
   const total = charges.reduce((acc, c) => acc + (c.amount ?? 0), 0);
+  const paidCount = charges.filter((c) => c.paymentStatus === "PAID").length;
+  const allPaid = charges.length > 0 && paidCount === charges.length;
+  const pendingCount = charges.length - paidCount;
 
   function handleAdd() {
     startAddTransition(async () => {
@@ -46,7 +50,18 @@ export function DealChargesSection({ dealId, charges }: Props) {
       <DealSectionHeader
         icon={<TrendingDown className="h-4 w-4 text-red-500" />}
         title="🔴 Charges diverses"
-        subtitle="Transports, hôtels, technique, repas…"
+        subtitle={
+          charges.length > 0 && (
+            <SectionStatusBadge
+              done={allPaid}
+              label={
+                allPaid
+                  ? "Toutes payées"
+                  : `${pendingCount} en cours / ${charges.length}`
+              }
+            />
+          )
+        }
         total={total}
         totalAccent="negative"
       />
@@ -133,7 +148,6 @@ function ChargeRow({ row }: { row: BookingDealChargeRow }) {
           type="text"
           defaultValue={row.notes ?? ""}
           onBlur={commitNotes}
-          placeholder="Commentaire optionnel"
           className="h-8 w-full rounded-md border bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-foreground/20"
         />
       </div>

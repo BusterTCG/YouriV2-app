@@ -1,5 +1,6 @@
 import { Sparkles } from "lucide-react";
 import { formatEur, formatPct } from "./deal-helpers";
+import { cn } from "@/lib/utils";
 
 /**
  * Section Résultat — style KN show "RÉPARTITION CO-PROD".
@@ -57,10 +58,18 @@ export function DealResultSection({
         </div>
       </div>
 
-      {/* Bandeau vert "= Marge Youri" — pattern KN "Bénéfice net" */}
+      {/* Bandeau "= Marge Youri" — vert si positif, rouge si négatif
+          (Stan 2026-05-26). */}
       <div className="border-t px-4 py-3 flex justify-between items-baseline">
         <div>
-          <div className="text-xs uppercase tracking-wider text-emerald-700 dark:text-emerald-400 font-semibold">
+          <div
+            className={cn(
+              "text-xs uppercase tracking-wider font-semibold",
+              marge >= 0
+                ? "text-emerald-700 dark:text-emerald-400"
+                : "text-red-700 dark:text-red-400",
+            )}
+          >
             = Marge Youri
           </div>
           {isEncaisse ? (
@@ -74,7 +83,14 @@ export function DealResultSection({
           )}
         </div>
         <div className="text-right">
-          <div className="text-2xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+          <div
+            className={cn(
+              "text-2xl font-semibold tabular-nums",
+              marge >= 0
+                ? "text-emerald-700 dark:text-emerald-400"
+                : "text-red-700 dark:text-red-400",
+            )}
+          >
             {formatEur(marge)}
           </div>
           {margePct != null && (

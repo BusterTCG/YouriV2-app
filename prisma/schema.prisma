@@ -111,6 +111,25 @@ enum BriefingRole {
   AUTRE
 }
 
+// ─────────────────────────── MANAGEMENT FEES (rémunération associés) ───────────────────────────
+//
+// Pangee verse à chaque associé (Stan/Certe/Angath) un % de la marge sur
+// chaque deal, pour 2 catégories de prestation :
+//   - APPORT : apport d'affaires (qui a ramené le deal)
+//   - WORK   : travail effectif sur le deal (gestion de la date hors direction)
+//
+// Défaut 10% par catégorie, modifiable au cas par cas. Si N personnes sont
+// sélectionnées dans une catégorie, le pool est réparti équitablement
+// (pool ÷ N pour chaque associé).
+//
+// Stan 2026-05-26 : cadre juridique = convention de prestation entre Pangee
+// et la société de chaque associé (Kuro Neko EURL Stan, SASU Certe, etc.).
+
+enum ManagementFeeRole {
+  APPORT  // Apport d'affaires
+  WORK    // Travail effectif sur le deal
+}
+
 // ─────────────────────────── USERS (Sprint 1) ───────────────────────────
 
 /// Compte utilisateur Pangee Prod. 3 seedés au bootstrap :
@@ -374,6 +393,11 @@ model Deal {
   // ── Charges diverses (dépenses Pangee) ──
   dealCharges  DealCharge[]
 
+  // ── Management fees (Marge associés) ──
+  /// Reversement Pangee → associés sous forme de prestation. 2 catégories :
+  /// apport d'affaires + travail effectif. Voir model DealManagementFee.
+  managementFees DealManagementFee[]
+
   // ── Feuille de route (Sprint 3.7) ──
   /// 1-1 optionnel : la FDR n'existe que si l'user l'a ouverte au moins
   /// une fois (auto-création via ensureBriefingWithPrefill). Cascade
@@ -491,6 +515,52 @@ model DealCharge {
   deletedAt DateTime?
 
   @@index([dealId])
+  @@index([deletedAt])
+}
+
+/// Reversement Pangee → associé sur un deal (cadre prestation de services).
+/// 1 ligne par (deal × catégorie × associé). Le pool % (10 par défaut) est
+/// modifiable par catégorie au cas par cas, puis réparti équitablement
+/// entre les N associés sélectionnés (sharePct = pool ÷ N).
+///
+/// Le montant € est snapshot (calculé au moment du set) pour préserver
+/// l'historique même si la marge change après — Stan peut le re-calculer
+/// manuellement via le bouton "Recalculer" si besoin.
+model DealManagementFee {
+  id     String @id @default(cuid())
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  role ManagementFeeRole
+
+  /// Clé associé (stan/certe/angath) — pointe vers lib/pangee-team.ts.
+  /// Migrera vers FK userId quand on aura User.phone (task #47).
+  associateKey String
+
+  /// % de la marge Youri attribué à CET associé (= pool ÷ nb personnes).
+  /// Ex : pool 10% partagé entre 2 personnes → sharePct = 5 chacun.
+  sharePct Decimal
+
+  /// Montant € snapshot (= margeYouri × sharePct / 100). Stocké pour
+  /// préserver l'historique même si la marge change après.
+  amount Decimal?
+
+  /// Statut paiement Pangee → société de l'associé (cycle facturation).
+  paymentStatus PaymentStatus @default(N_A)
+
+  /// Mois de paiement effectif (cash-flow Pangee sortant).
+  paidAt DateTime?
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Soft-delete cascade depuis Deal (idem DealArtiste/DealCharge).
+  deletedAt DateTime?
+
+  @@unique([dealId, role, associateKey])
+  @@index([dealId])
+  @@index([associateKey])
   @@index([deletedAt])
 }
 

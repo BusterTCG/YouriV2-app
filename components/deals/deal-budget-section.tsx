@@ -9,6 +9,7 @@ import { PaidToggle } from "./paid-toggle";
 import { MoneyInput } from "./money-input";
 import { MonthPickerField } from "./month-picker-field";
 import { DealSectionHeader } from "./deal-section-header";
+import { SectionStatusBadge } from "./section-status-badge";
 
 /**
  * Section Budget Youri — copie fidèle KN show § Section "RECETTES".
@@ -53,7 +54,12 @@ export function DealBudgetSection({ dealId, budgetAmount, isEncaisse, paidAt }: 
       <DealSectionHeader
         icon={<TrendingUp className="h-4 w-4 text-emerald-500" />}
         title="🟢 Budget"
-        subtitle="Montant que l'organisateur paie à Youri"
+        subtitle={
+          <SectionStatusBadge
+            done={isEncaisse}
+            label={isEncaisse ? "Encaissé" : "En cours"}
+          />
+        }
         total={budgetAmount ?? 0}
         totalAccent="positive"
       />

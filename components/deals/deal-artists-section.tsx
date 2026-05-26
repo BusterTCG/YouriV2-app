@@ -10,6 +10,7 @@ import { ArtistStatusSelect } from "./artist-status-select";
 import { MoneyInput } from "./money-input";
 import { artistInitials } from "@/lib/artists";
 import { DealSectionHeader } from "./deal-section-header";
+import { SectionStatusBadge } from "./section-status-badge";
 import { ArtistRosterPicker } from "./artist-roster-picker";
 
 /**
@@ -35,13 +36,27 @@ interface Props {
 export function DealArtistsSection({ dealId, budgetAmount, artistes }: Props) {
   const total = artistes.reduce((acc, a) => acc + (a.amount ?? 0), 0);
   const excludeIds = artistes.map((a) => a.artist.id);
+  const paidCount = artistes.filter((a) => a.paymentStatus === "PAID").length;
+  const allPaid = artistes.length > 0 && paidCount === artistes.length;
+  const pendingCount = artistes.length - paidCount;
 
   return (
     <section className="space-y-1.5">
       <DealSectionHeader
         icon={<TrendingDown className="h-4 w-4 text-red-500" />}
         title="🔴 Artistes"
-        subtitle="Rémunérations versées aux artistes"
+        subtitle={
+          artistes.length > 0 && (
+            <SectionStatusBadge
+              done={allPaid}
+              label={
+                allPaid
+                  ? "Tous payés"
+                  : `${pendingCount} en cours / ${artistes.length}`
+              }
+            />
+          )
+        }
         total={total}
         totalAccent="negative"
       />
@@ -156,7 +171,6 @@ function ArtistRow({
           type="text"
           defaultValue={row.notes ?? ""}
           onBlur={commitNotes}
-          placeholder="Commentaire optionnel"
           className="h-8 w-full rounded-md border bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-foreground/20"
         />
       </div>
@@ -197,7 +211,9 @@ function PctInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  const display = value != null ? formatPct(value) : "";
+  // Affichage en entier (Stan 2026-05-26 : pas de décimales côté artiste).
+  // La valeur en DB conserve sa précision décimale pour les calculs internes.
+  const display = value != null ? formatPct(value, { integer: true }) : "";
 
   function commit() {
     const raw = draft.replace(/[^\d.,-]/g, "").replace(",", ".");
@@ -230,7 +246,9 @@ function PctInput({
         }
       }}
       placeholder="—"
-      className="h-8 w-full rounded-md border bg-background px-2 text-sm tabular-nums text-right focus:outline-none focus:ring-2 focus:ring-foreground/20"
+      // Style aligné sur l'input % pool des Management fees (Stan 2026-05-26)
+      // — discret, fond muted, sans bordure permanente.
+      className="h-8 w-full rounded bg-muted/40 border-0 px-2 text-sm tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-foreground/20 focus:bg-background"
     />
   );
 }
