@@ -1,6 +1,11 @@
 "use server";
 
-import { BriefingRole, BriefingStatus, Prisma } from "@prisma/client";
+import {
+  BriefingRole,
+  BriefingStatus,
+  Prisma,
+  TravelDirection,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
@@ -207,5 +212,100 @@ export async function updateBriefing(
       select: { dealId: true },
     });
     revalidatePath(`/deals/booking/${updated.dealId}/fdr`);
+  });
+}
+
+// ──────────────────────────── Travels (Lot B2) ────────────────────────────
+//
+// CRUD trajets (BriefingTravel). Copie fidèle KN avec gestion runs JSON :
+//   - `runs` est un tableau optionnel de {location, time} stocké en JSON
+//   - Tableau vide ou absent → Prisma.DbNull (préserve la propreté)
+//   - Sémantique selon direction : OUTBOUND = pickups après arrivée,
+//     RETURN = pickups avant départ, INTER = transferts libres
+
+const TravelRunSchema = z.object({
+  location: z.string().min(1).max(200),
+  time: z.string().max(10),
+});
+
+const TravelInputSchema = z.object({
+  briefingId: z.string().min(1),
+  direction: z.nativeEnum(TravelDirection),
+  date: z.coerce.date(),
+  fromStation: z.string().min(1).max(120),
+  fromTime: z.string().max(10),
+  toStation: z.string().min(1).max(120),
+  toTime: z.string().max(10),
+  comment: z.string().max(500).nullable().optional(),
+  runs: z.array(TravelRunSchema).nullable().optional(),
+});
+
+export async function createTravel(
+  input: z.infer<typeof TravelInputSchema>,
+): Promise<ActionResult<{ id: string }>> {
+  return safeAction("createTravel", async () => {
+    await requireUser();
+    const data = TravelInputSchema.parse(input);
+    const travel = await prisma.briefingTravel.create({
+      data: {
+        briefingId: data.briefingId,
+        direction: data.direction,
+        date: data.date,
+        fromStation: data.fromStation,
+        fromTime: data.fromTime,
+        toStation: data.toStation,
+        toTime: data.toTime,
+        comment: data.comment ?? null,
+        // Tableau vide ou absent → DbNull (Prisma exige ce sentinel pour
+        // distinguer "pas de valeur" de "valeur JSON null").
+        runs:
+          data.runs && data.runs.length > 0 ? data.runs : Prisma.DbNull,
+      },
+      select: { id: true, briefing: { select: { dealId: true } } },
+    });
+    revalidatePath(`/deals/booking/${travel.briefing.dealId}/fdr`);
+    return { id: travel.id };
+  });
+}
+
+const UpdateTravelSchema = z.object({
+  id: z.string().min(1),
+  patch: TravelInputSchema.omit({ briefingId: true }).partial(),
+});
+
+export async function updateTravel(
+  input: z.infer<typeof UpdateTravelSchema>,
+): Promise<ActionResult> {
+  return safeAction("updateTravel", async () => {
+    await requireUser();
+    const { id, patch } = UpdateTravelSchema.parse(input);
+    if (!id) throw new Error("id manquant");
+
+    // `runs` (Json) ne peut pas être typé via cast direct — séparer le traitement.
+    const { runs, ...rest } = patch;
+    const data: Prisma.BriefingTravelUncheckedUpdateInput = {
+      ...(rest as Prisma.BriefingTravelUncheckedUpdateInput),
+    };
+    if (runs !== undefined) {
+      data.runs = runs && runs.length > 0 ? runs : Prisma.DbNull;
+    }
+    const travel = await prisma.briefingTravel.update({
+      where: { id },
+      data,
+      select: { briefing: { select: { dealId: true } } },
+    });
+    revalidatePath(`/deals/booking/${travel.briefing.dealId}/fdr`);
+  });
+}
+
+export async function deleteTravel(id: string): Promise<ActionResult> {
+  return safeAction("deleteTravel", async () => {
+    await requireUser();
+    if (!id) throw new Error("id manquant");
+    const travel = await prisma.briefingTravel.delete({
+      where: { id },
+      select: { briefing: { select: { dealId: true } } },
+    });
+    revalidatePath(`/deals/booking/${travel.briefing.dealId}/fdr`);
   });
 }

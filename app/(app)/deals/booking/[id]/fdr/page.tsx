@@ -141,8 +141,8 @@ export default async function FdrPage({ params }: PageProps) {
         </div>
       )}
 
-      {/* Éditeur FDR — Lot B1 : sections Spectacle / Hébergement / Notes.
-          Trajets (Lot B2) et Contacts (Lot B3) en placeholder pour l'instant. */}
+      {/* Éditeur FDR — Lot B1 (spectacle/héberg/notes) + Lot B2 (trajets).
+          Contacts (Lot B3) reste en placeholder pour l'instant. */}
       <BriefingEditor
         briefing={{
           id: briefing.id,
@@ -170,6 +170,28 @@ export default async function FdrPage({ params }: PageProps) {
             ? deal.dealArtistes[0].artist.name
             : `les artistes du deal`
         }
+        travels={briefing.travels.map((t) => ({
+          id: t.id,
+          direction: t.direction,
+          date: t.date,
+          fromStation: t.fromStation,
+          fromTime: t.fromTime,
+          toStation: t.toStation,
+          toTime: t.toTime,
+          comment: t.comment,
+          // runs : JSON → array {location, time} filtré (sécurité côté lecture).
+          runs: Array.isArray(t.runs)
+            ? (t.runs as unknown[]).filter(
+                (r): r is { location: string; time: string } =>
+                  typeof r === "object" &&
+                  r !== null &&
+                  typeof (r as Record<string, unknown>).location === "string" &&
+                  typeof (r as Record<string, unknown>).time === "string",
+              )
+            : [],
+        }))}
+        eventDate={deal.date}
+        showCity={briefing.venueCity ?? deal.venueCity ?? ""}
       />
     </div>
   );

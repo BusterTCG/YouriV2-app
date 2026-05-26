@@ -19,6 +19,7 @@ import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { VenuePicker, type VenueSnapshot } from "@/components/deals/venue-picker";
 import { cn } from "@/lib/utils";
 import { updateBriefing } from "@/lib/actions/briefings";
+import { TravelsSection, type TravelRow } from "./travels-section";
 
 /**
  * Éditeur FDR — Sprint 3.7 Lot B1 (Stan 2026-05-26).
@@ -88,12 +89,21 @@ interface Props {
   /** Heure du show depuis Deal — affichée en lecture seule (source de vérité). */
   showTimeFromDeal: string | null;
   artistName: string;
+  /** Trajets rattachés à la FDR (Lot B2) — passés en props pour rendu inline. */
+  travels: TravelRow[];
+  /** Date du deal — défaut pour les trajets neufs. */
+  eventDate: Date;
+  /** Ville du show — sert au pré-remplissage GARE DE {ville}. */
+  showCity: string;
 }
 
 export function BriefingEditor({
   briefing,
   showTimeFromDeal,
   artistName,
+  travels,
+  eventDate,
+  showCity,
 }: Props) {
   const [pending, startTransition] = useTransition();
 
@@ -234,6 +244,7 @@ export function BriefingEditor({
               onChange={(e) => setBalanceTime(e.target.value)}
               onBlur={() => autoSave({ balanceTime: balanceTime || null })}
               placeholder="18:00"
+              className="text-sm"
             />
           </Field>
           {/* Adresse complète du lieu — Stan 2026-05-26 :
@@ -269,6 +280,7 @@ export function BriefingEditor({
                 onChange={(e) => setHotelName(e.target.value)}
                 onBlur={() => autoSave({ hotelName: hotelName || null })}
                 placeholder="Ex. Mercure, Ibis Centre…"
+                className="text-sm"
               />
             </Field>
             <Field label="Adresse">
@@ -310,6 +322,7 @@ export function BriefingEditor({
                   autoSave({ restaurantName: restaurantName || null })
                 }
                 placeholder="Ex. Bouillon Pigalle…"
+                className="text-sm"
               />
             </Field>
             <Field label="Adresse">
@@ -349,7 +362,7 @@ export function BriefingEditor({
                 }
                 placeholder="€ par jour"
                 disabled={!perDiemFlag}
-                className="w-40"
+                className="w-40 text-sm"
               />
               <span className="text-xs text-muted-foreground">€ / jour</span>
             </div>
@@ -357,12 +370,14 @@ export function BriefingEditor({
         </div>
       </Section>
 
-      {/* Section : Trajets — placeholder Lot B2 */}
+      {/* Section : Trajets — Lot B2 (cards visuelles + CRUD inline + runs) */}
       <Section icon={<Train />} title="Trajets">
-        <div className="rounded-md border border-dashed bg-muted/10 p-4 text-sm text-muted-foreground italic text-center">
-          Édition des trajets — à venir Lot B2 (aller / retour / inter-étapes
-          avec runs voiture).
-        </div>
+        <TravelsSection
+          briefingId={briefing.id}
+          travels={travels}
+          eventDate={eventDate}
+          showCity={showCity}
+        />
       </Section>
 
       {/* Section : Contacts — placeholder Lot B3 */}

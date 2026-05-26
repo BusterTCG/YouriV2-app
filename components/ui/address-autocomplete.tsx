@@ -204,7 +204,10 @@ export function AddressAutocomplete({
           }}
           placeholder={placeholder}
           disabled={disabled}
-          className="pl-7"
+          // text-sm strict (override le text-base/md:text-sm du shadcn Input) —
+          // cohérence visuelle avec DatePickerField + Select (Stan 2026-05-26 :
+          // "réduire la taille de police, matcher la FDR KN").
+          className="pl-7 text-sm"
           autoComplete="off"
         />
         {loading && (
