@@ -1,7 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/db";
-import type { Prisma, DealCategory, PaymentStatus } from "@prisma/client";
+import type { Prisma, DealCategory } from "@prisma/client";
 import { sortArtistsDiversLast } from "@/lib/artists";
 import { getPeriodRange, type PeriodPreset } from "@/lib/period-presets";
 import type {
@@ -36,43 +36,44 @@ export type {
   PeriodPreset,
 } from "./deals-list-types";
 
-const ACTIONABLE: PaymentStatus[] = ["TO_INVOICE", "INVOICED", "DISPUTE"];
-
+/**
+ * Filtre statut du tableau booking (Stan 2026-05-26 v3).
+ *
+ * Règle stricte alignée avec les RecapStatusPill du tableau :
+ *   - "Encaissé" = budgetPaymentStatus PAID **strict** + AU MOINS 1 artiste
+ *     actif **et** TOUS les artistes actifs PAID **strict**
+ *   - "En cours" = tout le reste (budget pas PAID, ou pas d'artiste, ou
+ *     au moins 1 artiste non-PAID)
+ *
+ * Charges et management fees sont **hors scope** de ce filtre — la règle
+ * porte uniquement sur le statut budget + statut artiste, identique à ce
+ * qu'affichent les colonnes ST. MARGE et ST. ARTISTE.
+ */
 function statusFilter(status: DealsListStatus): Prisma.DealWhereInput {
   if (status === "all") return {};
-  if (status === "todo") {
-    // Au moins une action en attente sur le deal :
-    // - Budget pas encaissé (statut actionnable)
-    // - OU au moins un artiste pas payé
-    // - OU au moins une charge pas payée
+  if (status === "paid") {
     return {
-      OR: [
-        { budgetPaymentStatus: { in: ACTIONABLE } },
+      AND: [
+        { budgetPaymentStatus: "PAID" },
+        // Au moins 1 artiste actif (sinon ST. ARTISTE = "En cours" côté UI).
+        { dealArtistes: { some: { deletedAt: null } } },
+        // Aucun artiste actif avec un statut ≠ PAID.
         {
           dealArtistes: {
-            some: { deletedAt: null, paymentStatus: { in: ACTIONABLE } },
-          },
-        },
-        {
-          dealCharges: {
-            some: { deletedAt: null, paymentStatus: { in: ACTIONABLE } },
+            none: { deletedAt: null, paymentStatus: { not: "PAID" } },
           },
         },
       ],
     };
   }
-  // "paid" : aucune action en attente (tout réglé).
+  // "todo" : NOT paid → OU(budget ≠ PAID, pas d'artiste, ≥1 artiste non-PAID).
   return {
-    AND: [
-      { budgetPaymentStatus: { notIn: ACTIONABLE } },
+    OR: [
+      { budgetPaymentStatus: { not: "PAID" } },
+      { dealArtistes: { none: { deletedAt: null } } },
       {
         dealArtistes: {
-          none: { deletedAt: null, paymentStatus: { in: ACTIONABLE } },
-        },
-      },
-      {
-        dealCharges: {
-          none: { deletedAt: null, paymentStatus: { in: ACTIONABLE } },
+          some: { deletedAt: null, paymentStatus: { not: "PAID" } },
         },
       },
     ],
