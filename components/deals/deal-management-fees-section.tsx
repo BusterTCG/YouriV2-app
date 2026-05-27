@@ -127,7 +127,7 @@ export function DealManagementFeesSection({
     <section className="space-y-1.5">
       <DealSectionHeader
         icon={<TrendingDown className="h-4 w-4 text-red-500" />}
-        title="📉 💼 Management fees"
+        title="💼 Management fees"
         subtitle={
           <div className="inline-flex items-center gap-1.5 flex-wrap">
             {isReadyToPay && (
@@ -184,10 +184,10 @@ export function DealManagementFeesSection({
                   : "text-red-700 dark:text-red-400",
               )}
             >
-              = Marge nette Youri
+              = Marge Nette
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
-              Marge Youri − Management fees
+              Marge Brute − Management fees
               {isEncaisse
                 ? " · ✓ budget encaissé"
                 : " · ⏳ budget non encaissé"}

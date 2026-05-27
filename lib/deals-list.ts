@@ -138,6 +138,10 @@ export async function getBookingDealsList(opts: {
         dealCharges: {
           where: { deletedAt: null },
         },
+        managementFees: {
+          where: { deletedAt: null },
+          select: { amount: true },
+        },
       },
     }),
     prisma.artist.findMany({
@@ -176,6 +180,15 @@ export async function getBookingDealsList(opts: {
     const budget = d.budgetAmount != null ? Number(d.budgetAmount) : 0;
     const margePangee = budget - totalArtistes - totalCharges;
     const margePct = budget > 0 ? (margePangee / budget) * 100 : null;
+    // Stan 2026-05-26 : tableau récap booking expose les MF et la marge nette.
+    // Si margePangee ≤ 0, on considère que les MF sont à 0 (le helper
+    // recomputeMfForDeal a déjà mis les amounts à 0 dans ce cas).
+    const totalMf = d.managementFees.reduce(
+      (acc, mf) => acc + (mf.amount != null ? Number(mf.amount) : 0),
+      0,
+    );
+    const margeNette = margePangee - totalMf;
+    const margeNettePct = budget > 0 ? (margeNette / budget) * 100 : null;
     return {
       id: d.id,
       date: d.date,
@@ -199,6 +212,9 @@ export async function getBookingDealsList(opts: {
       totalCharges,
       margePangee,
       margePct,
+      totalMf,
+      margeNette,
+      margeNettePct,
     };
   });
 
@@ -210,17 +226,22 @@ export async function getBookingDealsList(opts: {
   let margeRealisee = 0;
   let margeAttente = 0;
   let artistOwed = 0;
+  let totalMf = 0;
   for (const d of deals) {
     if (d.status === "ANNULE") continue;
     totalBudget += d.budgetAmount ?? 0;
     totalArtistes += d.totalArtistes;
     totalCharges += d.totalCharges;
     totalMarge += d.margePangee;
+    totalMf += d.totalMf;
     const budgetPaid = d.budgetPaymentStatus === "PAID";
+    // Stan 2026-05-26 v4 : on split la marge NETTE (= margePangee − MF) entre
+    // réalisée / à venir, pour rester cohérent avec le KPI "Marge Nette"
+    // affiché en gros (sinon margeRealisee peut dépasser totalMargeNette).
     if (budgetPaid) {
-      margeRealisee += d.margePangee;
+      margeRealisee += d.margeNette;
     } else {
-      margeAttente += d.margePangee;
+      margeAttente += d.margeNette;
     }
     // "À reverser à l'artiste" : Youri a encaissé le budget mais n'a pas
     // encore payé l'artiste → cet argent est en trésorerie Youri.
@@ -232,6 +253,7 @@ export async function getBookingDealsList(opts: {
       }
     }
   }
+  const totalMargeNette = totalMarge - totalMf;
 
   return {
     deals,
@@ -244,6 +266,8 @@ export async function getBookingDealsList(opts: {
       margeRealisee,
       margeAttente,
       artistOwed,
+      totalMf,
+      totalMargeNette,
     },
     artists: sortArtistsDiversLast(artistsRaw),
   };
@@ -252,6 +276,13 @@ export async function getBookingDealsList(opts: {
 /**
  * Récap par catégorie pour la page parent /deals (3 cards Booking / Prod Exé /
  * Cachet) — affiche le total Marge Pangee par catégorie.
+ *
+ * Stan 2026-05-27 audit : la formule diffère par catégorie.
+ *   - BOOKING / CACHETS : budget − artistes − charges (modèle classique)
+ *   - PROD_EXE          : commissionAmount scalar (= 15% × CA HT, snapshot
+ *                         recalculé par recomputeShowFinancials)
+ * Sinon, PROD_EXE affichait toujours une marge négative car budgetAmount
+ * est null sur cette catégorie.
  */
 export async function getDealsCategoryRecap(): Promise<
   Array<{ category: DealCategory; count: number; totalMarge: number }>
@@ -261,6 +292,7 @@ export async function getDealsCategoryRecap(): Promise<
     select: {
       category: true,
       budgetAmount: true,
+      commissionAmount: true,
       dealArtistes: {
         where: { deletedAt: null },
         select: { cachetAmount: true },
@@ -279,16 +311,22 @@ export async function getDealsCategoryRecap(): Promise<
   for (const d of grouped) {
     const entry = byCategory.get(d.category)!;
     entry.count += 1;
-    const budget = d.budgetAmount != null ? Number(d.budgetAmount) : 0;
-    const artistes = d.dealArtistes.reduce(
-      (acc, da) => acc + (da.cachetAmount != null ? Number(da.cachetAmount) : 0),
-      0,
-    );
-    const charges = d.dealCharges.reduce(
-      (acc, c) => acc + (c.amount != null ? Number(c.amount) : 0),
-      0,
-    );
-    entry.totalMarge += budget - artistes - charges;
+    if (d.category === "PROD_EXE") {
+      // Marge Brute Pangee = commission scalar (snapshot recompute).
+      entry.totalMarge +=
+        d.commissionAmount != null ? Number(d.commissionAmount) : 0;
+    } else {
+      const budget = d.budgetAmount != null ? Number(d.budgetAmount) : 0;
+      const artistes = d.dealArtistes.reduce(
+        (acc, da) => acc + (da.cachetAmount != null ? Number(da.cachetAmount) : 0),
+        0,
+      );
+      const charges = d.dealCharges.reduce(
+        (acc, c) => acc + (c.amount != null ? Number(c.amount) : 0),
+        0,
+      );
+      entry.totalMarge += budget - artistes - charges;
+    }
   }
 
   return Array.from(byCategory.entries()).map(([category, v]) => ({

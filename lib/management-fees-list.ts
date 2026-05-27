@@ -128,14 +128,22 @@ export async function getManagementFeesList(
           date: true,
           title: true,
           category: true,
+          // Booking driver
           budgetPaymentStatus: true,
+          // Prod Exé driver consolidé (Part Artiste indépendante des cachets)
+          artistStatus: true,
           dealArtistes: {
             where: { deletedAt: null },
-            select: { paymentStatus: true },
+            select: { paymentStatus: true, cachetAmount: true },
           },
           dealCharges: {
             where: { deletedAt: null },
-            select: { paymentStatus: true },
+            select: { paymentStatus: true, amount: true },
+          },
+          // Prod Exé : recettes (REVENUE) + coûts (COST)
+          productionLines: {
+            where: { deletedAt: null },
+            select: { kind: true, amount: true, paymentStatus: true, coveredByVenue: true },
           },
         },
       },
@@ -144,16 +152,65 @@ export async function getManagementFeesList(
   });
 
   const allRows: ManagementFeeRow[] = fees.map((f) => {
-    // "Dispo pour paiement" : tout l'amont du deal est OK (budget + artistes
-    // + charges). Signal vert pour Stan : il peut maintenant verser le MF.
-    const budgetOk = f.deal.budgetPaymentStatus === PaymentStatus.PAID;
-    const artistesOk =
-      f.deal.dealArtistes.length === 0 ||
-      f.deal.dealArtistes.every((a) => a.paymentStatus === PaymentStatus.PAID);
-    const chargesOk =
-      f.deal.dealCharges.length === 0 ||
-      f.deal.dealCharges.every((c) => c.paymentStatus === PaymentStatus.PAID);
-    const dealReadyToPay = budgetOk && artistesOk && chargesOk;
+    // "Dispo pour paiement" : tout l'amont du deal est OK. Signal vert pour
+    // Stan : il peut maintenant verser le MF sans risque cash-flow.
+    //
+    // Stan 2026-05-27 v2 — Règle discriminée par catégorie :
+    //   - BOOKING  : budgetPaymentStatus=PAID + artistes (montant > 0) PAID
+    //                + charges (montant > 0) PAID
+    //   - PROD_EXE : recettes REVENUE (montant > 0, non coveredByVenue) PAID
+    //                + coûts COST (montant > 0, non coveredByVenue) PAID
+    //                + (deal.artistStatus=PAID OU tous artistes individuels PAID)
+    //   - CACHETS  : budget PAID + artistes PAID (fallback simple)
+    //
+    // Les lignes à montant null/0 sont IGNORÉES (un artiste créé sans cachet
+    // ne doit pas bloquer la dispo). Idem charges/recettes à 0.
+    const hasAmount = (n: number | null | undefined | { toString(): string }) => {
+      if (n == null) return false;
+      const v = typeof n === "number" ? n : Number(n);
+      return v > 0;
+    };
+
+    let dealReadyToPay = false;
+    if (f.deal.category === DealCategory.PROD_EXE) {
+      const revLines = f.deal.productionLines.filter(
+        (l) => l.kind === "REVENUE" && !l.coveredByVenue && hasAmount(l.amount as unknown as number),
+      );
+      const costLines = f.deal.productionLines.filter(
+        (l) => l.kind === "COST" && !l.coveredByVenue && hasAmount(l.amount as unknown as number),
+      );
+      const recettesOk =
+        revLines.length === 0 ||
+        revLines.every((l) => l.paymentStatus === PaymentStatus.PAID);
+      const coutsOk =
+        costLines.length === 0 ||
+        costLines.every((l) => l.paymentStatus === PaymentStatus.PAID);
+      const artistesIndivOk =
+        f.deal.dealArtistes.filter((a) => hasAmount(a.cachetAmount as unknown as number)).length === 0 ||
+        f.deal.dealArtistes
+          .filter((a) => hasAmount(a.cachetAmount as unknown as number))
+          .every((a) => a.paymentStatus === PaymentStatus.PAID);
+      const artistesOk =
+        f.deal.artistStatus === PaymentStatus.PAID || artistesIndivOk;
+      dealReadyToPay = recettesOk && coutsOk && artistesOk;
+    } else {
+      // BOOKING + CACHETS : budget + artistes + charges (charges Booking-only,
+      // donc vide pour CACHETS — n'impacte pas la règle).
+      const budgetOk = f.deal.budgetPaymentStatus === PaymentStatus.PAID;
+      const significantArtistes = f.deal.dealArtistes.filter((a) =>
+        hasAmount(a.cachetAmount as unknown as number),
+      );
+      const artistesOk =
+        significantArtistes.length === 0 ||
+        significantArtistes.every((a) => a.paymentStatus === PaymentStatus.PAID);
+      const significantCharges = f.deal.dealCharges.filter((c) =>
+        hasAmount(c.amount as unknown as number),
+      );
+      const chargesOk =
+        significantCharges.length === 0 ||
+        significantCharges.every((c) => c.paymentStatus === PaymentStatus.PAID);
+      dealReadyToPay = budgetOk && artistesOk && chargesOk;
+    }
 
     return {
       id: f.id,

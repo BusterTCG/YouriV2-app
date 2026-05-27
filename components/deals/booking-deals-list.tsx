@@ -12,7 +12,15 @@ import { formatEur, formatPct, dealStatusLabel } from "./deal-helpers";
  * "Encaissé" (vert) si PAID, "En cours" (gris) sinon. Quels que soient les
  * statuts intermédiaires sous-jacents (TO_INVOICE/VALIDATED/INVOICED/DISPUTE).
  */
-function RecapStatusPill({ isPaid }: { isPaid: boolean }) {
+function RecapStatusPill({
+  isPaid,
+  paidLabel = "Encaissé",
+}: {
+  isPaid: boolean;
+  /** Wording du status PAID — "Encaissé" (entrée cash, budget) ou "Payé"
+   *  (sortie cash, artiste). Stan 2026-05-27. */
+  paidLabel?: string;
+}) {
   return (
     <span
       className={cn(
@@ -23,7 +31,7 @@ function RecapStatusPill({ isPaid }: { isPaid: boolean }) {
       )}
     >
       <span>{isPaid ? "✅" : "⏳"}</span>
-      <span>{isPaid ? "Encaissé" : "En cours"}</span>
+      <span>{isPaid ? paidLabel : "En cours"}</span>
     </span>
   );
 }
@@ -36,9 +44,14 @@ interface Props {
 /**
  * Tableau récap /deals/booking — modèle Budget/Marge (Stan 2026-05-26).
  *
- * Colonnes : Date / Projet / Statut / Montant (budget) / Artiste (Σ rémus) /
- * St. Artiste (consolidé) / Divers (Σ charges) / Marge Youri / St. Marge
- * (= budgetPaymentStatus) / % Marge / Encaiss. (budgetPaidAt) / Notes.
+ * Colonnes : Date / Projet / Statut / CA HT (budget) / Artiste (Σ rémus) /
+ * St. Artiste (consolidé) / Marge Brute (= budget − artistes − charges) /
+ * St. Marge (= budgetPaymentStatus) / Encaiss. (budgetPaidAt) / Mgmt fees /
+ * Marge Nette (= Marge Brute − MF) / Taux Marge Nette.
+ *
+ * Wording aligné Stan 2026-05-27 audit : on parle de "Marge Brute" (vs
+ * "Marge Youri"/"Marge Pangee" historiques) pour rester cohérent avec les
+ * KPI top et la fiche détail Prod Exé.
  *
  * - PAS de colonne Artiste (Stan : indés que je gère pas).
  * - PAS de colonne % Com (modèle marge auto, pas de % par artiste).
@@ -46,19 +59,31 @@ interface Props {
  * - Cliquer sur la ligne → fiche détail `/deals/booking/[id]`.
  */
 
+/** Largeurs des colonnes Stan 2026-05-27 v5 :
+ *    Date | Projet | Statut | CA HT | Artiste | St. Artiste | Marge
+ *    | St. Marge | Encaiss. | Manag fees | Marge nette | %
+ *
+ *  Stan v4 (2026-05-26 retour) :
+ *    - % de marge déplacé APRÈS Marge nette (= % de la marge nette)
+ *    - Manag fees en text-sm (même taille que CA HT/Artiste)
+ *    - Encaiss. en format MM/yy
+ *    - Colonne Notes supprimée
+ *  Stan v5 (2026-05-27) :
+ *    - "Montant" → "CA HT" pour cohérence avec Prod Exé
+ */
 const DEAL_COL_WIDTHS = [
   "w-[68px]",  // Date
   "w-[220px]", // Projet
   "w-[110px]", // Statut deal
-  "w-[90px]",  // Montant (budget)
+  "w-[90px]",  // CA HT (= budget)
   "w-[90px]",  // Artiste (Σ)
   "w-[110px]", // St. Artiste
-  "w-[90px]",  // Divers (Σ charges)
-  "w-[90px]",  // Marge Youri
-  "w-[50px]",  // % (entre Marge Youri et St. Marge — Stan 2026-05-26 v2)
+  "w-[90px]",  // Marge Brute (= budget − artistes − charges)
   "w-[110px]", // St. Marge
-  "w-[100px]", // Encaiss.
-  "w-[120px]", // Notes
+  "w-[80px]",  // Encaiss. (MM/yy)
+  "w-[90px]",  // Manag fees
+  "w-[90px]",  // Marge nette
+  "w-[50px]",  // % de la marge nette
 ];
 
 function DealsListColGroup() {
@@ -85,22 +110,22 @@ export function BookingDealsList({ deals, totals }: Props) {
   return (
     <div className="rounded-md border overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="min-w-[1258px] text-sm table-fixed xl:min-w-0 xl:w-full">
+        <table className="min-w-[1208px] text-sm table-fixed xl:min-w-0 xl:w-full">
           <DealsListColGroup />
           <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground sticky top-0 z-10">
             <tr>
               <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Date</th>
               <th className="text-left px-2 py-2 font-medium">Projet</th>
               <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Statut</th>
-              <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Montant</th>
+              <th className="text-right px-2 py-2 font-medium whitespace-nowrap">CA HT</th>
               <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Artiste</th>
               <th className="text-left px-2 py-2 font-medium whitespace-nowrap">St. Artiste</th>
-              <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Divers</th>
-              <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Marge Youri</th>
-              <th className="text-center px-2 py-2 font-medium whitespace-nowrap">%</th>
+              <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Marge Brute</th>
               <th className="text-left px-2 py-2 font-medium whitespace-nowrap">St. Marge</th>
               <th className="text-left px-2 py-2 font-medium whitespace-nowrap">Encaiss.</th>
-              <th className="text-left px-2 py-2 font-medium">Notes</th>
+              <th className="text-right px-2 py-2 font-medium whitespace-nowrap" title="Management fees">Mgmt fees</th>
+              <th className="text-right px-2 py-2 font-medium whitespace-nowrap">Marge nette</th>
+              <th className="text-center px-2 py-2 font-medium whitespace-nowrap">%</th>
             </tr>
           </thead>
           <tbody>
@@ -144,7 +169,7 @@ export function BookingDealsList({ deals, totals }: Props) {
                     {dStatus.emoji} {dStatus.label}
                   </td>
 
-                  {/* Montant = budget */}
+                  {/* CA HT = budget */}
                   <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">
                     {formatEur(deal.budgetAmount)}
                   </td>
@@ -154,24 +179,15 @@ export function BookingDealsList({ deals, totals }: Props) {
                     {formatEur(deal.totalArtistes)}
                   </td>
 
-                  {/* St. Artiste — recap binaire Stan : Encaissé si tous PAID, sinon En cours. */}
+                  {/* St. Artiste — recap binaire : Payé si tous PAID, sinon En cours
+                      (Stan 2026-05-27 : "Payé" car sortie cash vers l'artiste). */}
                   <td className="px-2 py-2 whitespace-nowrap">
-                    <RecapStatusPill isPaid={allArtistesPaid} />
+                    <RecapStatusPill isPaid={allArtistesPaid} paidLabel="Payé" />
                   </td>
 
-                  {/* Divers = Σ charges */}
-                  <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">
-                    {deal.totalCharges > 0 ? formatEur(deal.totalCharges) : "—"}
-                  </td>
-
-                  {/* Marge Youri — en noir (couleur normale, pas accent) */}
+                  {/* Marge Pangee (= budget − artistes − charges) */}
                   <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums font-medium">
                     {formatEur(deal.margePangee)}
-                  </td>
-
-                  {/* % — entre Marge Youri et St. Marge (Stan 2026-05-26 v2) */}
-                  <td className="px-2 py-2 text-center whitespace-nowrap tabular-nums text-xs text-muted-foreground">
-                    {deal.margePct != null ? formatPct(deal.margePct, { integer: true }) : "—"}
                   </td>
 
                   {/* St. Marge — recap binaire Stan : Encaissé si budget PAID, sinon En cours. */}
@@ -179,25 +195,40 @@ export function BookingDealsList({ deals, totals }: Props) {
                     <RecapStatusPill isPaid={deal.budgetPaymentStatus === "PAID"} />
                   </td>
 
-                  {/* Encaissement = mois budget Youri — LECTURE SEULE */}
+                  {/* Encaissement = mois budget Pangee — format MM/yy (Stan v4) */}
                   <td className="px-2 py-2 whitespace-nowrap text-xs tabular-nums">
                     {deal.budgetPaidAt
-                      ? format(deal.budgetPaidAt, "MMM yyyy", { locale: fr })
+                      ? format(deal.budgetPaidAt, "MM/yy", { locale: fr })
                       : <span className="text-muted-foreground/40">—</span>}
                   </td>
 
-                  {/* Notes */}
-                  <td className="px-2 py-2 min-w-0">
-                    {deal.notes ? (
-                      <span
-                        className="text-xs text-muted-foreground line-clamp-2"
-                        title={deal.notes}
-                      >
-                        {deal.notes}
-                      </span>
+                  {/* Manag fees (Σ MF du deal) — text-sm aligné autres montants (Stan v4) */}
+                  <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">
+                    {deal.totalMf > 0 ? (
+                      formatEur(deal.totalMf)
                     ) : (
-                      <span className="text-xs text-muted-foreground/40">—</span>
+                      <span className="text-muted-foreground/40">—</span>
                     )}
+                  </td>
+
+                  {/* Marge nette = Marge − Manag fees */}
+                  <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums font-semibold">
+                    <span
+                      className={cn(
+                        deal.margeNette >= 0
+                          ? "text-emerald-700 dark:text-emerald-400"
+                          : "text-red-700 dark:text-red-400",
+                      )}
+                    >
+                      {formatEur(deal.margeNette)}
+                    </span>
+                  </td>
+
+                  {/* % de la marge nette (Stan v4 : APRÈS Marge nette) */}
+                  <td className="px-2 py-2 text-center whitespace-nowrap tabular-nums text-xs text-muted-foreground">
+                    {deal.margeNettePct != null
+                      ? formatPct(deal.margeNettePct, { integer: true })
+                      : "—"}
                   </td>
                 </tr>
               );
@@ -205,26 +236,28 @@ export function BookingDealsList({ deals, totals }: Props) {
           </tbody>
           <tfoot className="bg-muted/60 border-t-2 font-semibold sticky bottom-0">
             <tr>
+              {/* col 1-3 : Date | Projet | Statut */}
               <td
                 colSpan={3}
                 className="px-2 py-2.5 text-right text-[11px] uppercase tracking-wider text-muted-foreground"
               >
                 Total · {totals.count} deal{totals.count > 1 ? "s" : ""}
               </td>
+              {/* col 4 CA HT */}
               <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
                 {formatEur(totals.totalBudget)}
               </td>
+              {/* col 5 Artiste */}
               <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
                 {formatEur(totals.totalArtistes)}
               </td>
+              {/* col 6 St. Artiste */}
               <td />
-              <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
-                {totals.totalCharges > 0 ? formatEur(totals.totalCharges) : "—"}
-              </td>
+              {/* col 7 Marge Pangee */}
               <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
                 {formatEur(totals.totalMarge)}
               </td>
-              <td />
+              {/* col 8 St. Marge — détail encaissée / à venir */}
               <td className="px-2 py-2.5 text-[11px] text-muted-foreground whitespace-nowrap">
                 {totals.margeRealisee !== 0 && (
                   <span className="text-emerald-600 dark:text-emerald-400 tabular-nums">
@@ -240,7 +273,24 @@ export function BookingDealsList({ deals, totals }: Props) {
                   </span>
                 )}
               </td>
+              {/* col 9 Encaiss. */}
               <td />
+              {/* col 10 Manag fees total */}
+              <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
+                {totals.totalMf > 0 ? formatEur(totals.totalMf) : "—"}
+              </td>
+              {/* col 11 Marge nette total */}
+              <td
+                className={cn(
+                  "px-2 py-2.5 text-right tabular-nums whitespace-nowrap",
+                  totals.totalMargeNette >= 0
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : "text-red-700 dark:text-red-400",
+                )}
+              >
+                {formatEur(totals.totalMargeNette)}
+              </td>
+              {/* col 12 % de marge nette */}
               <td />
             </tr>
           </tfoot>

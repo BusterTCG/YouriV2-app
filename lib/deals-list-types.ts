@@ -94,6 +94,13 @@ export type BookingDealRow = {
   margePangee: number;
   /** % marge = marge / budget * 100, null si budget vide/zéro. */
   margePct: number | null;
+  /** Somme des management fees (€) reversés aux associés sur ce deal. */
+  totalMf: number;
+  /** Marge nette = Marge Pangee − Management fees (peut être négative). */
+  margeNette: number;
+  /** % marge nette = margeNette / budget × 100, null si budget vide/zéro
+   *  (Stan 2026-05-26 v3 : c'est CE % qui s'affiche dans la colonne %). */
+  margeNettePct: number | null;
 };
 
 export interface BookingDealsListData {
@@ -115,6 +122,10 @@ export interface BookingDealsListData {
     /** Cachets que Youri doit reverser à l'artiste : budget encaissé MAIS
      *  artiste pas encore payé (cash-flow réel à débourser). */
     artistOwed: number;
+    /** Somme des management fees reversés (tous deals non annulés). */
+    totalMf: number;
+    /** Marge nette globale = totalMarge − totalMf. */
+    totalMargeNette: number;
   };
   artists: Array<{ id: string; name: string; slug: string; color: string | null }>;
 }

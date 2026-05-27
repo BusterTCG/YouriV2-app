@@ -1,4 +1,4 @@
-import { Briefcase, CheckCircle2, Hourglass, Percent, Receipt, Sparkles } from "lucide-react";
+import { Briefcase, CheckCircle2, HandCoins, Hourglass, Percent, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatEur, formatPct } from "@/components/deals/deal-helpers";
 import type { BookingDealsListData } from "@/lib/deals-list-types";
@@ -9,17 +9,18 @@ interface Props {
 }
 
 /**
- * Bloc cumulés — refonte modèle Budget/Marge (Stan 2026-05-26).
- *
- * 4 KPI :
- *   - Budget       — total budgets reçus de l'organisateur
- *   - Artistes     — total rémunérations versées
- *   - Charges      — total charges diverses
- *   - Marge Youri — split réalisée (budget encaissé) vs en attente
+ * Bloc cumulés (Stan 2026-05-27 v5) — 5 KPI alignés Booking + Prod Exé :
+ *   - CA HT           — total budgets reçus de l'organisateur (= CA Pangee)
+ *   - Artistes        — total rémunérations versées
+ *   - Management Fees — total reversé aux associés (Stan/Certe/Angath)
+ *   - Marge Nette     — Marge Pangee − Management Fees (split réalisée/attente)
+ *   - Taux Marge Nette — Marge nette ÷ CA HT × 100
  */
 export function DealsTotals({ totals, periodLabel }: Props) {
-  const margePct =
-    totals.totalBudget > 0 ? (totals.totalMarge / totals.totalBudget) * 100 : null;
+  const margeNettePct =
+    totals.totalBudget > 0
+      ? (totals.totalMargeNette / totals.totalBudget) * 100
+      : null;
 
   return (
     <div className="rounded-md border-2 border-[--yr-gold]/30 bg-card p-4">
@@ -35,7 +36,7 @@ export function DealsTotals({ totals, periodLabel }: Props) {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <Stat
           icon={<Briefcase className="h-3.5 w-3.5 text-muted-foreground" />}
-          label="Budget"
+          label="CA HT"
           value={formatEur(totals.totalBudget)}
         />
         <Stat
@@ -52,14 +53,14 @@ export function DealsTotals({ totals, periodLabel }: Props) {
           }
         />
         <Stat
-          icon={<Receipt className="h-3.5 w-3.5 text-muted-foreground" />}
-          label="Charges diverses"
-          value={formatEur(totals.totalCharges)}
+          icon={<HandCoins className="h-3.5 w-3.5 text-muted-foreground" />}
+          label="Management Fees"
+          value={formatEur(totals.totalMf)}
         />
         <Stat
           icon={<span className="text-emerald-600 text-xs">★</span>}
-          label="Marge Youri"
-          value={formatEur(totals.totalMarge)}
+          label="Marge Nette"
+          value={formatEur(totals.totalMargeNette)}
           sub={
             totals.totalMarge !== 0 ? (
               <span className="flex items-center gap-2 flex-wrap">
@@ -81,9 +82,9 @@ export function DealsTotals({ totals, periodLabel }: Props) {
         />
         <Stat
           icon={<Percent className="h-3.5 w-3.5 text-muted-foreground" />}
-          label="Taux marge"
-          value={formatPct(margePct, { integer: true })}
-          sub="Marge ÷ budget"
+          label="Taux Marge Nette"
+          value={formatPct(margeNettePct, { integer: true })}
+          sub="Marge nette ÷ CA HT"
         />
       </div>
     </div>

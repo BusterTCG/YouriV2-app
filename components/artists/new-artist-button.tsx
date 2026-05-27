@@ -90,7 +90,7 @@ export function NewArtistButton() {
                 id="artist-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Ex. Sophie Mercier"
+                placeholder=""
                 autoFocus
                 disabled={pending}
                 maxLength={100}

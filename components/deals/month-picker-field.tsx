@@ -41,8 +41,10 @@ export function MonthPickerField({
     setOpen(false);
   }
 
+  // Stan 2026-05-26 v4 : harmonisation format date d'encaissement = MM/yy
+  // (cohérent avec colonne Encaiss. tableau booking + colonne Paiement MF).
   const labelDisplay = value
-    ? capitalize(format(value, "MMM", { locale: fr })).replace(/\.$/, "")
+    ? format(value, "MM/yy", { locale: fr })
     : placeholder;
 
   return (
@@ -136,6 +138,3 @@ export function MonthPickerField({
   );
 }
 
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}

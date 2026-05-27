@@ -41,7 +41,7 @@ const CATEGORIES: Array<{
     description: "Production exécutive 15 % — lignes recettes/dépenses, multi-date.",
     href: "/deals/prod-executive",
     icon: TrendingUp,
-    wip: true,
+    wip: false,
   },
   {
     category: "CACHETS",

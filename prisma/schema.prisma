@@ -126,8 +126,49 @@ enum BriefingRole {
 // et la société de chaque associé (Kuro Neko EURL Stan, SASU Certe, etc.).
 
 enum ManagementFeeRole {
-  APPORT  // Apport d'affaires
-  WORK    // Travail effectif sur le deal
+  APPORT // Apport d'affaires
+  WORK // Travail effectif sur le deal
+}
+
+// ─────────────────────────── PROD EXÉCUTIVE (Sprint 4) ───────────────────────────
+//
+// Pangee Prod gère 3 modèles de contrat avec une salle pour les productions
+// exécutives. Le modèle artiste est toujours implicite PROD_EXE (Pangee prend
+// 15 % du CA billetterie, configurable par deal via `prodExePct`). Multi-date
+// supporté via `multiDateDates` JSON (1 deal = 1 tournée / résidence).
+//
+// Copie fidèle du module Production de KuroNeko-App (cf. AGENTS.md), simplifiée
+// pour n'exposer que PROD_EXE côté Pangee (pas de COPROD artiste).
+
+/// Modèle de contrat avec la salle — détermine d'où vient le CA billetterie.
+enum VenueDealKind {
+  PROD // Pangee loue la salle, encaisse 100 % billetterie HT, paye location.
+  CO_REAL // Salle gère, billetterie partagée. Pangee saisit sa part nette dans RECETTE_HT.
+  CESSION // Prix fixe payé par la salle, pas de risque billetterie.
+}
+
+/// Type de ligne du tableau de production (recettes vs charges).
+enum ProductionLineKind {
+  REVENUE
+  COST
+}
+
+/// Catégories prédéfinies des lignes de production. Reprise fidèle KN.
+/// L'user peut préciser via `customLabel` (texte libre) pour les sous-entrées
+/// (ex. VHR multi : train + hôtel + repas).
+enum ProductionLineLabel {
+  // ── Recettes
+  RECETTE_HT // Billetterie nette Pangee (PROD/CO_REAL) ou prix de cession (CESSION).
+  DL_PROD // Deal Live : montant additionnel par billet vendu, saisi à la main.
+  // ── Charges
+  CNM // Centre National de la Musique (taxe).
+  SACD // Société des Auteurs et Compositeurs Dramatiques.
+  LOCATION // Location de la salle (mode PROD principalement).
+  VHR // Voyage / Hôtel / Repas (équipe + artistes).
+  COM // Communication / promotion.
+  TECH // Technique scénique (son, lumière, matériel).
+  CAPTA // Captation audio/vidéo éventuelle.
+  AUTRE // Catch-all texte libre (`customLabel` obligatoire).
 }
 
 // ─────────────────────────── USERS (Sprint 1) ───────────────────────────
@@ -139,29 +180,29 @@ enum ManagementFeeRole {
 /// au lieu de supprimer, pour préserver l'historique d'audit / completedBy
 /// sur les tâches que l'user a validées (à venir Sprint 6).
 model User {
-  id            String   @id @default(cuid())
+  id String @id @default(cuid())
 
   /// Email principal (login). Pour les users avec Google OAuth, c'est aussi
   /// l'email Google. Unique.
-  email         String   @unique
+  email String @unique
 
   /// Nom d'affichage (sidebar, badges, "Validé par X").
-  name          String
+  name String
 
   /// Hash bcrypt du mot de passe de secours (fallback si Google down).
   /// Tous les users ont le même mdp au démarrage (APP_PASSWORD). Réinitia-
   /// lisable depuis /settings/users par l'ADMIN.
-  passwordHash  String
+  passwordHash String
 
   /// Couleur d'identification de l'user (badges "assigné à", chips). Hex.
-  color         String   @default("#3b82f6")
+  color String @default("#3b82f6")
 
   /// Rôle (ADMIN | MEMBER). Voir enum UserRole pour les implications.
-  role          UserRole @default(MEMBER)
+  role UserRole @default(MEMBER)
 
   /// Désactiver = empêche le login mais préserve l'historique des actions.
   /// Préféré à un soft-delete pour la traçabilité.
-  active        Boolean  @default(true)
+  active Boolean @default(true)
 
   /// Trace la dernière source d'auth (debug si problème OAuth vs mdp).
   lastAuthSource AuthSource?
@@ -172,14 +213,14 @@ model User {
   /// l'associé connecté (Stan 2026-05-26). Migration future task #47 :
   /// remplacer lib/pangee-team.ts par un fetch dynamique des users avec
   /// pangeeKey défini.
-  pangeeKey      String?
+  pangeeKey String?
 
   /// Relations d'audit — quel user a créé quel deal (multi-user audit léger).
   /// Sprint 10 ajoutera un AuditEntry plus complet pour les actions update/delete.
-  dealsCreated   Deal[] @relation("DealCreatedBy")
+  dealsCreated Deal[] @relation("DealCreatedBy")
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ─────────────────────────── MASTER DATA (Sprint 2) ───────────────────────────
@@ -197,21 +238,21 @@ model User {
 /// ArtistProfile complète en relation 1-1 (identité civile, SACD,
 /// intermittence, structure, RIB, bio, social).
 model Artist {
-  id        String    @id @default(cuid())
+  id String @id @default(cuid())
 
   /// Nom d'affichage de l'artiste. Unique pour éviter doublons accidentels.
-  name      String    @unique
+  name String @unique
 
   /// Slug pour les URLs `/artistes/[slug]`. Généré depuis `name` via lib/slug.ts.
   /// Unique. Si l'user crée 2 fois "Jean Dupont", le slug aura un suffixe -2.
-  slug      String    @unique
+  slug String @unique
 
   /// Couleur d'identification (badges, chips, avatar). Hex.
   /// Pangee gère 50+ artistes — pas de couleurs distinctes par artiste
   /// (cf. règle 2026-05-26, lib/artists-constants.ts PANGEE_ARTIST_COLOR).
   /// On garde le champ en BDD pour compat / option future, mais l'UI
   /// force toujours la même couleur à la création/modif.
-  color     String    @default("#2563eb")
+  color String @default("#2563eb")
 
   /// URL relative vers la photo d'avatar uploadée (ex. "/uploads/avatars/<id>-<ts>.jpg").
   /// Null = pas de photo, on affiche le fallback initiales+couleur. Fichier stocké
@@ -228,16 +269,16 @@ model Artist {
 
   /// Notes libres internes (style musical, préférences, infos contractuelles
   /// rapides). La fiche complète vit dans ArtistProfile relation 1-1.
-  notes     String?
+  notes String?
 
   /// Désactiver = masquer dans les listes par défaut. Soft-delete via
   /// `deletedAt` reste l'opération "définitive" (visible dans /trash Sprint 10).
-  active    Boolean   @default(true)
+  active Boolean @default(true)
 
   deletedAt DateTime?
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   profile      ArtistProfile?
   /// Deals où cet artiste apparaît (jointure DealArtiste avec cachet + com
@@ -260,46 +301,46 @@ model ArtistProfile {
   artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
   // 1 — Identité civile
-  firstName              String?
-  lastName               String?
-  stageName              String?
-  birthDate              DateTime?
-  birthPlace             String?
-  nationality            String?
-  socialSecurityNumber   String?
-  intermittentNumber     String?
-  sacdNumber             String?
+  firstName            String?
+  lastName             String?
+  stageName            String?
+  birthDate            DateTime?
+  birthPlace           String?
+  nationality          String?
+  socialSecurityNumber String?
+  intermittentNumber   String?
+  sacdNumber           String?
 
   // 2 — Coordonnées personnelles
-  personalEmail   String?
-  personalPhone   String?
-  homeAddress     String?
+  personalEmail String?
+  personalPhone String?
+  homeAddress   String?
 
   // 3 — Structure de facturation
-  companyName       String?
-  companyLegalForm  String?
-  companySiret      String?
-  companySiren      String?
-  companyVatNumber  String?
-  companyApeCode    String?
-  companyAddress    String?
-  spectacleLicense  String?
-  vatRegime         String?
+  companyName      String?
+  companyLegalForm String?
+  companySiret     String?
+  companySiren     String?
+  companyVatNumber String?
+  companyApeCode   String?
+  companyAddress   String?
+  spectacleLicense String?
+  vatRegime        String?
 
   // 4 — Coordonnées bancaires
-  bankIban    String?
-  bankBic     String?
-  bankName    String?
-  bankHolder  String?
+  bankIban   String?
+  bankBic    String?
+  bankName   String?
+  bankHolder String?
 
   // 5 — Communication / Press kit
-  bioShort         String?
-  bioLong          String?
-  pressPhotoUrl    String?
-  websiteUrl       String?
-  instagramHandle  String?
-  youtubeHandle    String?
-  tiktokHandle     String?
+  bioShort        String?
+  bioLong         String?
+  pressPhotoUrl   String?
+  websiteUrl      String?
+  instagramHandle String?
+  youtubeHandle   String?
+  tiktokHandle    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -329,19 +370,19 @@ model ArtistProfile {
 /// Deal Pangee — entité métier centrale du Sprint 3+. Représente une opération
 /// commerciale (booking, prod exécutive, cachets) avec 1-N artistes.
 model Deal {
-  id          String       @id @default(cuid())
+  id String @id @default(cuid())
 
   /// Catégorie discriminante (BOOKING / PROD_EXE / CACHETS). Sprint 3 = BOOKING
   /// uniquement. Filtre strict côté pages `/deals/<categorie>`.
-  category    DealCategory
+  category DealCategory
 
   /// Workflow simple manuel (LEAD → EN_COURS → CONFIRME / ANNULE).
   /// L'user passe les statuts à la main depuis la fiche deal.
-  status      DealStatus   @default(LEAD)
+  status DealStatus @default(LEAD)
 
   /// Titre court du deal (ex. "Nordine Ganso @ Comedy Club Paris").
   /// Souvent généré auto depuis artiste(s) + lieu, modifiable.
-  title       String
+  title String
 
   /// Description / contexte libre (notes commerciales en amont, terms négociés).
   description String?
@@ -349,11 +390,11 @@ model Deal {
   /// Date principale du deal. Pour BOOKING (mono-date) c'est LA date du show.
   /// Pour PROD_EXE/CACHETS (multi-date) c'est la 1re date — la liste complète
   /// sera stockée dans DealDate (Sprint 4+).
-  date        DateTime
+  date DateTime
 
   /// Heure du show — texte libre ("20h30", "doors 19h / show 20h"). Pas
   /// parsé, juste affiché. Indépendant de la date pour préserver la flexibilité.
-  showTime    String?
+  showTime String?
 
   // ── Budget Pangee (modèle 2026-05-26 : budget global vs marge) ──
   // Stan a refondé le modèle : Pangee touche un budget global de l'organisateur,
@@ -362,7 +403,7 @@ model Deal {
 
   /// Budget Pangee = montant que l'organisateur paie à Pangee pour ce deal.
   /// Sert de base au calcul de la Marge Pangee = budget − total artistes − total charges.
-  budgetAmount  Decimal?
+  budgetAmount Decimal?
 
   /// Statut du budget côté Pangee (à facturer / facturée / encaissée / litige).
   /// En UI, sur la fiche deal, exposé comme checkbox simple "Encaissé"
@@ -372,7 +413,7 @@ model Deal {
 
   /// Mois où Pangee a encaissé le budget de l'organisateur (cash-flow réel).
   /// Sert au filtre période axis="paid" + reporting mensuel marge.
-  budgetPaidAt  DateTime?
+  budgetPaidAt DateTime?
 
   // ── Snapshot organisateur (Contact KN distant) ──
   /// ID du Contact KN au moment de la sélection. Refetch via kn-client.
@@ -384,9 +425,9 @@ model Deal {
   organizerCity    String?
 
   // ── Snapshot lieu (Venue KN distant) ──
-  venueId    String?
-  venueName  String?
-  venueCity  String?
+  venueId      String?
+  venueName    String?
+  venueCity    String?
   /// Adresse libre (BAN data.gouv.fr) — utilisée quand le lieu n'est PAS un
   /// Venue référencé en BDD (ex. booking entreprise). Si venueId est null,
   /// venueCity est extraite automatiquement depuis cette adresse (regex code
@@ -398,7 +439,7 @@ model Deal {
   dealArtistes DealArtiste[]
 
   // ── Charges diverses (dépenses Pangee) ──
-  dealCharges  DealCharge[]
+  dealCharges DealCharge[]
 
   // ── Management fees (Marge associés) ──
   /// Reversement Pangee → associés sous forme de prestation. 2 catégories :
@@ -409,13 +450,90 @@ model Deal {
   /// 1-1 optionnel : la FDR n'existe que si l'user l'a ouverte au moins
   /// une fois (auto-création via ensureBriefingWithPrefill). Cascade
   /// delete suit le soft-delete du Deal côté server action.
-  briefing     EventBriefing?
+  briefing EventBriefing?
+
+  // ── Spécifique Prod Exécutive (Sprint 4) ──
+  /// Modèle de contrat avec la salle (PROD / CO_REAL / CESSION). Détermine
+  /// l'interprétation de la ligne RECETTE_HT et le calcul du CA. Null pour
+  /// les deals BOOKING / CACHETS (ne s'applique qu'à PROD_EXE).
+  venueDealKind VenueDealKind?
+
+  /// % du CA billetterie qui revient à Pangee (PROD_EXE). Défaut 15 — l'user
+  /// peut override par deal si négociation spécifique. Sert au calcul auto
+  /// de `commissionAmount` via `lib/finance/show-financials.ts`.
+  prodExePct Decimal?
+
+  /// % de co-réalisation avec la salle en mode CO_REAL — part Pangee sur la
+  /// billetterie totale (le reste revient à la salle). Informatif.
+  coRealKnPct Decimal?
+
+  /// CA global billetterie HT en mode CO_REAL — avant partage avec la salle.
+  /// Permet de calculer le ticket moyen sur le prix public.
+  coRealGrossCa Decimal?
+
+  /// Jauge totale de la salle (capacité max).
+  capacity Int?
+  /// Nombre de billets payants vendus.
+  paying   Int?
+  /// Nombre d'invités (gratuits).
+  invited  Int?
+
+  /// Mode multi-date activé pour les résidences / tournées.
+  isMultiDate      Boolean @default(false)
+  /// Nombre de représentations dans la série — calculé auto depuis
+  /// `multiDateDates.length` quand renseigné.
+  performanceCount Int?
+  /// Liste des dates de la série (array de "YYYY-MM-DD"). Type Json côté
+  /// Prisma → SQLite stocke en TEXT sérialisé, Postgres en JSON natif.
+  multiDateDates   Json?
+
+  /// Nom de scène/du spectacle (distinct du `title` qui est court).
+  showName String?
+  /// Heure de fin de la représentation (texte libre, identique à showTime).
+  endTime  String?
+
+  /// Suivi opérationnel : contrat signé.
+  contractSigned Boolean @default(false)
+  /// Suivi opérationnel : mise en vente billetterie effective.
+  ticketingReady Boolean @default(false)
+  /// URL externe vers la page billetterie.
+  ticketingUrl   String?
+  /// Suivi opérationnel : VHR (voyage/hôtel/repas) booké.
+  vhrBooked      Boolean @default(false)
+
+  /// VenueRoom snapshot (depuis annuaire KN) — la salle peut avoir plusieurs
+  /// configurations (grande salle, petite salle, etc.).
+  venueRoomId String?
+
+  // ── Scalars financiers recalculés (Prod Exé) ──
+  // Persistés à chaque mutation par `recomputeShowFinancials(dealId)`. La
+  // fiche artiste lit ces scalars pour ses totaux "à facturer / encaissé".
+  // Sur Booking ils restent null (le calcul Marge Pangee passe par
+  // budgetAmount − Σartistes − Σcharges, pas par ces scalars).
+
+  /// "Montant" générique (= revenue pour PROD_EXE, = budget pour BOOKING).
+  /// Mappé en colonne tableau de la fiche artiste.
+  grossAmount      Decimal?
+  /// % de commission Pangee retenu (= prodExePct au moment du recompute).
+  commissionPct    Decimal?
+  /// Montant € de la commission Pangee (= revenue × pct / 100).
+  commissionAmount Decimal?
+  /// Montant € qui revient à l'artiste (= margin − commissionAmount).
+  artistAmount     Decimal?
+
+  /// Statut consolidé de paiement de la Part Artiste (driver UI séparé du
+  /// DealArtiste.paymentStatus individuel — Stan 2026-05-27 v2 : pill "Payé"
+  /// global du show, indépendant des cachets individuels).
+  artistStatus     PaymentStatus @default(N_A)
+
+  // ── Lignes de production (Sprint 4) ──
+  productionLines ProductionLine[]
 
   // ── Audit multi-user ──
   /// User qui a créé ce deal. SetNull si l'user est désactivé (préserve
   /// l'historique sans casser la contrainte FK).
-  createdById  String?
-  createdBy    User?  @relation("DealCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  createdBy   User?   @relation("DealCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
   /// Soft-delete (règle B3 verrouillée). Cascade vers DealArtiste côté
   /// server action — pas Prisma onDelete qui supprimerait définitivement.
@@ -446,10 +564,10 @@ model Deal {
 /// qu'une fois par deal. Pour ajouter le même artiste avec 2 cachets
 /// différents, créer 2 deals séparés.
 model DealArtiste {
-  id       String @id @default(cuid())
+  id String @id @default(cuid())
 
-  dealId   String
-  deal     Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
 
   artistId String
   /// onDelete: Restrict — bloque la suppression d'un Artist si des DealArtiste
@@ -460,7 +578,7 @@ model DealArtiste {
   /// Montant que touche l'artiste pour ce deal (€). Champ DB `cachetAmount`,
   /// label UI "Montant" (Stan 2026-05-26). Pangee paie ce montant à l'artiste
   /// depuis le budget reçu de l'organisateur.
-  cachetAmount    Decimal?
+  cachetAmount Decimal?
 
   /// Part de l'artiste sur le budget Pangee (%, ex. 30.0 = 30 %). Optionnel.
   /// Si renseigné, le montant peut se calculer auto côté UI :
@@ -470,11 +588,11 @@ model DealArtiste {
 
   /// Statut paiement de l'artiste (Pangee a-t-il versé sa rémunération ?).
   /// Wording identique KN : À facturer / Facturée / Encaissée / Litige / N_A.
-  paymentStatus   PaymentStatus @default(N_A)
+  paymentStatus PaymentStatus @default(N_A)
 
   /// Mois où l'artiste a été payé par Pangee (cash-flow réel sortant).
   /// Sert au reporting + filtre période.
-  paidAt    DateTime?
+  paidAt DateTime?
 
   notes     String?
   createdAt DateTime @default(now())
@@ -497,28 +615,83 @@ model DealArtiste {
 /// Suit le même pattern de statut paiement / mois encaissement que DealArtiste,
 /// car Pangee paie ces charges à des fournisseurs externes.
 model DealCharge {
-  id       String @id @default(cuid())
+  id String @id @default(cuid())
 
-  dealId   String
-  deal     Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
 
   /// Libellé court de la charge (ex. "Hôtel Mercure Paris", "Train Paris-Lyon").
-  label    String
+  label String
 
   /// Montant de la charge (€).
-  amount   Decimal?
+  amount Decimal?
 
   /// Statut paiement (Pangee a-t-il payé ?).
   paymentStatus PaymentStatus @default(N_A)
 
   /// Mois de paiement effectif (cash-flow réel sortant).
-  paidAt   DateTime?
+  paidAt DateTime?
 
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   /// Soft-delete cascade depuis Deal (idem DealArtiste).
+  deletedAt DateTime?
+
+  @@index([dealId])
+  @@index([deletedAt])
+}
+
+/// Ligne du tableau de production (Sprint 4) — recettes + charges d'un deal
+/// Prod Exécutive. Copie fidèle KN `ProductionLine`.
+///
+/// Le calcul de la marge Pangee dérive de la somme des `REVENUE` − `COST`,
+/// puis Pangee retient `prodExePct` % du CA (revenue). Cf.
+/// `lib/finance/show-financials.ts` pour le recompute server-side.
+///
+/// Plusieurs lignes peuvent partager le même `label` (sous-entrées multi —
+/// ex. VHR = train + hôtel + repas). Le champ `customLabel` sert à préciser
+/// le sous-libellé. Pas de contrainte d'unicité sur (dealId, label).
+model ProductionLine {
+  id String @id @default(cuid())
+
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  /// Recette ou charge.
+  kind ProductionLineKind
+
+  /// Catégorie figée enum (Stan ne peut pas créer de nouvelles catégories).
+  label ProductionLineLabel
+
+  /// Sous-libellé texte libre (ex. "Train Paris-Lyon" sous label VHR).
+  customLabel String?
+
+  /// Montant € (Decimal pour préserver la précision).
+  amount Decimal?
+
+  /// Statut paiement de la ligne (sortie cash ou encaissement).
+  paymentStatus PaymentStatus @default(N_A)
+
+  /// Mois où la ligne a été réglée / encaissée.
+  paidAt DateTime?
+
+  /// Commentaire libre.
+  comment String?
+
+  /// Flag "Pris par la salle" — uniquement pertinent en mode CO_REAL. Si
+  /// true, la ligne n'est pas comptée dans la marge Pangee (la salle l'a
+  /// payée en direct).
+  coveredByVenue Boolean @default(false)
+
+  /// Ordre d'affichage (drag & drop éventuel futur).
+  order Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Soft-delete cascade depuis Deal (idem DealArtiste / DealCharge).
   deletedAt DateTime?
 
   @@index([dealId])
@@ -590,9 +763,9 @@ model EventBriefing {
   deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
 
   // ── Snapshot lieu (Venue KN distant — pattern identique Deal) ──
-  venueId   String?
-  venueName String?
-  venueCity String?
+  venueId      String?
+  venueName    String?
+  venueCity    String?
   /// Adresse libre (free-text + BAN data.gouv.fr) — copiée depuis Deal.venueAddress
   /// au prefill, ou complétée à la main sur la FDR. Couvre les 2 cas Pangee :
   ///   - Lieu de l'annuaire KN : l'adresse complète n'est pas forcément en BDD
@@ -607,7 +780,7 @@ model EventBriefing {
   /// Jauge (capacité du lieu). Auto-remplie depuis Venue KN au pick du lieu,
   /// modifiable à la main (cas booking sans lieu KN ou capacité différente
   /// de la jauge par défaut du lieu).
-  capacity    Int?
+  capacity Int?
 
   // ── Hébergement (free-text + adresse BAN data.gouv.fr) ──
   hotelName    String?
@@ -650,9 +823,9 @@ model EventBriefing {
 /// `runs` stocke une liste JSON de transferts (taxi, voiture) attachés
 /// au trajet — voir commentaire détaillé sur le champ.
 model BriefingTravel {
-  id         String          @id @default(cuid())
+  id         String        @id @default(cuid())
   briefingId String
-  briefing   EventBriefing   @relation(fields: [briefingId], references: [id], onDelete: Cascade)
+  briefing   EventBriefing @relation(fields: [briefingId], references: [id], onDelete: Cascade)
 
   direction   TravelDirection
   date        DateTime
@@ -690,7 +863,7 @@ model BriefingTravel {
 /// Dans les 2 cas, les champs `firstName/lastName/...` sont peuplés (soit
 /// copiés depuis KN au moment de la sélection, soit saisis manuellement).
 model BriefingContact {
-  id         String @id @default(cuid())
+  id         String        @id @default(cuid())
   briefingId String
   briefing   EventBriefing @relation(fields: [briefingId], references: [id], onDelete: Cascade)
 

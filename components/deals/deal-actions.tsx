@@ -31,7 +31,15 @@ export function DealActions({ deal }: Props) {
         alert(`Erreur : ${res.error}`);
         return;
       }
-      router.push("/deals/booking");
+      // Redirige vers la liste de la catégorie du deal supprimé
+      // (Stan 2026-05-27 : sinon un delete Prod Exé renvoyait sur Booking).
+      const path =
+        deal.category === "PROD_EXE"
+          ? "/deals/prod-executive"
+          : deal.category === "CACHETS"
+            ? "/deals/cachets"
+            : "/deals/booking";
+      router.push(path);
     });
   }
 

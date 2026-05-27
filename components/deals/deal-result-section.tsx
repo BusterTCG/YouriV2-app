@@ -32,10 +32,7 @@ export function DealResultSection({
       <div className="flex items-center gap-2 px-4 py-3 border-b">
         <Sparkles className="h-4 w-4 text-emerald-600 shrink-0" />
         <span className="text-xs uppercase tracking-wider font-semibold">
-          Répartition — Marge Youri
-        </span>
-        <span className="text-xs text-muted-foreground hidden sm:inline">
-          Ce que Youri garde après avoir payé artistes et charges
+          Répartition — Marge Brute
         </span>
       </div>
 
@@ -70,7 +67,7 @@ export function DealResultSection({
                 : "text-red-700 dark:text-red-400",
             )}
           >
-            = Marge Youri
+            = Marge Brute
           </div>
           {isEncaisse ? (
             <div className="text-[11px] text-muted-foreground mt-0.5">

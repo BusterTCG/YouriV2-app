@@ -71,7 +71,7 @@ export function DealBudgetSection({ dealId, budgetAmount, isEncaisse, paidAt }: 
               <div className="text-[11px] text-muted-foreground mt-0.5">
                 Encaissé en{" "}
                 <span className="font-medium">
-                  {format(paidAt, "MMMM yyyy", { locale: fr })}
+                  {format(paidAt, "MM/yy", { locale: fr })}
                 </span>
               </div>
             )}

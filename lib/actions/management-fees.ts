@@ -118,7 +118,10 @@ export async function setManagementFeePool(
       }
     }
 
+    // Audit Stan 2026-05-27 : un MF peut être lié à un deal Booking OU Prod Exé.
+    // On revalide les deux fiches (cheap : Next ignore le path inexistant).
     revalidatePath(`/deals/booking/${dealId}`);
+    revalidatePath(`/deals/prod-executive/${dealId}`);
     revalidatePath("/deals/management-fees");
   });
 }
@@ -183,45 +186,13 @@ export async function updateManagementFee(
       data,
       select: { dealId: true },
     });
+    // Audit Stan 2026-05-27 : cf. setManagementFeePool.
     revalidatePath(`/deals/booking/${fee.dealId}`);
+    revalidatePath(`/deals/prod-executive/${fee.dealId}`);
     revalidatePath("/deals/management-fees");
   });
 }
 
-// ──────────────────────────── Recalcul montants snapshot ────────────────────────────
-
-/**
- * Recalcule les montants snapshot de toutes les lignes MF d'un deal en
- * partant de la nouvelle marge Youri. Utile quand la marge change (ajout
- * d'artiste, modification budget, etc.) — les montants snapshot ne se
- * mettent pas à jour automatiquement pour préserver l'historique des
- * paiements déjà faits.
- *
- * Préserve : paymentStatus, paidAt, notes (rien ne touche aux paiements).
- * Met à jour : amount uniquement.
- */
-export async function recomputeManagementFeeAmounts(
-  dealId: string,
-  margeYouri: number,
-): Promise<ActionResult> {
-  return safeAction("recomputeManagementFeeAmounts", async () => {
-    await requireUser();
-    if (!dealId) throw new Error("dealId manquant");
-
-    const fees = await prisma.dealManagementFee.findMany({
-      where: { dealId, deletedAt: null },
-      select: { id: true, sharePct: true },
-    });
-    for (const fee of fees) {
-      const sharePctNum = Number(fee.sharePct);
-      const amount =
-        margeYouri > 0 ? Math.round((margeYouri * sharePctNum) / 100) : 0;
-      await prisma.dealManagementFee.update({
-        where: { id: fee.id },
-        data: { amount },
-      });
-    }
-    revalidatePath(`/deals/booking/${dealId}`);
-    revalidatePath("/deals/management-fees");
-  });
-}
+// `recomputeManagementFeeAmounts` supprimé Stan 2026-05-27 — remplacé par
+// `recomputeMfForDeal` (lib/management-fees-recompute.ts) qui discrimine
+// BOOKING / PROD_EXE et calcule la marge selon la catégorie.

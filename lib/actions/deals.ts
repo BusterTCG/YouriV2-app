@@ -3,12 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { DealCategory, DealStatus, PaymentStatus, Prisma } from "@prisma/client";
+import { DealCategory, DealStatus, PaymentStatus, Prisma, VenueDealKind } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { listContacts, listVenues, type KnContact, type KnVenue } from "@/lib/kn-client";
 import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
+import { recomputeShowFinancials } from "@/lib/finance/show-financials";
 
 /**
  * Server actions /deals — édition inline tableau + actions CRUD.
@@ -41,6 +42,7 @@ const CreateDealSchema = z.object({
   title: z.string().trim().min(1, "Titre requis").max(200),
   date: z.coerce.date(),
   showTime: z.string().max(20).optional().nullable(),
+  status: z.nativeEnum(DealStatus).optional(),
   organizerId: z.string().optional().nullable(),
   organizerName: z.string().max(200).optional().nullable(),
   organizerCompany: z.string().max(200).optional().nullable(),
@@ -51,6 +53,14 @@ const CreateDealSchema = z.object({
   /** Adresse libre BAN — pour booking entreprise sans Venue référencé. */
   venueAddress: z.string().max(300).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
+  /** Artiste initial (1 ligne DealArtiste créée si fourni). Recommandé pour
+   *  les deals Prod Exé / Cachets où l'artiste est obligatoire dans le form. */
+  initialArtistId: z.string().optional().nullable(),
+  // ── Champs Prod Exé (uniquement utilisés si category=PROD_EXE) ──
+  showName: z.string().max(200).optional().nullable(),
+  isMultiDate: z.boolean().optional(),
+  venueDealKind: z.nativeEnum(VenueDealKind).optional().nullable(),
+  prodExePct: z.number().min(0).max(100).optional().nullable(),
 });
 
 export async function createDeal(
@@ -67,7 +77,7 @@ export async function createDeal(
     const created = await prisma.deal.create({
       data: {
         category: data.category,
-        status: DealStatus.LEAD,
+        status: data.status ?? DealStatus.LEAD,
         title: data.title,
         date: data.date,
         showTime: data.showTime ?? null,
@@ -81,11 +91,32 @@ export async function createDeal(
         venueAddress: data.venueAddress ?? null,
         notes: data.notes ?? null,
         createdById: user.id,
+        // Champs Prod Exé (null si pas applicable)
+        ...(data.category === DealCategory.PROD_EXE
+          ? {
+              showName: data.showName ?? null,
+              isMultiDate: data.isMultiDate ?? false,
+              venueDealKind: data.venueDealKind ?? null,
+              prodExePct: data.prodExePct ?? null,
+            }
+          : {}),
+        // Artiste initial (1 ligne DealArtiste vide rattachée — Stan : on
+        // pré-attache l'artiste sélectionné dans le form de création).
+        ...(data.initialArtistId
+          ? {
+              dealArtistes: {
+                create: [
+                  { artistId: data.initialArtistId, paymentStatus: "N_A" },
+                ],
+              },
+            }
+          : {}),
       },
       select: { id: true },
     });
     revalidatePath("/deals");
     revalidatePath("/deals/booking");
+    revalidatePath("/deals/prod-executive");
     return { id: created.id };
   });
 }
@@ -129,7 +160,16 @@ export async function updateDealMeta(
   });
 }
 
-/** Soft-delete deal + cascade DealArtiste + DealCharge + DealManagementFee. */
+/**
+ * Soft-delete deal + cascade vers TOUTES les entités enfants soft-deletables :
+ *   - DealArtiste, DealCharge, DealManagementFee (Booking + Prod Exé)
+ *   - ProductionLine (Prod Exé — audit Stan 2026-05-27)
+ *   - EventBriefing (FDR — audit Stan 2026-05-27)
+ *
+ * Sans cette cascade, les enfants restent actifs en DB ; `recomputeMfForDeal`
+ * peut continuer à calculer sur un deal mort, et un futur trash/restore aurait
+ * des références orphelines.
+ */
 export async function softDeleteDeal(id: string): Promise<ActionResult> {
   return safeAction("softDeleteDeal", async () => {
     await requireUser();
@@ -139,10 +179,13 @@ export async function softDeleteDeal(id: string): Promise<ActionResult> {
       prisma.deal.update({ where: { id }, data: { deletedAt: now } }),
       prisma.dealArtiste.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
       prisma.dealCharge.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
-      // Cascade MF — alignement avec la doc du model (audit 2026-05-26).
       prisma.dealManagementFee.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
+      prisma.productionLine.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
+      prisma.eventBriefing.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
     ]);
     revalidatePath("/deals/booking");
+    revalidatePath("/deals/prod-executive");
+    revalidatePath("/deals/cachets");
     revalidatePath("/deals/management-fees");
   });
 }
@@ -270,6 +313,95 @@ export async function searchKnVenues(query: string): Promise<ActionResult<KnVenu
 }
 
 // ───────── Statut deal (LEAD / EN_COURS / CONFIRME / ANNULE) ─────────
+
+/**
+ * Change l'artiste principal d'un deal (Prod Exé / Cachets en mono-artiste).
+ * Met à jour le DealArtiste actif existant — ou en crée un nouveau si aucun.
+ * Stan 2026-05-27 : permettre de modifier l'artiste lié depuis le dialog d'édition.
+ */
+const SetDealPrimaryArtistSchema = z.object({
+  dealId: z.string().min(1),
+  artistId: z.string().min(1).nullable(),
+});
+
+export async function setDealPrimaryArtist(
+  input: z.infer<typeof SetDealPrimaryArtistSchema>,
+): Promise<ActionResult> {
+  return safeAction("setDealPrimaryArtist", async () => {
+    await requireUser();
+    const { dealId, artistId } = SetDealPrimaryArtistSchema.parse(input);
+
+    const existing = await prisma.dealArtiste.findFirst({
+      where: { dealId, deletedAt: null },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, artistId: true },
+    });
+
+    if (artistId == null) {
+      // L'user vide la sélection → soft-delete le DealArtiste actif s'il existe.
+      if (existing) {
+        await prisma.dealArtiste.update({
+          where: { id: existing.id },
+          data: { deletedAt: new Date() },
+        });
+      }
+    } else if (existing) {
+      if (existing.artistId !== artistId) {
+        // L'unique(dealId, artistId) empêche un swap direct si l'artiste cible
+        // existe déjà sur ce deal — on soft-delete l'ancien et on crée nouveau.
+        const conflict = await prisma.dealArtiste.findFirst({
+          where: { dealId, artistId, deletedAt: null },
+          select: { id: true },
+        });
+        if (!conflict) {
+          await prisma.dealArtiste.update({
+            where: { id: existing.id },
+            data: { artistId },
+          });
+        }
+      }
+    } else {
+      await prisma.dealArtiste.create({
+        data: { dealId, artistId, paymentStatus: "N_A" },
+      });
+    }
+
+    await recomputeMfForDeal(dealId);
+    revalidatePath("/deals/prod-executive");
+    revalidatePath(`/deals/prod-executive/${dealId}`);
+    revalidatePath("/deals/booking");
+    revalidatePath(`/deals/booking/${dealId}`);
+  });
+}
+
+/**
+ * Statut consolidé "Part Artiste payée" — INDÉPENDANT du DealArtiste.paymentStatus
+ * individuel. Stan 2026-05-27 v2 : driver UI du pill global "Payé" sur la
+ * Part Artiste (fiche show), non corrélé aux cachets individuels.
+ */
+const SetDealArtistStatusSchema = z.object({
+  dealId: z.string().min(1),
+  status: z.nativeEnum(PaymentStatus),
+});
+
+export async function setDealArtistStatus(
+  input: z.infer<typeof SetDealArtistStatusSchema>,
+): Promise<ActionResult> {
+  return safeAction("setDealArtistStatus", async () => {
+    await requireUser();
+    const { dealId, status } = SetDealArtistStatusSchema.parse(input);
+    await prisma.deal.update({
+      where: { id: dealId },
+      data: { artistStatus: status },
+    });
+    revalidatePath("/deals/prod-executive");
+    revalidatePath(`/deals/prod-executive/${dealId}`);
+    revalidatePath("/deals/booking");
+    revalidatePath(`/deals/booking/${dealId}`);
+    // Audit Stan 2026-05-27 : impacte la règle "Dispo paiement" Prod Exé.
+    revalidatePath("/deals/management-fees");
+  });
+}
 
 const SetDealStatusSchema = z.object({
   dealId: z.string().min(1),
@@ -519,14 +651,25 @@ export async function updateDealArtiste(
     const da = await prisma.dealArtiste.update({
       where: { id },
       data,
-      select: { dealId: true },
+      select: { dealId: true, deal: { select: { category: true } } },
     });
     // Si le cachet (montant artiste) change, la marge bouge → recalc MF.
+    // Pour Prod Exé, recompute aussi les financials show (totalCost inclut
+    // les cachets indirectement via Part Artiste).
     if (cachetAmount !== undefined) {
+      if (da.deal.category === "PROD_EXE") {
+        await recomputeShowFinancials(da.dealId);
+      }
       await recomputeMfForDeal(da.dealId);
     }
+    // Audit Stan 2026-05-27 : revalider TOUS les chemins concernés (l'éditeur
+    // de cachets est utilisé depuis booking ET prod-executive ; un changement
+    // de statut/cachet impacte aussi la règle "dispo paiement" MF).
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${da.dealId}`);
+    revalidatePath("/deals/prod-executive");
+    revalidatePath(`/deals/prod-executive/${da.dealId}`);
+    revalidatePath("/deals/management-fees");
   });
 }
 

@@ -564,7 +564,7 @@ function FeeRow({ row }: { row: ManagementFeeRow }) {
       </td>
       <td className="px-3 py-2 whitespace-nowrap text-xs text-muted-foreground tabular-nums">
         {row.paidAt
-          ? format(row.paidAt, "MMM yy", { locale: fr })
+          ? format(row.paidAt, "MM/yy", { locale: fr })
           : "—"}
       </td>
       <td className="px-3 py-2 w-8">

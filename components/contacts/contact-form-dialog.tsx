@@ -295,7 +295,7 @@ export function ContactFormDialog({
                   <FormItem>
                     <FormLabel>Société / lieu</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex. Comedy Club, Quick, Le Monde…" {...field} />
+                      <Input placeholder="" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -325,7 +325,7 @@ export function ContactFormDialog({
                   <FormLabel>Profession</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="Ex. Programmateur, Tour Manager, Pigiste…"
+                      placeholder=""
                       {...field}
                     />
                   </FormControl>
