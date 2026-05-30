@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { DealCategory, DealStatus, VenueDealKind } from "@prisma/client";
 import {
   Dialog,
@@ -32,7 +32,12 @@ import {
   setDealPrimaryArtist,
 } from "@/lib/actions/deals";
 import { updateShowDetails } from "@/lib/actions/prod-executive";
+import {
+  updateCachetsDetails,
+  batchCreateCachetPrestations,
+} from "@/lib/actions/cachets";
 import { DEAL_STATUS_DISPLAY } from "./deal-helpers";
+import { MonthPickerField } from "./month-picker-field";
 import { ContactPicker, type ContactSnapshot } from "./contact-picker";
 import { VenuePicker, type VenueSnapshot } from "./venue-picker";
 import { ContactFormDialog } from "@/components/contacts/contact-form-dialog";
@@ -84,6 +89,10 @@ export interface DealFormDeal {
   /** Nom de l'artiste — pré-remplit l'auto-titre en mode edit pour éviter de
    *  devoir re-fetch la liste avant que le nom soit dispo. */
   artistName?: string | null;
+  // ── Champs CACHETS (Stan 2026-05-28 Sprint 5) ──
+  budgetAmount?: number | null;
+  cachetsFeesPct?: number | null;
+  linkedToOwnProd?: boolean;
 }
 
 interface Props {
@@ -117,6 +126,7 @@ export function DealFormDialog({
   // `category` reste valide pour la création).
   const effectiveCategory = deal?.category ?? category;
   const isProdExe = effectiveCategory === DealCategory.PROD_EXE;
+  const isCachets = effectiveCategory === DealCategory.CACHETS;
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -167,6 +177,42 @@ export function DealFormDialog({
     deal?.prodExePct != null ? String(deal.prodExePct) : "15",
   );
 
+  // ── États spécifiques CACHETS (Stan 2026-05-28 Sprint 5) ──
+  const [budgetAmount, setBudgetAmount] = useState(
+    deal?.budgetAmount != null ? String(deal.budgetAmount) : "",
+  );
+  const [cachetsFeesPct, setCachetsFeesPct] = useState(
+    deal?.cachetsFeesPct != null ? String(deal.cachetsFeesPct) : "10",
+  );
+  const [linkedToOwnProd, setLinkedToOwnProd] = useState(
+    deal?.linkedToOwnProd ?? false,
+  );
+  /** Prestations Cachets — état local (création uniquement, batch insert au
+   *  submit). Stan 2026-05-28 v2 : N prestations facturées à N sociétés sur
+   *  le même mois pour 1 artiste. */
+  const [prestations, setPrestations] = useState<
+    Array<{ prestataire: string; amount: string }>
+  >([{ prestataire: "", amount: "" }]);
+
+  function addPrestation() {
+    setPrestations((arr) => [...arr, { prestataire: "", amount: "" }]);
+  }
+  function removePrestation(idx: number) {
+    setPrestations((arr) => arr.filter((_, i) => i !== idx));
+  }
+  function updatePrestation(
+    idx: number,
+    patch: Partial<{ prestataire: string; amount: string }>,
+  ) {
+    setPrestations((arr) =>
+      arr.map((p, i) => (i === idx ? { ...p, ...patch } : p)),
+    );
+  }
+  const prestationsTotal = prestations.reduce(
+    (acc, p) => acc + (Number(p.amount) || 0),
+    0,
+  );
+
   /**
    * Auto-suggestion du titre pour Prod Exé — Stan 2026-05-27 : inclut le
    * nom de l'artiste contrairement à KN. Format progressif :
@@ -205,6 +251,29 @@ export function DealFormDialog({
     }
   }, [isProdExe, isEdit, artistName, showName, venue, title]);
 
+  /**
+   * Auto-suggestion du titre pour CACHETS (Stan 2026-05-28).
+   * Format : "{artiste} - Cachets {MMM yyyy}"
+   * Ex. "Nordine Ganso - Cachets Mai 2026"
+   */
+  useEffect(() => {
+    if (!isCachets || isEdit) return;
+    const artist = (artistName ?? "").trim();
+    if (!artist || !date) return;
+    const monthDate = new Date(date);
+    if (Number.isNaN(monthDate.getTime())) return;
+    const MONTHS_FR = [
+      "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+      "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
+    ];
+    const monthLabel = `${MONTHS_FR[monthDate.getMonth()]} ${monthDate.getFullYear()}`;
+    const suggestion = `${artist} - Cachets ${monthLabel}`;
+    if (!title.trim() || title === lastSuggestionRef.current) {
+      lastSuggestionRef.current = suggestion;
+      setTitle(suggestion);
+    }
+  }, [isCachets, isEdit, artistName, date, title]);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -216,19 +285,27 @@ export function DealFormDialog({
       setError("Artiste requis pour un deal Prod Exécutive.");
       return;
     }
+    if (isCachets && !isEdit && !artistId) {
+      setError("Artiste requis pour un deal Cachets.");
+      return;
+    }
     startTransition(async () => {
       const baseMeta = {
         title: title.trim(),
         date: new Date(date),
-        showTime: showTime.trim() || null,
-        organizerId: organizer?.id ?? null,
-        organizerName: organizer?.name ?? null,
-        organizerCompany: organizer?.company ?? null,
-        organizerCity: organizer?.city ?? null,
-        venueId: venue?.id ?? null,
-        venueName: venue?.name ?? null,
-        venueCity: venue?.city ?? null,
-        venueAddress: venueAddress.trim() || null,
+        // CACHETS : pas d'heure (juste mois).
+        showTime: isCachets ? null : showTime.trim() || null,
+        // CACHETS : pas de Contact en annuaire — juste un nom de société libre
+        //   mappé sur `organizerCompany` (le label DB devient "Prestataire" UI).
+        organizerId: isCachets ? null : organizer?.id ?? null,
+        organizerName: isCachets ? null : organizer?.name ?? null,
+        organizerCompany: isCachets ? null : organizer?.company ?? null,
+        organizerCity: isCachets ? null : organizer?.city ?? null,
+        // CACHETS : pas de lieu ni adresse.
+        venueId: isCachets ? null : venue?.id ?? null,
+        venueName: isCachets ? null : venue?.name ?? null,
+        venueCity: isCachets ? null : venue?.city ?? null,
+        venueAddress: isCachets ? null : venueAddress.trim() || null,
         notes: notes.trim() || null,
       };
       if (isEdit && deal) {
@@ -255,6 +332,19 @@ export function DealFormDialog({
             await setDealPrimaryArtist({ dealId: deal.id, artistId });
           }
         }
+        // Update champs CACHETS si applicable. On ne passe PAS budgetAmount
+        // (recompute auto depuis prestations).
+        if (isCachets) {
+          await updateCachetsDetails({
+            id: deal.id,
+            cachetsFeesPct:
+              cachetsFeesPct === "" ? null : Number(cachetsFeesPct),
+            linkedToOwnProd,
+          });
+          if (artistId !== (deal.artistId ?? null)) {
+            await setDealPrimaryArtist({ dealId: deal.id, artistId });
+          }
+        }
         onOpenChange(false);
         router.refresh();
       } else {
@@ -272,10 +362,35 @@ export function DealFormDialog({
                 prodExePct: Number(prodExePct) || null,
               }
             : {}),
+          ...(isCachets
+            ? {
+                // budgetAmount sera recalculé par batchCreateCachetPrestations
+                // depuis les prestations saisies. On laisse null à la création.
+                budgetAmount: null,
+                cachetsFeesPct:
+                  cachetsFeesPct === "" ? null : Number(cachetsFeesPct),
+                linkedToOwnProd,
+              }
+            : {}),
         });
         if (!res.ok) {
           setError(res.error);
           return;
+        }
+        // Cachets : créer les prestations en batch après création du deal
+        if (isCachets && !linkedToOwnProd) {
+          const validPrestations = prestations
+            .filter((p) => p.prestataire.trim().length > 0)
+            .map((p) => ({
+              prestataire: p.prestataire.trim(),
+              amount: p.amount === "" ? null : Number(p.amount),
+            }));
+          if (validPrestations.length > 0) {
+            await batchCreateCachetPrestations({
+              dealId: res.data!.id,
+              prestations: validPrestations,
+            });
+          }
         }
         onOpenChange(false);
         router.push(`${CATEGORY_PATH[category]}/${res.data!.id}`);
@@ -315,9 +430,9 @@ export function DealFormDialog({
             )}
 
             {/* IDENTITÉ rendue EN PREMIER pour Booking (Stan 2026-05-27).
-                Pour Prod Exé elle reste après CONTEXTE car le titre est
-                auto-suggéré depuis showName + venue. */}
-            {!isProdExe && (
+                Pour Prod Exé + Cachets elle reste après CONTEXTE car le
+                titre est auto-suggéré depuis artiste + show/mois. */}
+            {!isProdExe && !isCachets && (
               <IdentitySection
                 title={title}
                 setTitle={setTitle}
@@ -330,71 +445,104 @@ export function DealFormDialog({
 
             {/* ───────────────── SECTION CONTEXTE ───────────────── */}
             <Section eyebrow="Contexte">
-              {/* Artiste — obligatoire pour Prod Exé (création ET édition) */}
-              {isProdExe && (
-                <div className="space-y-1.5">
-                  <FieldLabel required>Artiste</FieldLabel>
-                  <ArtistSelect
-                    value={artistId}
-                    onChange={(id, name) => {
-                      setArtistId(id);
-                      setArtistName(name ?? null);
-                    }}
-                    disabled={pending}
-                  />
-                </div>
-              )}
-
-              {/* Date + heure début + Mois complet (Prod Exé) sur 1 ligne
-                  optimisée. Stan 2026-05-27 : largeur Date réduite, on
-                  groupe l'info temporelle pour densifier le formulaire. */}
-              <div
-                className={cn(
-                  "grid gap-2",
-                  isProdExe
-                    ? "grid-cols-[200px_140px_1fr]"
-                    : "grid-cols-[200px_140px]",
-                )}
-              >
-                <div className="space-y-1.5">
-                  <FieldLabel htmlFor="date" required>
-                    Date
-                  </FieldLabel>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    required
-                    disabled={pending}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <FieldLabel htmlFor="showTime">Heure début</FieldLabel>
-                  <Input
-                    id="showTime"
-                    type="time"
-                    value={showTime}
-                    onChange={(e) => setShowTime(e.target.value)}
-                    disabled={pending}
-                  />
-                </div>
-                {/* Mois complet (Prod Exé) inline avec date/heure pour densifier */}
-                {isProdExe && (
-                  <div className="space-y-1.5">
-                    <FieldLabel>Série multi-dates</FieldLabel>
-                    <label className="flex items-center gap-2 cursor-pointer rounded-md border bg-muted/20 px-3 h-9">
-                      <input
-                        type="checkbox"
-                        checked={isMultiDate}
-                        onChange={(e) => setIsMultiDate(e.target.checked)}
-                        className="h-4 w-4 rounded border-input"
-                      />
-                      <span className="text-sm font-medium">📅 Mois complet</span>
-                    </label>
+              {/* CACHETS : Artiste + Mois sur 1 seule ligne (Stan 2026-05-28 v3
+                  ergo). Largeurs fixes pour éviter l'artiste qui s'étend sur
+                  toute la largeur du dialog. */}
+              {isCachets ? (
+                <div className="grid gap-3 grid-cols-[1fr_180px] max-w-[520px]">
+                  <div className="space-y-1.5 min-w-0">
+                    <FieldLabel required>Artiste</FieldLabel>
+                    <ArtistSelect
+                      value={artistId}
+                      onChange={(id, name) => {
+                        setArtistId(id);
+                        setArtistName(name ?? null);
+                      }}
+                      disabled={pending}
+                    />
                   </div>
-                )}
-              </div>
+                  <div className="space-y-1.5">
+                    <FieldLabel required>Mois</FieldLabel>
+                    <MonthPickerField
+                      value={date ? new Date(date) : null}
+                      onChange={(d) => {
+                        if (!d) {
+                          setDate("");
+                          return;
+                        }
+                        setDate(toDateInput(d));
+                      }}
+                      placeholder="Choisir un mois"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Prod Exé : Artiste obligatoire avant la date */}
+                  {isProdExe && (
+                    <div className="space-y-1.5">
+                      <FieldLabel required>Artiste</FieldLabel>
+                      <ArtistSelect
+                        value={artistId}
+                        onChange={(id, name) => {
+                          setArtistId(id);
+                          setArtistName(name ?? null);
+                        }}
+                        disabled={pending}
+                      />
+                    </div>
+                  )}
+
+                  {/* Booking + Prod Exé : Date + heure début + Mois complet */}
+                  <div
+                    className={cn(
+                      "grid gap-2",
+                      isProdExe
+                        ? "grid-cols-[200px_140px_1fr]"
+                        : "grid-cols-[200px_140px]",
+                    )}
+                  >
+                  <div className="space-y-1.5">
+                    <FieldLabel htmlFor="date" required>
+                      Date
+                    </FieldLabel>
+                    <Input
+                      id="date"
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      required
+                      disabled={pending}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <FieldLabel htmlFor="showTime">Heure début</FieldLabel>
+                    <Input
+                      id="showTime"
+                      type="time"
+                      value={showTime}
+                      onChange={(e) => setShowTime(e.target.value)}
+                      disabled={pending}
+                    />
+                  </div>
+                  {/* Mois complet (Prod Exé) inline avec date/heure pour densifier */}
+                  {isProdExe && (
+                    <div className="space-y-1.5">
+                      <FieldLabel>Série multi-dates</FieldLabel>
+                      <label className="flex items-center gap-2 cursor-pointer rounded-md border bg-muted/20 px-3 h-9">
+                        <input
+                          type="checkbox"
+                          checked={isMultiDate}
+                          onChange={(e) => setIsMultiDate(e.target.checked)}
+                          className="h-4 w-4 rounded border-input"
+                        />
+                        <span className="text-sm font-medium">📅 Mois complet</span>
+                      </label>
+                    </div>
+                  )}
+                  </div>
+                </>
+              )}
 
               {/* Nom du spectacle + Salle (Prod Exé) — 2 colonnes pour densifier */}
               {isProdExe ? (
@@ -427,64 +575,72 @@ export function DealFormDialog({
                 </div>
               ) : (
                 <>
-                  {/* Organisateur + Lieu sur 2 colonnes (Booking) */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <FieldLabel>Organisateur</FieldLabel>
-                        <button
-                          type="button"
-                          onClick={() => setOpenContactDialog(true)}
-                          title="Créer un nouveau contact"
-                          className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <Plus className="h-3 w-3" />
-                          Nouveau
-                        </button>
+                  {isCachets ? (
+                    /* CACHETS : les prestataires sont saisis dans la section
+                       FINANCIER (multi-entrées). Section CONTEXTE = juste
+                       Artiste + Mois. */
+                    null
+                  ) : (
+                    <>
+                      {/* Booking : Organisateur + Lieu sur 2 colonnes */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <FieldLabel>Organisateur</FieldLabel>
+                            <button
+                              type="button"
+                              onClick={() => setOpenContactDialog(true)}
+                              title="Créer un nouveau contact"
+                              className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <Plus className="h-3 w-3" />
+                              Nouveau
+                            </button>
+                          </div>
+                          <ContactPicker value={organizer} onChange={setOrganizer} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <FieldLabel>Lieu</FieldLabel>
+                            <button
+                              type="button"
+                              onClick={() => setOpenVenueDialog(true)}
+                              title="Créer un nouveau lieu"
+                              className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              <Plus className="h-3 w-3" />
+                              Nouveau
+                            </button>
+                          </div>
+                          <VenuePicker value={venue} onChange={setVenue} />
+                        </div>
                       </div>
-                      <ContactPicker value={organizer} onChange={setOrganizer} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <FieldLabel>Lieu</FieldLabel>
-                        <button
-                          type="button"
-                          onClick={() => setOpenVenueDialog(true)}
-                          title="Créer un nouveau lieu"
-                          className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <Plus className="h-3 w-3" />
-                          Nouveau
-                        </button>
-                      </div>
-                      <VenuePicker value={venue} onChange={setVenue} />
-                    </div>
-                  </div>
 
-                  {/* Adresse libre — surtout utile pour Booking entreprise */}
-                  <div className="space-y-1.5">
-                    <FieldLabel>
-                      Adresse libre{" "}
-                      {venue && (
-                        <span className="text-muted-foreground/60 normal-case">
-                          (optionnelle si lieu choisi)
-                        </span>
-                      )}
-                    </FieldLabel>
-                    <AddressAutocomplete
-                      value={venueAddress}
-                      onChange={setVenueAddress}
-                      placeholder="N° et rue (autocomplete BAN data.gouv.fr)…"
-                    />
-                  </div>
+                      {/* Adresse libre — surtout utile pour Booking entreprise */}
+                      <div className="space-y-1.5">
+                        <FieldLabel>
+                          Adresse libre{" "}
+                          {venue && (
+                            <span className="text-muted-foreground/60 normal-case">
+                              (optionnelle si lieu choisi)
+                            </span>
+                          )}
+                        </FieldLabel>
+                        <AddressAutocomplete
+                          value={venueAddress}
+                          onChange={setVenueAddress}
+                          placeholder="N° et rue (autocomplete BAN data.gouv.fr)…"
+                        />
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </Section>
 
-            {/* SECTION IDENTITÉ rendue après CONTEXTE uniquement pour Prod Exé
-                (titre auto-suggéré depuis showName + venue). Booking l'a déjà
-                en haut, donc on ne re-rend pas ici. */}
-            {isProdExe && (
+            {/* SECTION IDENTITÉ rendue après CONTEXTE pour Prod Exé + Cachets
+                (titre auto-suggéré depuis artiste + show/mois). */}
+            {(isProdExe || isCachets) && (
               <IdentitySection
                 title={title}
                 setTitle={setTitle}
@@ -493,6 +649,148 @@ export function DealFormDialog({
                 pending={pending}
                 isProdExe={isProdExe}
               />
+            )}
+
+            {/* ───────────────── SECTION FINANCIER (Cachets) ───────────────── */}
+            {isCachets && (
+              <Section eyebrow="Financier">
+                <label className="flex items-start gap-2 cursor-pointer rounded-md border bg-amber-500/5 border-amber-500/30 px-3 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={linkedToOwnProd}
+                    onChange={(e) => setLinkedToOwnProd(e.target.checked)}
+                    className="h-4 w-4 rounded border-input mt-0.5"
+                    disabled={pending}
+                  />
+                  <div className="space-y-0.5">
+                    <div className="text-sm font-medium">
+                      🎭 Lié à un spectacle qu&apos;on produit
+                    </div>
+                    <div className="text-[11px] text-muted-foreground leading-snug">
+                      Cochez si ce cachet est versé dans le cadre d&apos;un
+                      spectacle produit par Pangee — pas de marge ni MF,
+                      juste une trace pour la paie GUSO.
+                    </div>
+                  </div>
+                </label>
+
+                {!linkedToOwnProd && (
+                  <>
+                    {/* Frais Pangee % */}
+                    <div className="flex items-end gap-2">
+                      <div className="space-y-1.5 w-[120px]">
+                        <FieldLabel htmlFor="cachetsFeesPct">
+                          Frais Pangee %
+                        </FieldLabel>
+                        <Input
+                          id="cachetsFeesPct"
+                          type="number"
+                          value={cachetsFeesPct}
+                          onChange={(e) => setCachetsFeesPct(e.target.value)}
+                          min={0}
+                          max={100}
+                          className="h-9 text-sm text-right tabular-nums"
+                          disabled={pending}
+                        />
+                      </div>
+                      <p className="flex-1 text-[11px] text-muted-foreground leading-snug pb-2">
+                        Pangee conserve ce % du total des prestations (= Marge
+                        Brute). Le reste est versé à l&apos;artiste comme cachet
+                        brut sur le mois.
+                      </p>
+                    </div>
+
+                    {/* Prestations — multi-entrées Stan 2026-05-28 v2 */}
+                    {!isEdit && (
+                      <div className="space-y-2 pt-2">
+                        <div className="flex items-center justify-between">
+                          <FieldLabel>Prestations facturées</FieldLabel>
+                          <button
+                            type="button"
+                            onClick={addPrestation}
+                            className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <Plus className="h-3 w-3" />
+                            Ajouter
+                          </button>
+                        </div>
+
+                        <div className="space-y-2 rounded-md border bg-muted/10 p-2">
+                          {prestations.map((p, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center gap-2"
+                            >
+                              <Input
+                                value={p.prestataire}
+                                onChange={(e) =>
+                                  updatePrestation(idx, {
+                                    prestataire: e.target.value,
+                                  })
+                                }
+                                placeholder="Société facturée"
+                                className="h-9 flex-1 text-sm"
+                                disabled={pending}
+                              />
+                              <div className="relative w-[140px] shrink-0">
+                                <Input
+                                  type="number"
+                                  value={p.amount}
+                                  onChange={(e) =>
+                                    updatePrestation(idx, {
+                                      amount: e.target.value,
+                                    })
+                                  }
+                                  placeholder="0,00"
+                                  min={0}
+                                  step="0.01"
+                                  className="h-9 text-sm text-right tabular-nums pr-7"
+                                  disabled={pending}
+                                />
+                                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                                  €
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removePrestation(idx)}
+                                disabled={pending || prestations.length === 1}
+                                title="Supprimer cette prestation"
+                                className="shrink-0 h-9 w-9 inline-flex items-center justify-center rounded-md text-destructive hover:bg-destructive/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Récap inline */}
+                        {prestationsTotal > 0 && (
+                          <div className="flex items-center justify-between rounded-md bg-card border px-3 py-2 text-xs">
+                            <span className="text-muted-foreground">
+                              Total facturé · {prestations.filter((p) => p.prestataire.trim()).length} prestation{prestations.filter((p) => p.prestataire.trim()).length > 1 ? "s" : ""}
+                            </span>
+                            <div className="flex items-center gap-3 tabular-nums">
+                              <span className="text-muted-foreground">
+                                Marge Pangee {Math.round((prestationsTotal * Number(cachetsFeesPct || 10)) / 100).toLocaleString("fr-FR")} €
+                              </span>
+                              <span className="font-semibold">
+                                {prestationsTotal.toLocaleString("fr-FR")} €
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {isEdit && (
+                      <p className="rounded-md border border-dashed bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
+                        💡 Les prestations se gèrent depuis la fiche détail du
+                        deal après création.
+                      </p>
+                    )}
+                  </>
+                )}
+              </Section>
             )}
 
             {/* ───────────────── SECTION FINANCIER (Prod Exé) ───────────────── */}

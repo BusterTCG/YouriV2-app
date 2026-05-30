@@ -463,6 +463,21 @@ model Deal {
   /// de `commissionAmount` via `lib/finance/show-financials.ts`.
   prodExePct Decimal?
 
+  /// % du budget que Pangee conserve sur un deal CACHETS — Sprint 5
+  /// Stan 2026-05-28. Modèle Cachets : Pangee facture un tiers pour le compte
+  /// d'un artiste, conserve `cachetsFeesPct`% (= Marge Brute, default 10%) et
+  /// reverse le reste à l'artiste (= `DealArtiste.cachetAmount` auto-calc =
+  /// budget × (100 − cachetsFeesPct) / 100).
+  /// Override par deal si négociation spécifique.
+  cachetsFeesPct Decimal?
+
+  /// CACHETS uniquement (Stan 2026-05-28) — Si `true`, ce cachet est versé
+  /// dans le cadre d'un spectacle que Pangee produit elle-même (un autre
+  /// deal PROD_EXE) : pas de tiers qui facture en amont, pas de marge Pangee,
+  /// pas de MF — juste une trace administrative pour la paie GUSO/CDDU.
+  /// → `margeBrute = 0` ET `recomputeMfForDeal` met les MF à 0.
+  linkedToOwnProd Boolean @default(false)
+
   /// % de co-réalisation avec la salle en mode CO_REAL — part Pangee sur la
   /// billetterie totale (le reste revient à la salle). Informatif.
   coRealKnPct Decimal?
@@ -528,6 +543,9 @@ model Deal {
 
   // ── Lignes de production (Sprint 4) ──
   productionLines ProductionLine[]
+
+  // ── Prestations facturées (Sprint 5 CACHETS) — N prestataires/mois ──
+  cachetPrestations CachetPrestation[]
 
   // ── Audit multi-user ──
   /// User qui a créé ce deal. SetNull si l'user est désactivé (préserve
@@ -742,6 +760,49 @@ model DealManagementFee {
   @@index([dealId])
   @@index([associateKey])
   @@index([deletedAt])
+}
+
+// ─────────────────────────── Cachet · Prestations (Sprint 5) ───────────────────────────
+//
+// Modèle CACHETS Stan 2026-05-28 : 1 deal = 1 artiste × 1 mois, mais N
+// prestations facturées à des sociétés différentes (chacune avec son budget).
+// Le cachet artiste total = Σ prestations × (100 − cachetsFeesPct)%, la
+// Marge Brute Pangee = Σ prestations × cachetsFeesPct%.
+//
+// Le scalar `Deal.budgetAmount` est recalculé automatiquement comme somme
+// des `CachetPrestation.amount` actives (recompute server-side dans
+// `lib/finance/cachets-finance.ts`).
+
+model CachetPrestation {
+  id     String @id @default(cuid())
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  /// Nom libre de la société facturée. Pas de lien avec l'annuaire Contact
+  /// (Stan : facture à une société, pas besoin d'un contact référencé).
+  prestataire String
+
+  /// Montant facturé en € (HT par convention — la TVA est gérée en compta).
+  amount Decimal?
+
+  /// Statut paiement de la facture (workflow Pangee → tiers).
+  paymentStatus PaymentStatus @default(N_A)
+
+  /// Mois d'encaissement effectif (cash-flow Pangee entrant).
+  paidAt DateTime?
+
+  notes String?
+
+  /// Ordre d'affichage dans le form / fiche détail.
+  order Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Soft-delete cascade depuis Deal.
+  deletedAt DateTime?
+
+  @@index([dealId, deletedAt])
 }
 
 // ─────────────────────────── FDR / Feuille de route (Sprint 3.7) ───────────────────────────

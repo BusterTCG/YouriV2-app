@@ -132,6 +132,8 @@ export async function getManagementFeesList(
           budgetPaymentStatus: true,
           // Prod Exé driver consolidé (Part Artiste indépendante des cachets)
           artistStatus: true,
+          // Cachets : pas de tiers facturé si linkedToOwnProd
+          linkedToOwnProd: true,
           dealArtistes: {
             where: { deletedAt: null },
             select: { paymentStatus: true, cachetAmount: true },
@@ -144,6 +146,11 @@ export async function getManagementFeesList(
           productionLines: {
             where: { deletedAt: null },
             select: { kind: true, amount: true, paymentStatus: true, coveredByVenue: true },
+          },
+          // Cachets : prestations facturées aux sociétés
+          cachetPrestations: {
+            where: { deletedAt: null },
+            select: { paymentStatus: true, amount: true },
           },
         },
       },
@@ -161,7 +168,11 @@ export async function getManagementFeesList(
     //   - PROD_EXE : recettes REVENUE (montant > 0, non coveredByVenue) PAID
     //                + coûts COST (montant > 0, non coveredByVenue) PAID
     //                + (deal.artistStatus=PAID OU tous artistes individuels PAID)
-    //   - CACHETS  : budget PAID + artistes PAID (fallback simple)
+    //   - CACHETS  : (linkedToOwnProd ? true : toutes prestations PAID)
+    //                + tous artistes individuels PAID
+    //                (Stan 2026-05-30 audit Sprint 5 — v2 multi-prestations
+    //                ne touche plus `budgetPaymentStatus`, on lit directement
+    //                `cachetPrestations`).
     //
     // Les lignes à montant null/0 sont IGNORÉES (un artiste créé sans cachet
     // ne doit pas bloquer la dispo). Idem charges/recettes à 0.
@@ -193,9 +204,27 @@ export async function getManagementFeesList(
       const artistesOk =
         f.deal.artistStatus === PaymentStatus.PAID || artistesIndivOk;
       dealReadyToPay = recettesOk && coutsOk && artistesOk;
+    } else if (f.deal.category === DealCategory.CACHETS) {
+      // CACHETS (Stan 2026-05-30 v2) : on lit les prestations directement.
+      // budgetPaymentStatus n'est plus pertinent depuis le passage multi-prestations.
+      const significantPrestations = f.deal.cachetPrestations.filter((p) =>
+        hasAmount(p.amount as unknown as number),
+      );
+      const prestationsOk = f.deal.linkedToOwnProd
+        ? true
+        : significantPrestations.length > 0 &&
+          significantPrestations.every(
+            (p) => p.paymentStatus === PaymentStatus.PAID,
+          );
+      const significantArtistes = f.deal.dealArtistes.filter((a) =>
+        hasAmount(a.cachetAmount as unknown as number),
+      );
+      const artistesOk =
+        significantArtistes.length === 0 ||
+        significantArtistes.every((a) => a.paymentStatus === PaymentStatus.PAID);
+      dealReadyToPay = prestationsOk && artistesOk;
     } else {
-      // BOOKING + CACHETS : budget + artistes + charges (charges Booking-only,
-      // donc vide pour CACHETS — n'impacte pas la règle).
+      // BOOKING : budget + artistes + charges
       const budgetOk = f.deal.budgetPaymentStatus === PaymentStatus.PAID;
       const significantArtistes = f.deal.dealArtistes.filter((a) =>
         hasAmount(a.cachetAmount as unknown as number),

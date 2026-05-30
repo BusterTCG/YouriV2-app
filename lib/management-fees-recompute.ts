@@ -8,10 +8,10 @@ import { computeProdExeBrute } from "@/lib/finance/show-financials";
  * Recalcule les montants `amount` des Management Fees d'un deal en partant
  * de la nouvelle marge brute Pangee (base de calcul des MF).
  *
- * Base par catégorie (Stan 2026-05-27) :
+ * Base par catégorie :
  *   - **BOOKING** : margeYouri = budget − Σ artistes − Σ charges
  *   - **PROD_EXE** : margeYouri = Σ recettes × prodExePct%  (= commission)
- *   - **CACHETS** : TODO (Sprint 5)
+ *   - **CACHETS** : margeYouri = budget × cachetsFeesPct%  (Stan 2026-05-28)
  *
  * À appeler **après** toute action qui modifie la marge brute :
  *   - updateDealBudget (Booking)
@@ -38,6 +38,8 @@ export async function recomputeMfForDeal(dealId: string): Promise<void> {
       category: true,
       budgetAmount: true,
       prodExePct: true,
+      cachetsFeesPct: true,
+      linkedToOwnProd: true,
       dealArtistes: {
         where: { deletedAt: null },
         select: { cachetAmount: true },
@@ -70,8 +72,22 @@ export async function recomputeMfForDeal(dealId: string): Promise<void> {
     );
     const pct = deal.prodExePct != null ? Number(deal.prodExePct) : 15;
     margeYouri = computeProdExeBrute(totalRevenue, pct);
+  } else if (deal.category === "CACHETS") {
+    // Marge brute Pangee = budget × cachetsFeesPct% (Stan 2026-05-28 Sprint 5).
+    // Pangee facture le tiers pour le compte de l'artiste, garde X% de gestion.
+    // Si `linkedToOwnProd` → cachet versé dans le cadre d'un spectacle produit
+    // par Pangee elle-même, pas de marge à dégager (trace paie GUSO uniquement).
+    if (deal.linkedToOwnProd) {
+      margeYouri = 0;
+    } else {
+      const budget =
+        deal.budgetAmount != null ? Number(deal.budgetAmount) : 0;
+      const pct =
+        deal.cachetsFeesPct != null ? Number(deal.cachetsFeesPct) : 10;
+      margeYouri = budget > 0 ? Math.round((budget * pct) / 100) : 0;
+    }
   } else {
-    // BOOKING (et fallback CACHETS) : marge = budget − artistes − charges
+    // BOOKING : marge = budget − artistes − charges
     const budget = deal.budgetAmount != null ? Number(deal.budgetAmount) : 0;
     const totalArtistes = deal.dealArtistes.reduce(
       (acc, a) => acc + (a.cachetAmount != null ? Number(a.cachetAmount) : 0),

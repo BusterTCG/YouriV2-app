@@ -10,6 +10,7 @@ import { safeAction, type ActionResult } from "@/lib/errors";
 import { listContacts, listVenues, type KnContact, type KnVenue } from "@/lib/kn-client";
 import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
 import { recomputeShowFinancials } from "@/lib/finance/show-financials";
+import { revalidateAllDealRoutes } from "@/lib/revalidate-deals";
 
 /**
  * Server actions /deals — édition inline tableau + actions CRUD.
@@ -61,6 +62,13 @@ const CreateDealSchema = z.object({
   isMultiDate: z.boolean().optional(),
   venueDealKind: z.nativeEnum(VenueDealKind).optional().nullable(),
   prodExePct: z.number().min(0).max(100).optional().nullable(),
+  // ── Champs CACHETS (Stan 2026-05-28 Sprint 5) ──
+  /** Montant facturé au prestataire (tiers). Sert au calcul de la Marge Brute. */
+  budgetAmount: z.number().nonnegative().optional().nullable(),
+  /** % du budget conservé par Pangee (défaut 10). */
+  cachetsFeesPct: z.number().min(0).max(100).optional().nullable(),
+  /** Cachet versé dans le cadre d'un spectacle produit par Pangee — 0 marge, 0 MF. */
+  linkedToOwnProd: z.boolean().optional(),
 });
 
 export async function createDeal(
@@ -100,6 +108,20 @@ export async function createDeal(
               prodExePct: data.prodExePct ?? null,
             }
           : {}),
+        // Champs Cachets (Stan 2026-05-28 Sprint 5)
+        ...(data.category === DealCategory.CACHETS
+          ? {
+              budgetAmount:
+                data.budgetAmount != null
+                  ? new Prisma.Decimal(data.budgetAmount)
+                  : null,
+              cachetsFeesPct:
+                data.cachetsFeesPct != null
+                  ? new Prisma.Decimal(data.cachetsFeesPct)
+                  : new Prisma.Decimal(10),
+              linkedToOwnProd: data.linkedToOwnProd ?? false,
+            }
+          : {}),
         // Artiste initial (1 ligne DealArtiste vide rattachée — Stan : on
         // pré-attache l'artiste sélectionné dans le form de création).
         ...(data.initialArtistId
@@ -117,6 +139,7 @@ export async function createDeal(
     revalidatePath("/deals");
     revalidatePath("/deals/booking");
     revalidatePath("/deals/prod-executive");
+    revalidatePath("/deals/cachets");
     return { id: created.id };
   });
 }
@@ -155,8 +178,7 @@ export async function updateDealMeta(
       patch.venueCity = extractCityFromAddress(patch.venueAddress);
     }
     await prisma.deal.update({ where: { id }, data: patch });
-    revalidatePath("/deals/booking");
-    revalidatePath(`/deals/booking/${id}`);
+    revalidateAllDealRoutes(id);
   });
 }
 
@@ -181,6 +203,7 @@ export async function softDeleteDeal(id: string): Promise<ActionResult> {
       prisma.dealCharge.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
       prisma.dealManagementFee.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
       prisma.productionLine.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
+      prisma.cachetPrestation.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
       prisma.eventBriefing.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
     ]);
     revalidatePath("/deals/booking");
@@ -367,10 +390,9 @@ export async function setDealPrimaryArtist(
     }
 
     await recomputeMfForDeal(dealId);
-    revalidatePath("/deals/prod-executive");
-    revalidatePath(`/deals/prod-executive/${dealId}`);
-    revalidatePath("/deals/booking");
-    revalidatePath(`/deals/booking/${dealId}`);
+    // Stan 2026-05-30 audit Sprint 5 : helper centralisé qui revalide les 3
+    // catégories d'un coup (évite les oublis).
+    revalidateAllDealRoutes(dealId, true);
   });
 }
 
@@ -394,12 +416,9 @@ export async function setDealArtistStatus(
       where: { id: dealId },
       data: { artistStatus: status },
     });
-    revalidatePath("/deals/prod-executive");
-    revalidatePath(`/deals/prod-executive/${dealId}`);
-    revalidatePath("/deals/booking");
-    revalidatePath(`/deals/booking/${dealId}`);
-    // Audit Stan 2026-05-27 : impacte la règle "Dispo paiement" Prod Exé.
-    revalidatePath("/deals/management-fees");
+    // Stan 2026-05-30 audit Sprint 5 : helper centralisé (BOOKING/PROD_EXE/CACHETS).
+    // Impacte la règle "Dispo paiement" → MF inclus.
+    revalidateAllDealRoutes(dealId, true);
   });
 }
 
@@ -418,12 +437,9 @@ export async function setDealStatus(
       where: { id: dealId },
       data: { status },
     });
-    revalidatePath("/deals/booking");
-    revalidatePath(`/deals/booking/${dealId}`);
-    revalidatePath("/deals");
-    // La page liste MF exclut les deals ANNULE — invalider son cache si le
-    // statut change vers/depuis ANNULE (audit 2026-05-26).
-    revalidatePath("/deals/management-fees");
+    // Stan 2026-05-30 audit Sprint 5 : helper centralisé. La page liste MF
+    // exclut les deals ANNULE → revalider aussi.
+    revalidateAllDealRoutes(dealId, true);
   });
 }
 
@@ -665,11 +681,8 @@ export async function updateDealArtiste(
     // Audit Stan 2026-05-27 : revalider TOUS les chemins concernés (l'éditeur
     // de cachets est utilisé depuis booking ET prod-executive ; un changement
     // de statut/cachet impacte aussi la règle "dispo paiement" MF).
-    revalidatePath("/deals/booking");
-    revalidatePath(`/deals/booking/${da.dealId}`);
-    revalidatePath("/deals/prod-executive");
-    revalidatePath(`/deals/prod-executive/${da.dealId}`);
-    revalidatePath("/deals/management-fees");
+    // Stan 2026-05-30 audit Sprint 5 : helper centralisé (BOOKING/PROD_EXE/CACHETS).
+    revalidateAllDealRoutes(da.dealId, true);
   });
 }
 

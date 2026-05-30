@@ -46,10 +46,11 @@ const CATEGORIES: Array<{
   {
     category: "CACHETS",
     label: "Cachets",
-    description: "Gestion paie intermittents, multi-date.",
+    description:
+      "Pangee facture pour le compte de l'artiste, conserve un % de gestion.",
     href: "/deals/cachets",
     icon: Wallet,
-    wip: true,
+    wip: false,
   },
 ];
 
