@@ -13,6 +13,8 @@ import { prisma } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { formatShowTime } from "@/components/deals/deal-helpers";
 import { DealBudgetSection } from "@/components/deals/deal-budget-section";
+import { DealPipelineBar } from "@/components/tasks/deal-pipeline-bar";
+import { getTasksForDeal } from "@/lib/queries/tasks";
 import { DealArtistsSection } from "@/components/deals/deal-artists-section";
 import { DealChargesSection } from "@/components/deals/deal-charges-section";
 import { DealResultSection } from "@/components/deals/deal-result-section";
@@ -66,6 +68,9 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
     },
   });
   if (!deal) notFound();
+
+  // Pipeline de tâches (Sprint 6 — section "Tâches" inline en haut)
+  const tasks = await getTasksForDeal(deal.id);
 
   // Adapter Prisma → types projection
   const artistes: BookingDealArtistRow[] = deal.dealArtistes.map((da) => ({
@@ -162,6 +167,7 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
             </span>
           )}
           <DealStatusInline dealId={deal.id} value={deal.status} />
+          <DealPipelineBar dealId={deal.id} tasks={tasks} />
         </div>
 
         {/* Boutons d'action — pattern KN */}

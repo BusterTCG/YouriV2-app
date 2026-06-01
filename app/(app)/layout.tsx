@@ -1,3 +1,4 @@
+import { Toaster } from "sonner";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { UserMenu } from "@/components/layout/user-menu";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -55,6 +56,16 @@ export default async function AppLayout({
           {children}
         </main>
       </div>
+
+      {/* Toast global — Sprint 6 Stan 2026-05-31 : undo après validation tâche.
+          Position bottom-right par défaut, theme-aware. */}
+      <Toaster
+        richColors
+        closeButton
+        toastOptions={{
+          duration: 6000,
+        }}
+      />
     </div>
   );
 }

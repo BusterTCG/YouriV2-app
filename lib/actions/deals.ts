@@ -11,6 +11,7 @@ import { listContacts, listVenues, type KnContact, type KnVenue } from "@/lib/kn
 import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
 import { recomputeShowFinancials } from "@/lib/finance/show-financials";
 import { revalidateAllDealRoutes } from "@/lib/revalidate-deals";
+import { autoCreateTasksForDeal } from "@/lib/tasks-autocreate";
 
 /**
  * Server actions /deals — édition inline tableau + actions CRUD.
@@ -82,6 +83,7 @@ export async function createDeal(
     const venueCity = data.venueId
       ? data.venueCity ?? null
       : data.venueCity ?? extractCityFromAddress(data.venueAddress);
+
     const created = await prisma.deal.create({
       data: {
         category: data.category,
@@ -136,10 +138,21 @@ export async function createDeal(
       },
       select: { id: true },
     });
+    // Stan 2026-05-31 v4 audit : rollback manuel si auto-création du pipeline
+    // crash, pour éviter qu'un deal existe sans son pipeline de tâches.
+    // (Transaction interactive Prisma incompatible avec le client étendu.)
+    try {
+      await autoCreateTasksForDeal(created.id, data.category, data.date);
+    } catch (taskErr) {
+      // Rollback : on supprime le deal créé pour rester cohérent.
+      await prisma.deal.delete({ where: { id: created.id } }).catch(() => {});
+      throw taskErr;
+    }
     revalidatePath("/deals");
     revalidatePath("/deals/booking");
     revalidatePath("/deals/prod-executive");
     revalidatePath("/deals/cachets");
+    revalidatePath("/taches");
     return { id: created.id };
   });
 }
@@ -204,6 +217,7 @@ export async function softDeleteDeal(id: string): Promise<ActionResult> {
       prisma.dealManagementFee.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
       prisma.productionLine.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
       prisma.cachetPrestation.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
+      prisma.task.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
       prisma.eventBriefing.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
     ]);
     revalidatePath("/deals/booking");

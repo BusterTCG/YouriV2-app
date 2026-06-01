@@ -89,6 +89,22 @@ function ArtistRow({
   const [removing, startRemoveTransition] = useTransition();
 
   /**
+   * % d'affichage (Stan 2026-06-01 fix) — priorité au sharePct stocké
+   * (override user explicite), fallback dérivé depuis montant + budget global.
+   *
+   * Avant ce fix : si l'user saisissait le montant artiste AVANT de remplir le
+   * budget global du deal, le sharePct restait null car `commitAmount` ne
+   * calculait le % que si `budgetAmount > 0` au moment de la saisie.
+   * Résultat : "—" persistant même après que le budget a été rempli.
+   * Maintenant : le % s'affiche systématiquement dès qu'il est calculable.
+   */
+  const derivedPct =
+    row.sharePct ??
+    (row.amount != null && budgetAmount != null && budgetAmount > 0
+      ? (row.amount / budgetAmount) * 100
+      : null);
+
+  /**
    * Montant ↔ % interconnectés (Stan 2026-05-26) :
    *   - Saisie montant → recalcule % auto (= montant / budget * 100)
    *   - Saisie % → recalcule montant auto (= budget * % / 100)
@@ -132,11 +148,12 @@ function ArtistRow({
 
   return (
     <div className="flex items-center gap-3 px-3 py-2 hover:bg-accent/30 transition-colors flex-wrap sm:flex-nowrap">
-      {/* Nom — pattern KN : div text-sm font-medium leading-tight */}
-      <div className="min-w-[180px] flex-1 sm:flex-initial">
+      {/* Nom — Stan 2026-06-01 : w-[200px] fixe pour aligner les colonnes
+          suivantes avec Budget / Charges. */}
+      <div className="w-full sm:w-[200px] sm:shrink-0 min-w-0">
         <Link
           href={`/artistes/${row.artist.slug}`}
-          className="inline-flex items-center gap-2 hover:underline min-w-0"
+          className="inline-flex items-center gap-2 hover:underline min-w-0 max-w-full"
         >
           <span
             className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-semibold text-white shrink-0"
@@ -150,17 +167,17 @@ function ArtistRow({
         </Link>
       </div>
 
-      {/* Montant */}
-      <div className="w-24 shrink-0">
+      {/* Montant — w-32 (uniforme avec Budget / Charges) */}
+      <div className="w-32 shrink-0">
         <MoneyInput value={row.amount} onCommit={commitAmount} />
       </div>
 
-      {/* % budget */}
+      {/* % budget — affiche le sharePct stocké OU un dérivé (montant / budget) */}
       <div className="w-16 shrink-0">
-        <PctInput value={row.sharePct} onCommit={commitPct} />
+        <PctInput value={derivedPct} onCommit={commitPct} />
       </div>
 
-      {/* Status select (4 valeurs) — w-36 pour "Attente Facture" */}
+      {/* Status select (4 valeurs) — w-36 (uniforme avec Budget / Charges) */}
       <div className="w-36 shrink-0">
         <ArtistStatusSelect dealArtisteId={row.id} value={row.paymentStatus} />
       </div>

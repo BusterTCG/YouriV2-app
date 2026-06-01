@@ -115,10 +115,17 @@ export interface BookingDealsListData {
     totalCharges: number;
     /** Marge Pangee globale. */
     totalMarge: number;
-    /** Marge réalisée (sur les deals où budget = PAID). */
+    /** Marge **NETTE** réalisée (sur les deals où budget = PAID). Utilisée
+     *  dans la card KPI top (sous "Marge Nette") — cf. Stan 2026-05-26 v4. */
     margeRealisee: number;
-    /** Marge en attente (sur les deals où budget ≠ PAID). */
+    /** Marge **NETTE** en attente (sur les deals où budget ≠ PAID). */
     margeAttente: number;
+    /** Marge **BRUTE** réalisée (sur les deals où budget = PAID). Stan
+     *  2026-06-01 fix : utilisée dans le footer du tableau sous "St. Marge"
+     *  (colonne juste à droite de "Marge Brute") pour cohérence visuelle. */
+    margeBruteRealisee: number;
+    /** Marge **BRUTE** en attente (sur les deals où budget ≠ PAID). */
+    margeBruteAttente: number;
     /** Cachets que Youri doit reverser à l'artiste : budget encaissé MAIS
      *  artiste pas encore payé (cash-flow réel à débourser). */
     artistOwed: number;

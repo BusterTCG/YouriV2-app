@@ -124,8 +124,15 @@ export interface ProdExeDealsListData {
     totalRevenue: number;
     totalCost: number;
     totalCommission: number;
+    /** Marge NETTE réalisée — utilisée dans la card KPI top. */
     margeRealisee: number;
+    /** Marge NETTE en attente — utilisée dans la card KPI top. */
     margeAttente: number;
+    /** Marge BRUTE réalisée — utilisée dans le footer du tableau (sous St.
+     *  Marge, à droite de Marge Brute). Stan 2026-06-01. */
+    margeBruteRealisee: number;
+    /** Marge BRUTE en attente. */
+    margeBruteAttente: number;
     /** Stan 2026-05-27 v3 — KPI top tableau Prod Exé. */
     totalPartArtiste: number;
     /** Σ partArtiste des deals dont artistStatus !== PAID (à reverser). */
@@ -370,6 +377,8 @@ export async function getProdExeDealsList(opts: {
   let totalCommission = 0;
   let margeRealisee = 0;
   let margeAttente = 0;
+  let margeBruteRealisee = 0;
+  let margeBruteAttente = 0;
   let totalPartArtiste = 0;
   let partArtisteARegler = 0;
   let totalMf = 0;
@@ -388,11 +397,15 @@ export async function getProdExeDealsList(opts: {
     // Stan 2026-05-27 v4 : split la marge NETTE (= margeBrute − MF) entre
     // réalisée / à venir, pour rester cohérent avec le KPI "Marge Nette"
     // affiché en gros (sinon margeRealisee peut dépasser totalMargeNette).
+    // Stan 2026-06-01 fix : on calcule aussi le split de la marge BRUTE pour
+    // le footer du tableau (colonne St. Marge à droite de Marge Brute).
     // Seuil = toutes les recettes encaissées (allRevenuePaid).
     if (d.allRevenuePaid) {
       margeRealisee += d.margeNette;
+      margeBruteRealisee += d.margeBrute;
     } else {
       margeAttente += d.margeNette;
+      margeBruteAttente += d.margeBrute;
     }
   }
   // Stan 2026-05-27 v5 : % marge nette globale = totalMargeNette / totalCA HT.
@@ -408,6 +421,8 @@ export async function getProdExeDealsList(opts: {
       totalCommission,
       margeRealisee,
       margeAttente,
+      margeBruteRealisee,
+      margeBruteAttente,
       totalPartArtiste,
       partArtisteARegler,
       totalMf,

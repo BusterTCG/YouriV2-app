@@ -219,6 +219,10 @@ model User {
   /// Sprint 10 ajoutera un AuditEntry plus complet pour les actions update/delete.
   dealsCreated Deal[] @relation("DealCreatedBy")
 
+  /// Tâches que l'user a validées (audit Sprint 6 — Stan 2026-05-31).
+  /// SetNull si user désactivé pour préserver la trace historique.
+  tasksCompleted Task[] @relation("TaskDoneBy")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -547,6 +551,11 @@ model Deal {
   // ── Prestations facturées (Sprint 5 CACHETS) — N prestataires/mois ──
   cachetPrestations CachetPrestation[]
 
+  /// Tâches du deal (Sprint 6 — Stan 2026-05-31). Instanciées auto à la
+  /// création depuis `TaskTemplate where category = deal.category`. Cascade
+  /// delete via la relation Task → Deal.
+  tasks Task[]
+
   // ── Audit multi-user ──
   /// User qui a créé ce deal. SetNull si l'user est désactivé (préserve
   /// l'historique sans casser la contrainte FK).
@@ -803,6 +812,128 @@ model CachetPrestation {
   deletedAt DateTime?
 
   @@index([dealId, deletedAt])
+}
+
+// ─────────────────────────── Tâches (Sprint 6) ───────────────────────────
+//
+// Modèle inspiré de Youri V1 mais refondu en table dédiée (vs JSON) avec
+// templates éditables depuis /settings/templates (vs hardcodés en code).
+//
+// Workflow Stan 2026-05-31 :
+//   - Chaque catégorie de deal (BOOKING / PROD_EXE / CACHETS) a un pipeline
+//     ordonné de TaskTemplate (étapes génériques avec assigné par défaut).
+//   - À la création d'un deal → instanciation auto des templates en Task
+//     avec snapshot intégral du label/assignee/dueAt (l'édition ultérieure
+//     du template ne touche pas les Task existantes).
+//   - Pour un user X, la "tâche courante" affichée dans /taches = la 1re
+//     Task TODO assignée à X dans chaque deal (ordonnée par `order`).
+//   - Au validate → status passe à DONE → la Task suivante apparait.
+
+enum TaskStatus {
+  TODO
+  DONE
+  SKIPPED
+}
+
+/// Étape générique d'un pipeline de tâches par catégorie de deal.
+/// Éditable côté `/settings/templates` (ADMIN only). Les modifications ici
+/// ne touchent QUE les nouveaux deals — les deals existants conservent
+/// leur pipeline snapshot.
+model TaskTemplate {
+  id String @id @default(cuid())
+
+  /// Catégorie de deal cible (BOOKING / PROD_EXE / CACHETS).
+  category DealCategory
+
+  /// Position dans le pipeline (0-N). Tri ASC.
+  order Int
+
+  /// Libellé court (ex. "Envoyer devis"). Snapshot copié vers Task.label.
+  label String
+
+  /// Description optionnelle (consigne, pré-requis…).
+  description String?
+
+  /// Clé pangee (stan/certe/angath) de l'associé responsable par défaut.
+  /// null = "à attribuer" — l'user choisira au moment de prendre la tâche.
+  defaultAssigneeKey String?
+
+  /// Délai en jours par rapport à `Deal.date` pour calculer `Task.dueAt`.
+  /// Positif = APRÈS la date du show (ex. encaissement J+15).
+  /// Négatif = AVANT (ex. envoyer devis J−30).
+  /// null = pas de deadline auto.
+  defaultDueOffsetDays Int?
+
+  /// Soft-delete (préserve les Task existantes via SetNull sur templateId).
+  deletedAt DateTime?
+
+  /// Reverse de Task.template — permet d'auditer combien d'instances ont été
+  /// créées depuis ce template (et de bloquer la suppression définitive si
+  /// besoin, géré côté server action).
+  tasks Task[] @relation("TaskFromTemplate")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category, order, deletedAt])
+}
+
+/// Instance de tâche rattachée à un deal. Créée auto à `createDeal` depuis
+/// les templates actifs de la catégorie. Snapshot du template au create
+/// (label/assigneeKey/dueAt) pour préserver l'historique si le template
+/// est modifié après.
+model Task {
+  id String @id @default(cuid())
+
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  /// Référence au template d'origine (null si tâche custom ajoutée à la main).
+  /// SetNull si template supprimé pour préserver la trace.
+  templateId String?
+  template   TaskTemplate? @relation("TaskFromTemplate", fields: [templateId], references: [id], onDelete: SetNull)
+
+  /// Position dans le pipeline du deal (copié du template au create, modifiable).
+  order Int
+
+  /// Snapshot du label (modifiable au cas par cas sur le deal).
+  label String
+
+  description String?
+
+  /// Snapshot pangee key. Pattern cohérent avec DealManagementFee.associateKey
+  /// (préserve l'historique si user désactivé).
+  assigneeKey String?
+
+  /// Statut : TODO (à faire), DONE (validée), SKIPPED (ignorée — non applicable).
+  status TaskStatus @default(TODO)
+
+  /// Date d'échéance snapshot (= deal.date + template.defaultDueOffsetDays).
+  /// Modifiable manuellement après création.
+  dueAt DateTime?
+
+  /// Audit : moment où la tâche a été validée (status=DONE/SKIPPED).
+  doneAt DateTime?
+
+  /// Audit : user qui a validé la tâche. SetNull si user désactivé pour
+  /// préserver la trace historique.
+  doneByUserId String?
+  doneBy       User?   @relation("TaskDoneBy", fields: [doneByUserId], references: [id], onDelete: SetNull)
+
+  /// Notes libres (raison de skip, contexte de validation…).
+  notes String?
+
+  /// Soft-delete cascade depuis Deal.
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Index pour la query "tâches d'un deal triées par ordre".
+  @@index([dealId, status, order])
+  /// Index pour la query "mes tâches courantes" (filtré sur user + TODO).
+  @@index([assigneeKey, status, deletedAt])
+  @@index([deletedAt])
 }
 
 // ─────────────────────────── FDR / Feuille de route (Sprint 3.7) ───────────────────────────

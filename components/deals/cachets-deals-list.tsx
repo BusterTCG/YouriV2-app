@@ -18,6 +18,7 @@ import type {
   CachetsDealsListData,
 } from "@/lib/cachets-list";
 import { formatEur, formatPct, dealStatusLabel } from "./deal-helpers";
+import { DealStatusInline } from "./deal-status-inline";
 import { updateDealArtiste } from "@/lib/actions/deals";
 
 /**
@@ -128,7 +129,7 @@ interface Props {
 const COL_WIDTHS = [
   "w-[68px]",  // 1 Date
   "w-[220px]", // 2 Projet (artiste)
-  "w-[100px]", // 3 Statut deal
+  "w-[120px]", // 3 Statut deal (Stan 2026-06-01 fix : DealStatusInline a min-w-[110px], 100px provoquait débordement)
   "w-[90px]",  // 4 CA HT (budget)
   "w-[90px]",  // 5 Cachet artiste
   "w-[100px]", // 6 St. Artiste
@@ -225,9 +226,14 @@ export function CachetsDealsList({ deals, totals, periodLabel }: Props) {
                         )}
                       </td>
 
-                      {/* 3. Statut deal */}
+                      {/* 3. Statut deal — éditable inline desktop (Stan 2026-05-31 v3) */}
                       <td className="px-2 py-2 whitespace-nowrap text-xs">
-                        {dStatus.emoji} {dStatus.label}
+                        <div className="hidden sm:block" onClick={(e) => e.stopPropagation()}>
+                          <DealStatusInline dealId={deal.id} value={deal.status as never} />
+                        </div>
+                        <span className="sm:hidden">
+                          {dStatus.emoji} {dStatus.label}
+                        </span>
                       </td>
 
                       {/* 4. CA HT (budget) */}
@@ -323,19 +329,22 @@ export function CachetsDealsList({ deals, totals, periodLabel }: Props) {
                   <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
                     {formatEur(totals.totalMargeBrute)}
                   </td>
-                  {/* col 8 St. Marge — split réalisée/à venir */}
+                  {/* col 8 St. Marge — split MARGE BRUTE encaissée / à venir
+                      (Stan 2026-06-01 fix : col à droite de Marge Brute, donc on
+                      affiche le split de la BRUTE, pas de la NETTE qui est dans
+                      la card KPI top). */}
                   <td className="px-2 py-2.5 text-[11px] text-muted-foreground whitespace-nowrap">
-                    {totals.margeRealisee !== 0 && (
+                    {totals.margeBruteRealisee !== 0 && (
                       <span className="text-emerald-600 dark:text-emerald-400 tabular-nums">
-                        {formatEur(totals.margeRealisee)} encaissée
+                        {formatEur(totals.margeBruteRealisee)} encaissée
                       </span>
                     )}
-                    {totals.margeRealisee !== 0 && totals.margeAttente !== 0 && (
+                    {totals.margeBruteRealisee !== 0 && totals.margeBruteAttente !== 0 && (
                       <span className="mx-1 text-muted-foreground/50">·</span>
                     )}
-                    {totals.margeAttente !== 0 && (
+                    {totals.margeBruteAttente !== 0 && (
                       <span className="text-amber-600 dark:text-amber-400 tabular-nums">
-                        {formatEur(totals.margeAttente)} à venir
+                        {formatEur(totals.margeBruteAttente)} à venir
                       </span>
                     )}
                   </td>

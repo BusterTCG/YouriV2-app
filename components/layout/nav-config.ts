@@ -48,7 +48,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Pilotage",
     items: [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, placeholder: true },
-      { label: "Tâches", href: "/taches", icon: CheckSquare, placeholder: true },
+      { label: "Tâches", href: "/taches", icon: CheckSquare },
     ],
   },
   {
@@ -56,8 +56,8 @@ export const NAV_GROUPS: NavGroup[] = [
     href: "/deals", // page parent avec 3 cards récap (Booking / Prod Exé / Cachet)
     items: [
       { label: "Booking", href: "/deals/booking", icon: Briefcase },
-      { label: "Prod Exé", href: "/deals/prod-executive", icon: TrendingUp, placeholder: true },
-      { label: "Cachets", href: "/deals/cachets", icon: Wallet, placeholder: true },
+      { label: "Prod Exé", href: "/deals/prod-executive", icon: TrendingUp },
+      { label: "Cachets", href: "/deals/cachets", icon: Wallet },
       { label: "Management fees", href: "/deals/management-fees", icon: HandCoins },
     ],
   },
@@ -79,7 +79,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Administration",
     items: [
-      { label: "Paramètres", href: "/settings", icon: Settings, placeholder: true },
+      { label: "Paramètres", href: "/settings", icon: Settings },
       { label: "Utilisateurs", href: "/settings/users", icon: Users, adminOnly: true },
     ],
   },

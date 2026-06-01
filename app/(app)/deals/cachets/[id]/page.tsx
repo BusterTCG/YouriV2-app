@@ -12,6 +12,8 @@ import {
 import { DealStatusInline } from "@/components/deals/deal-status-inline";
 import { CachetArtisteSection } from "@/components/deals/cachet-artiste-section";
 import { CachetMargeSection } from "@/components/deals/cachet-marge-section";
+import { DealPipelineBar } from "@/components/tasks/deal-pipeline-bar";
+import { getTasksForDeal } from "@/lib/queries/tasks";
 import {
   CachetPrestationsEditor,
   type CachetPrestationRow,
@@ -60,6 +62,8 @@ export default async function CachetDetailPage({ params }: PageProps) {
     },
   });
   if (!deal) notFound();
+
+  const tasks = await getTasksForDeal(deal.id);
 
   // Projection artistes (1 par deal Cachets)
   const artistes: BookingDealArtistRow[] = deal.dealArtistes.map((da) => ({
@@ -158,6 +162,7 @@ export default async function CachetDetailPage({ params }: PageProps) {
               {format(deal.date, "MMMM yyyy", { locale: fr })}
             </span>
             <DealStatusInline dealId={deal.id} value={deal.status} />
+            <DealPipelineBar dealId={deal.id} tasks={tasks} />
             {linkedToOwnProd && (
               <span className="inline-flex items-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs whitespace-nowrap text-amber-700 dark:text-amber-400">
                 🎭 Spectacle interne (pas de marge / MF)

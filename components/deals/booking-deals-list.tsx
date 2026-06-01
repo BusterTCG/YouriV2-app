@@ -6,6 +6,7 @@ import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import type { BookingDealRow, BookingDealsListData } from "@/lib/deals-list-types";
 import { formatEur, formatPct, dealStatusLabel } from "./deal-helpers";
+import { DealStatusInline } from "./deal-status-inline";
 
 /**
  * Pill statut recap booking (Stan 2026-05-26) : seulement 2 états affichés —
@@ -164,9 +165,15 @@ export function BookingDealsList({ deals, totals }: Props) {
                     )}
                   </td>
 
-                  {/* Statut deal — LECTURE SEULE (Stan : édition seulement dans la fiche) */}
+                  {/* Statut deal — éditable inline desktop, lecture seule mobile.
+                      Stan 2026-05-31 v3 : édition directe depuis le tableau. */}
                   <td className="px-2 py-2 whitespace-nowrap text-xs">
-                    {dStatus.emoji} {dStatus.label}
+                    <div className="hidden sm:block" onClick={(e) => e.stopPropagation()}>
+                      <DealStatusInline dealId={deal.id} value={deal.status} />
+                    </div>
+                    <span className="sm:hidden">
+                      {dStatus.emoji} {dStatus.label}
+                    </span>
                   </td>
 
                   {/* CA HT = budget */}
@@ -257,19 +264,22 @@ export function BookingDealsList({ deals, totals }: Props) {
               <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
                 {formatEur(totals.totalMarge)}
               </td>
-              {/* col 8 St. Marge — détail encaissée / à venir */}
+              {/* col 8 St. Marge — split MARGE BRUTE encaissée / à venir
+                  (Stan 2026-06-01 fix : col à droite de Marge Brute, donc on
+                  affiche le split de la BRUTE, pas de la NETTE qui est dans
+                  la card KPI top). */}
               <td className="px-2 py-2.5 text-[11px] text-muted-foreground whitespace-nowrap">
-                {totals.margeRealisee !== 0 && (
+                {totals.margeBruteRealisee !== 0 && (
                   <span className="text-emerald-600 dark:text-emerald-400 tabular-nums">
-                    {formatEur(totals.margeRealisee)} encaissée
+                    {formatEur(totals.margeBruteRealisee)} encaissée
                   </span>
                 )}
-                {totals.margeRealisee !== 0 && totals.margeAttente !== 0 && (
+                {totals.margeBruteRealisee !== 0 && totals.margeBruteAttente !== 0 && (
                   <span className="mx-1 text-muted-foreground/50">·</span>
                 )}
-                {totals.margeAttente !== 0 && (
+                {totals.margeBruteAttente !== 0 && (
                   <span className="text-amber-600 dark:text-amber-400 tabular-nums">
-                    {formatEur(totals.margeAttente)} à venir
+                    {formatEur(totals.margeBruteAttente)} à venir
                   </span>
                 )}
               </td>

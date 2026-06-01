@@ -19,6 +19,11 @@ import type {
   VenueDealKind,
 } from "@prisma/client";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { MonthPickerField } from "./month-picker-field";
 import {
   PRODUCTION_LINE_LABELS,
@@ -107,6 +112,65 @@ export function ProductionLinesEditor({
   const visibleCosts = visibleCostLabels(venueDealKind);
   const visibleRevenues = REVENUE_LABELS;
 
+  // Stan 2026-05-31 v3 — Lignes vides masquées par défaut (efficacité visuelle).
+  // Un label est "avec contenu" si :
+  //   - au moins 1 ligne avec amount > 0, OU
+  //   - au moins 1 ligne coveredByVenue (cas "pris par la salle"), OU
+  //   - >= 2 lignes (mode multi-entrées en cours).
+  // Les autres restent masquées tant que l'user ne clique pas sur
+  // "+ Ajouter…" qui les ajoute à `manuallyShown` (state local).
+  //
+  // EXCEPTION : `RECETTE_HT` reste toujours visible (revenu principal).
+  const [manuallyShown, setManuallyShown] = useState<Set<ProductionLineLabel>>(
+    new Set(),
+  );
+
+  function hasLineContent(label: ProductionLineLabel): boolean {
+    const lines = byLabel.get(label) ?? [];
+    if (lines.length === 0) return false;
+    if (lines.some((l) => l.amount > 0)) return true;
+    if (lines.some((l) => l.coveredByVenue)) return true;
+    if (lines.length >= 2) return true; // multi-entrées
+    return false;
+  }
+
+  // Recettes : RECETTE_HT toujours visible ; DL_PROD masquable.
+  const displayedRevenues = visibleRevenues.filter(
+    (label) =>
+      label === "RECETTE_HT" ||
+      hasLineContent(label) ||
+      manuallyShown.has(label),
+  );
+  const hiddenRevenues = visibleRevenues.filter(
+    (label) =>
+      label !== "RECETTE_HT" &&
+      !hasLineContent(label) &&
+      !manuallyShown.has(label),
+  );
+
+  const displayedCosts = visibleCosts.filter(
+    (label) => hasLineContent(label) || manuallyShown.has(label),
+  );
+  const hiddenCosts = visibleCosts.filter(
+    (label) => !hasLineContent(label) && !manuallyShown.has(label),
+  );
+
+  function showHidden(label: ProductionLineLabel) {
+    setManuallyShown((prev) => {
+      const next = new Set(prev);
+      next.add(label);
+      return next;
+    });
+  }
+
+  function hideManuallyShown(label: ProductionLineLabel) {
+    setManuallyShown((prev) => {
+      const next = new Set(prev);
+      next.delete(label);
+      return next;
+    });
+  }
+
   function sumOf(label: ProductionLineLabel): number {
     return (byLabel.get(label) ?? [])
       .filter((l) => !l.coveredByVenue)
@@ -130,14 +194,14 @@ export function ProductionLinesEditor({
 
   return (
     <div className="space-y-5">
-      {/* Section Recettes */}
+      {/* Section Recettes — RECETTE_HT toujours visible, DL_PROD masquable */}
       <Section
         title="🟢 Recettes"
         total={totalRevenue}
         totalAccent="positive"
         icon={<TrendingUp className="h-4 w-4 text-emerald-500" />}
       >
-        {visibleRevenues.map((label) => (
+        {displayedRevenues.map((label) => (
           <CategoryEditor
             key={label}
             dealId={dealId}
@@ -145,8 +209,50 @@ export function ProductionLinesEditor({
             lines={byLabel.get(label) ?? []}
             venueDealKind={venueDealKind}
             totalRevenue={totalRevenue}
+            isManuallyShown={
+              manuallyShown.has(label) && !hasLineContent(label)
+            }
+            onRemove={() => hideManuallyShown(label)}
           />
         ))}
+
+        {hiddenRevenues.length > 0 && (
+          <div className="px-3 py-2 bg-muted/20 border-t">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-[11px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Plus className="h-3 w-3" />
+                  Ajouter une recette
+                  <span className="text-muted-foreground/60 normal-case">
+                    ({hiddenRevenues.length} disponible
+                    {hiddenRevenues.length > 1 ? "s" : ""})
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="start"
+                sideOffset={4}
+                className="w-[220px] p-1"
+              >
+                <div className="flex flex-col">
+                  {hiddenRevenues.map((label) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => showHidden(label)}
+                      className="text-left text-sm px-2 py-1.5 rounded hover:bg-accent transition-colors"
+                    >
+                      {PRODUCTION_LINE_LABELS[label]}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+        )}
       </Section>
 
       {/* Section Charges — total inclut la ligne virtuelle Prod exé */}
@@ -156,41 +262,116 @@ export function ProductionLinesEditor({
         totalAccent="negative"
         icon={<TrendingDown className="h-4 w-4 text-red-500" />}
       >
-        {visibleCosts.flatMap((label) => {
-          const editor = (
-            <CategoryEditor
-              key={label}
-              dealId={dealId}
-              label={label}
-              lines={byLabel.get(label) ?? []}
-              venueDealKind={venueDealKind}
-              totalRevenue={totalRevenue}
-            />
-          );
-          // Insère la ligne virtuelle "Prod exé" juste après SACD.
-          if (label === "SACD") {
-            return [
-              editor,
+        {/* Stan 2026-05-31 v2 — Affiche uniquement les charges avec contenu.
+            La ligne virtuelle "Prod exé" et les "Cachet Art." sont toujours
+            insérées indépendamment du filtrage (basées sur des données
+            calculées, pas sur les ProductionLine). */}
+        {(() => {
+          const elements: React.ReactNode[] = [];
+          let insertedVirtualProdExe = false;
+          let insertedCachets = false;
+
+          for (const label of displayedCosts) {
+            elements.push(
+              <CategoryEditor
+                key={label}
+                dealId={dealId}
+                label={label}
+                lines={byLabel.get(label) ?? []}
+                venueDealKind={venueDealKind}
+                totalRevenue={totalRevenue}
+                isManuallyShown={
+                  manuallyShown.has(label) && !hasLineContent(label)
+                }
+                onRemove={() => hideManuallyShown(label)}
+              />,
+            );
+            if (label === "SACD") {
+              elements.push(
+                <VirtualProdExeLine
+                  key="virtual-prod-exe"
+                  amount={prodExeAmount}
+                  pct={pct}
+                />,
+              );
+              insertedVirtualProdExe = true;
+            }
+            if (label === "LOCATION") {
+              artistes.forEach((a) =>
+                elements.push(
+                  <ArtisteCachetRow key={`art-${a.id}`} artiste={a} />,
+                ),
+              );
+              insertedCachets = true;
+            }
+          }
+
+          // Si SACD ou LOCATION étaient masqués, on insère quand même la
+          // ligne virtuelle et les cachets en début de section (pour ne pas
+          // les perdre).
+          if (!insertedVirtualProdExe) {
+            elements.unshift(
               <VirtualProdExeLine
                 key="virtual-prod-exe"
                 amount={prodExeAmount}
                 pct={pct}
               />,
-            ];
+            );
           }
-          // Insère les lignes "Cachet Art." juste après LOCATION — édition
-          // inline directe (Stan 2026-05-26 v2 : plus de section Artistes
-          // séparée). 1 ligne par DealArtiste actif.
-          if (label === "LOCATION") {
-            return [
-              editor,
-              ...artistes.map((a) => (
-                <ArtisteCachetRow key={`art-${a.id}`} artiste={a} />
-              )),
-            ];
+          if (!insertedCachets && artistes.length > 0) {
+            // Après la VirtualProdExeLine (qui est à l'index 0 si pas SACD).
+            const insertAt = insertedVirtualProdExe ? 0 : 1;
+            artistes.forEach((a, i) =>
+              elements.splice(
+                insertAt + i,
+                0,
+                <ArtisteCachetRow key={`art-${a.id}`} artiste={a} />,
+              ),
+            );
           }
-          return [editor];
-        })}
+
+          return elements;
+        })()}
+
+        {/* Bouton "+ Ajouter une charge" — affiché si des labels sont masqués */}
+        {hiddenCosts.length > 0 && (
+          <div className="px-3 py-2 bg-muted/20 border-t">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-[11px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Plus className="h-3 w-3" />
+                  Ajouter une charge
+                  <span className="text-muted-foreground/60 normal-case">
+                    ({hiddenCosts.length} disponible
+                    {hiddenCosts.length > 1 ? "s" : ""})
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="start"
+                sideOffset={4}
+                className="w-[220px] p-1"
+              >
+                <div className="flex flex-col">
+                  {hiddenCosts.map((label) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => showHidden(label)}
+                      className="text-left text-sm px-2 py-1.5 rounded hover:bg-accent transition-colors"
+                    >
+                      {PRODUCTION_LINE_LABELS[label]}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+        )}
+
         {(venueDealKind === "CO_REAL" || venueDealKind === "CESSION") && (
           <p className="text-[11px] text-muted-foreground italic px-3 py-1.5">
             ℹ Location de salle non affichée (
@@ -474,6 +655,8 @@ function CategoryEditor({
   lines,
   venueDealKind,
   totalRevenue,
+  isManuallyShown,
+  onRemove,
 }: {
   dealId: string;
   label: ProductionLineLabel;
@@ -482,6 +665,11 @@ function CategoryEditor({
   /** CA total — utilisé pour le bouton "Auto 3.5%" sur la ligne CNM
    *  (Stan 2026-05-27 : taxe CNM = 3.5% du CA billetterie). */
   totalRevenue: number;
+  /** Stan 2026-05-31 v3 : true si la ligne a été ajoutée via "+ Ajouter"
+   *  alors qu'elle était masquée (et est toujours vide). Affiche un bouton ✕
+   *  pour la masquer à nouveau. */
+  isManuallyShown?: boolean;
+  onRemove?: () => void;
 }) {
   if (lines.length >= 2) {
     return <MultiLineEditor dealId={dealId} label={label} lines={lines} />;
@@ -493,6 +681,8 @@ function CategoryEditor({
       line={lines[0]}
       venueDealKind={venueDealKind}
       totalRevenue={totalRevenue}
+      isManuallyShown={isManuallyShown}
+      onRemove={onRemove}
     />
   );
 }
@@ -725,12 +915,16 @@ function LineEditor({
   line,
   venueDealKind,
   totalRevenue,
+  isManuallyShown,
+  onRemove,
 }: {
   dealId: string;
   label: ProductionLineLabel;
   line: ProductionLineRow | undefined;
   venueDealKind: VenueDealKind | null;
   totalRevenue: number;
+  isManuallyShown?: boolean;
+  onRemove?: () => void;
 }) {
   const [pending, startTransition] = useTransition();
   const isCovered = line?.coveredByVenue ?? false;
@@ -919,15 +1113,38 @@ function LineEditor({
         />
       </div>
 
-      <button
-        type="button"
-        onClick={addSubEntry}
-        disabled={pending || isCovered}
-        title="Ajouter une sous-entrée"
-        className="shrink-0 h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent"
-      >
-        <Plus className="h-3.5 w-3.5" />
-      </button>
+      {isManuallyShown && onRemove ? (
+        // Si la ligne a été ajoutée par erreur (toujours vide) → bouton ✕
+        // pour la retirer sans soft-delete (juste cacher du DOM local).
+        <button
+          type="button"
+          onClick={() => {
+            // Si une ligne DB existe encore mais vide, soft-delete pour
+            // éviter le résidu. Sinon, juste masquer côté UI.
+            if (line) {
+              startTransition(async () => {
+                await deleteProductionLine(line.id);
+              });
+            }
+            onRemove();
+          }}
+          disabled={pending}
+          title="Retirer cette ligne (ajoutée par erreur)"
+          className="shrink-0 h-7 w-7 inline-flex items-center justify-center rounded-md text-destructive hover:bg-destructive/10"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={addSubEntry}
+          disabled={pending || isCovered}
+          title="Ajouter une sous-entrée"
+          className="shrink-0 h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      )}
 
       {pending && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />}
     </div>

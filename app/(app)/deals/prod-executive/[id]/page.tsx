@@ -12,8 +12,10 @@ import {
 } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { computeProdExeBrute } from "@/lib/finance/show-financials";
+import { getTasksForDeal } from "@/lib/queries/tasks";
 import { formatShowTime } from "@/components/deals/deal-helpers";
 import { DealActions } from "@/components/deals/deal-actions";
+import { DealPipelineBar } from "@/components/tasks/deal-pipeline-bar";
 import {
   DealManagementFeesSection,
   type DealManagementFeeRow,
@@ -72,6 +74,8 @@ export default async function ProdExecutiveDetailPage({ params }: PageProps) {
     },
   });
   if (!deal) notFound();
+
+  const tasks = await getTasksForDeal(deal.id);
 
   // Projection artistes (multi-artiste)
   const artistes: BookingDealArtistRow[] = deal.dealArtistes.map((da) => ({
@@ -200,6 +204,7 @@ export default async function ProdExecutiveDetailPage({ params }: PageProps) {
               </span>
             )}
             <DealStatusInline dealId={deal.id} value={deal.status} />
+            <DealPipelineBar dealId={deal.id} tasks={tasks} />
           </div>
         </div>
         {/* Boutons d'action : FDR en or doré (CTA principal KN-style)

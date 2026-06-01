@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import type { VenueDealKind } from "@prisma/client";
 import { updateShowDetails } from "@/lib/actions/prod-executive";
+import { syncShowTaskToggle } from "@/lib/actions/sync-show-tasks";
 import { MultiDatesPicker } from "./multi-dates-picker";
 import { formatEur } from "@/components/deals/deal-helpers";
 import { cn } from "@/lib/utils";
@@ -289,13 +290,22 @@ export function ShowSummaryCard({
             icon={<FileSignature className="h-3.5 w-3.5" />}
             label="Signature contrat"
             checked={contractSigned}
-            onClick={() => persist({ contractSigned: !contractSigned })}
+            onClick={() => {
+              const next = !contractSigned;
+              persist({ contractSigned: next });
+              // Sync pipeline task (Stan 2026-05-31 v3)
+              void syncShowTaskToggle(dealId, "contractSigned", next);
+            }}
           />
           <CheckPill
             icon={<Tag className="h-3.5 w-3.5" />}
             label="MEV billetterie"
             checked={ticketingReady}
-            onClick={() => persist({ ticketingReady: !ticketingReady })}
+            onClick={() => {
+              const next = !ticketingReady;
+              persist({ ticketingReady: next });
+              void syncShowTaskToggle(dealId, "ticketingReady", next);
+            }}
           />
           {ticketingReady && (
             <div className="flex items-center gap-1.5 flex-1 min-w-[200px] max-w-md">
@@ -325,9 +335,13 @@ export function ShowSummaryCard({
           )}
           <CheckPill
             icon={<Plane className="h-3.5 w-3.5" />}
-            label="VHR pris"
+            label="Gestion VHR"
             checked={vhrBooked}
-            onClick={() => persist({ vhrBooked: !vhrBooked })}
+            onClick={() => {
+              const next = !vhrBooked;
+              persist({ vhrBooked: next });
+              void syncShowTaskToggle(dealId, "vhrBooked", next);
+            }}
           />
         </div>
       </div>

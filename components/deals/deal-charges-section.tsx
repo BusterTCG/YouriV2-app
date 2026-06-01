@@ -121,18 +121,21 @@ function ChargeRow({ row }: { row: BookingDealChargeRow }) {
 
   return (
     <div className="flex items-center gap-3 px-3 py-2 hover:bg-accent/30 transition-colors flex-wrap sm:flex-nowrap">
-      {/* Label — click-to-edit (span par défaut = rendu identique aux labels
-          statiques Budget/Artiste). Input apparaît uniquement au click. */}
-      <div className="min-w-[180px] flex-1 sm:flex-initial">
+      {/* Label — Stan 2026-06-01 : w-[200px] fixe pour aligner avec Budget /
+          Artistes. */}
+      <div className="w-full sm:w-[200px] sm:shrink-0 min-w-0">
         <EditableLabel value={row.label} onCommit={commitLabel} />
       </div>
 
-      {/* Montant */}
-      <div className="w-24 shrink-0">
+      {/* Montant — w-32 (uniforme avec Budget / Artistes) */}
+      <div className="w-32 shrink-0">
         <MoneyInput value={row.amount} onCommit={commitAmount} />
       </div>
 
-      {/* Toggle Payé (charges = sortie cash → "Payé", pas "Encaissé") */}
+      {/* Spacer % — pour aligner avec la col % des Artistes */}
+      <div className="hidden sm:block w-16 shrink-0" />
+
+      {/* Toggle Payé — w-36 (uniforme). Charges = sortie cash → "Payé". */}
       <div className="w-36 shrink-0">
         <PaidToggle
           isOn={row.paymentStatus === "PAID"}

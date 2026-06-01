@@ -64,8 +64,11 @@ export function DealBudgetSection({ dealId, budgetAmount, isEncaisse, paidAt }: 
         totalAccent="positive"
       />
       <div className="rounded-md border overflow-hidden divide-y">
+        {/* Stan 2026-06-01 : alignement colonnes vertical avec Artistes /
+            Charges via mêmes largeurs (label w-[200px] + spacer w-16 pour
+            matcher la colonne % des Artistes). */}
         <div className="flex items-center gap-3 px-3 py-2 hover:bg-accent/30 transition-colors flex-wrap sm:flex-nowrap">
-          <div className="min-w-[180px] flex-1 sm:flex-initial">
+          <div className="w-full sm:w-[200px] sm:shrink-0 min-w-0">
             <div className="text-sm font-medium leading-tight">Budget Youri</div>
             {paidAt && (
               <div className="text-[11px] text-muted-foreground mt-0.5">
@@ -76,10 +79,14 @@ export function DealBudgetSection({ dealId, budgetAmount, isEncaisse, paidAt }: 
               </div>
             )}
           </div>
+          {/* Montant */}
           <div className="w-32 shrink-0">
             <MoneyInput value={budgetAmount} onCommit={commitAmount} placeholder="0 €" />
           </div>
-          <div className="w-32 shrink-0">
+          {/* Spacer % — pour aligner avec la col % des Artistes */}
+          <div className="hidden sm:block w-16 shrink-0" />
+          {/* Statut paiement */}
+          <div className="w-36 shrink-0">
             <PaidToggle
               isOn={isEncaisse}
               onToggle={toggleEncaisse}
@@ -87,6 +94,7 @@ export function DealBudgetSection({ dealId, budgetAmount, isEncaisse, paidAt }: 
               className="w-full justify-center"
             />
           </div>
+          {/* Mois d'encaissement */}
           <div className={`w-32 shrink-0 ${pendingMonth ? "opacity-60" : ""}`}>
             <MonthPickerField
               value={paidAt}

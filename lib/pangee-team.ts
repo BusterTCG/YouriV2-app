@@ -32,6 +32,8 @@ export interface PangeeMember {
   phone: string;
   /** Rôle par défaut sur la FDR — l'user peut le changer avant submit. */
   defaultRole: BriefingRole;
+  /** Couleur d'identification (hex) — chip/avatar associé. Stan 2026-05-31. */
+  color: string;
 }
 
 /**
@@ -46,6 +48,7 @@ export const PANGEE_TEAM: PangeeMember[] = [
     lastName: "",
     phone: "",
     defaultRole: "PRODUCTION",
+    color: "#10b981", // emerald
   },
   {
     key: "certe",
@@ -53,6 +56,7 @@ export const PANGEE_TEAM: PangeeMember[] = [
     lastName: "",
     phone: "",
     defaultRole: "PRODUCTION",
+    color: "#8b5cf6", // violet
   },
   {
     key: "stan",
@@ -60,8 +64,33 @@ export const PANGEE_TEAM: PangeeMember[] = [
     lastName: "",
     phone: "",
     defaultRole: "PRODUCTION",
+    color: "#f59e0b", // amber
   },
 ];
+
+/**
+ * Map indexée par `key` pour résolution O(1).
+ * Stan 2026-05-31 : utilisé par `getAssigneeName()` partagé client/serveur.
+ */
+const TEAM_BY_KEY = new Map(PANGEE_TEAM.map((m) => [m.key, m]));
+
+/**
+ * Retourne le prénom de l'associé Pangee à partir de sa key (stan/certe/angath),
+ * ou "Non attribué" si null. Sûr côté serveur ET client (pas de "use client").
+ */
+export function getAssigneeName(key: string | null | undefined): string {
+  if (!key) return "Non attribué";
+  return TEAM_BY_KEY.get(key)?.firstName ?? key;
+}
+
+/**
+ * Retourne la couleur (hex) de l'associé Pangee, ou null si key non
+ * reconnue / non attribuée. Stan 2026-05-31 : ronds de couleur visuels.
+ */
+export function getAssigneeColor(key: string | null | undefined): string | null {
+  if (!key) return null;
+  return TEAM_BY_KEY.get(key)?.color ?? null;
+}
 
 /** Company affichée sur la FDR pour les contacts Pangee. */
 export const PANGEE_COMPANY = "Pangee Prod";

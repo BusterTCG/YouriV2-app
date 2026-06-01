@@ -225,6 +225,8 @@ export async function getBookingDealsList(opts: {
   let totalMarge = 0;
   let margeRealisee = 0;
   let margeAttente = 0;
+  let margeBruteRealisee = 0;
+  let margeBruteAttente = 0;
   let artistOwed = 0;
   let totalMf = 0;
   for (const d of deals) {
@@ -238,10 +240,14 @@ export async function getBookingDealsList(opts: {
     // Stan 2026-05-26 v4 : on split la marge NETTE (= margePangee − MF) entre
     // réalisée / à venir, pour rester cohérent avec le KPI "Marge Nette"
     // affiché en gros (sinon margeRealisee peut dépasser totalMargeNette).
+    // Stan 2026-06-01 fix : on calcule aussi le split de la marge BRUTE pour
+    // le footer du tableau (colonne St. Marge à droite de Marge Brute).
     if (budgetPaid) {
       margeRealisee += d.margeNette;
+      margeBruteRealisee += d.margePangee;
     } else {
       margeAttente += d.margeNette;
+      margeBruteAttente += d.margePangee;
     }
     // "À reverser à l'artiste" : Youri a encaissé le budget mais n'a pas
     // encore payé l'artiste → cet argent est en trésorerie Youri.
@@ -265,6 +271,8 @@ export async function getBookingDealsList(opts: {
       totalMarge,
       margeRealisee,
       margeAttente,
+      margeBruteRealisee,
+      margeBruteAttente,
       artistOwed,
       totalMf,
       totalMargeNette,

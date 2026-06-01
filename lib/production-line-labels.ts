@@ -14,7 +14,7 @@ import type {
 export const PRODUCTION_LINE_LABELS: Record<ProductionLineLabel, string> = {
   // Recettes
   RECETTE_HT: "Recette HT",
-  DL_PROD: "Deal Live (DL/Prod)",
+  DL_PROD: "DL Prod",
   // Charges
   CNM: "CNM",
   SACD: "SACD",
