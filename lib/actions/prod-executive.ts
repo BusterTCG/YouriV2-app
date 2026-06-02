@@ -117,6 +117,7 @@ export async function updateShowDetails(
       await recomputeMfForDeal(id);
     }
 
+    revalidatePath("/dashboard");
     revalidatePath("/deals/prod-executive");
     revalidatePath(`/deals/prod-executive/${id}`);
     if (financialChanged) revalidatePath("/deals/management-fees");

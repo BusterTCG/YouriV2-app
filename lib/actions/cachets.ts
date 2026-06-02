@@ -133,6 +133,7 @@ export async function updateCachetsDetails(
       await recomputeMfForDeal(id);
     }
 
+    revalidatePath("/dashboard");
     revalidatePath("/deals/cachets");
     revalidatePath(`/deals/cachets/${id}`);
     if (marginChanged) revalidatePath("/deals/management-fees");
@@ -180,6 +181,7 @@ export async function addCachetPrestation(
     await recomputeCachetsBudget(data.dealId);
     await recomputeMfForDeal(data.dealId);
 
+    revalidatePath("/dashboard");
     revalidatePath("/deals/cachets");
     revalidatePath(`/deals/cachets/${data.dealId}`);
     revalidatePath("/deals/management-fees");
@@ -257,6 +259,7 @@ export async function updateCachetPrestation(
       await recomputeMfForDeal(updated.dealId);
     }
 
+    revalidatePath("/dashboard");
     revalidatePath("/deals/cachets");
     revalidatePath(`/deals/cachets/${updated.dealId}`);
     if (amount !== undefined) revalidatePath("/deals/management-fees");
@@ -274,6 +277,7 @@ export async function deleteCachetPrestation(id: string): Promise<ActionResult> 
     });
     await recomputeCachetsBudget(presta.dealId);
     await recomputeMfForDeal(presta.dealId);
+    revalidatePath("/dashboard");
     revalidatePath("/deals/cachets");
     revalidatePath(`/deals/cachets/${presta.dealId}`);
     revalidatePath("/deals/management-fees");
@@ -316,6 +320,7 @@ export async function batchCreateCachetPrestations(
     await recomputeCachetsBudget(dealId);
     await recomputeMfForDeal(dealId);
 
+    revalidatePath("/dashboard");
     revalidatePath("/deals/cachets");
     revalidatePath(`/deals/cachets/${dealId}`);
     revalidatePath("/deals/management-fees");

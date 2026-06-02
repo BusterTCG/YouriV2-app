@@ -68,6 +68,7 @@ export async function addProductionLine(
     await recomputeShowFinancials(dealId);
     await recomputeMfForDeal(dealId);
 
+    revalidatePath("/dashboard");
     revalidatePath("/deals/prod-executive");
     revalidatePath(`/deals/prod-executive/${dealId}`);
     revalidatePath("/deals/management-fees");
@@ -156,6 +157,7 @@ export async function updateProductionLine(
       await recomputeMfForDeal(line.dealId);
     }
 
+    revalidatePath("/dashboard");
     revalidatePath("/deals/prod-executive");
     revalidatePath(`/deals/prod-executive/${line.dealId}`);
     if (marginChanged) revalidatePath("/deals/management-fees");
@@ -175,6 +177,7 @@ export async function deleteProductionLine(id: string): Promise<ActionResult> {
     });
     await recomputeShowFinancials(line.dealId);
     await recomputeMfForDeal(line.dealId);
+    revalidatePath("/dashboard");
     revalidatePath("/deals/prod-executive");
     revalidatePath(`/deals/prod-executive/${line.dealId}`);
     revalidatePath("/deals/management-fees");
@@ -256,6 +259,7 @@ export async function upsertProductionLine(
 
     await recomputeShowFinancials(dealId);
     await recomputeMfForDeal(dealId);
+    revalidatePath("/dashboard");
     revalidatePath("/deals/prod-executive");
     revalidatePath(`/deals/prod-executive/${dealId}`);
     revalidatePath("/deals/management-fees");
@@ -298,6 +302,7 @@ export async function addEmptyProductionLine(
       },
     });
     // Pas de recompute (amount=0 → marge inchangée).
+    revalidatePath("/dashboard");
     revalidatePath(`/deals/prod-executive/${dealId}`);
   });
 }

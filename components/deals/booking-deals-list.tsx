@@ -5,8 +5,9 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import type { BookingDealRow, BookingDealsListData } from "@/lib/deals-list-types";
-import { formatEur, formatPct, dealStatusLabel } from "./deal-helpers";
+import { formatPct, dealStatusLabel } from "./deal-helpers";
 import { DealStatusInline } from "./deal-status-inline";
+import { useEur } from "@/lib/privacy-context";
 
 /**
  * Pill statut recap booking (Stan 2026-05-26) : seulement 2 états affichés —
@@ -99,6 +100,7 @@ function DealsListColGroup() {
 
 export function BookingDealsList({ deals, totals }: Props) {
   const router = useRouter();
+  const eur = useEur();
 
   if (deals.length === 0) {
     return (
@@ -178,12 +180,12 @@ export function BookingDealsList({ deals, totals }: Props) {
 
                   {/* CA HT = budget */}
                   <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">
-                    {formatEur(deal.budgetAmount)}
+                    {eur(deal.budgetAmount)}
                   </td>
 
                   {/* Artiste = Σ artistes */}
                   <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">
-                    {formatEur(deal.totalArtistes)}
+                    {eur(deal.totalArtistes)}
                   </td>
 
                   {/* St. Artiste — recap binaire : Payé si tous PAID, sinon En cours
@@ -194,7 +196,7 @@ export function BookingDealsList({ deals, totals }: Props) {
 
                   {/* Marge Pangee (= budget − artistes − charges) */}
                   <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums font-medium">
-                    {formatEur(deal.margePangee)}
+                    {eur(deal.margePangee)}
                   </td>
 
                   {/* St. Marge — recap binaire Stan : Encaissé si budget PAID, sinon En cours. */}
@@ -212,7 +214,7 @@ export function BookingDealsList({ deals, totals }: Props) {
                   {/* Manag fees (Σ MF du deal) — text-sm aligné autres montants (Stan v4) */}
                   <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">
                     {deal.totalMf > 0 ? (
-                      formatEur(deal.totalMf)
+                      eur(deal.totalMf)
                     ) : (
                       <span className="text-muted-foreground/40">—</span>
                     )}
@@ -227,7 +229,7 @@ export function BookingDealsList({ deals, totals }: Props) {
                           : "text-red-700 dark:text-red-400",
                       )}
                     >
-                      {formatEur(deal.margeNette)}
+                      {eur(deal.margeNette)}
                     </span>
                   </td>
 
@@ -252,17 +254,17 @@ export function BookingDealsList({ deals, totals }: Props) {
               </td>
               {/* col 4 CA HT */}
               <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
-                {formatEur(totals.totalBudget)}
+                {eur(totals.totalBudget)}
               </td>
               {/* col 5 Artiste */}
               <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
-                {formatEur(totals.totalArtistes)}
+                {eur(totals.totalArtistes)}
               </td>
               {/* col 6 St. Artiste */}
               <td />
               {/* col 7 Marge Pangee */}
               <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
-                {formatEur(totals.totalMarge)}
+                {eur(totals.totalMarge)}
               </td>
               {/* col 8 St. Marge — split MARGE BRUTE encaissée / à venir
                   (Stan 2026-06-01 fix : col à droite de Marge Brute, donc on
@@ -271,7 +273,7 @@ export function BookingDealsList({ deals, totals }: Props) {
               <td className="px-2 py-2.5 text-[11px] text-muted-foreground whitespace-nowrap">
                 {totals.margeBruteRealisee !== 0 && (
                   <span className="text-emerald-600 dark:text-emerald-400 tabular-nums">
-                    {formatEur(totals.margeBruteRealisee)} encaissée
+                    {eur(totals.margeBruteRealisee)} encaissée
                   </span>
                 )}
                 {totals.margeBruteRealisee !== 0 && totals.margeBruteAttente !== 0 && (
@@ -279,7 +281,7 @@ export function BookingDealsList({ deals, totals }: Props) {
                 )}
                 {totals.margeBruteAttente !== 0 && (
                   <span className="text-amber-600 dark:text-amber-400 tabular-nums">
-                    {formatEur(totals.margeBruteAttente)} à venir
+                    {eur(totals.margeBruteAttente)} à venir
                   </span>
                 )}
               </td>
@@ -287,7 +289,7 @@ export function BookingDealsList({ deals, totals }: Props) {
               <td />
               {/* col 10 Manag fees total */}
               <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
-                {totals.totalMf > 0 ? formatEur(totals.totalMf) : "—"}
+                {totals.totalMf > 0 ? eur(totals.totalMf) : "—"}
               </td>
               {/* col 11 Marge nette total */}
               <td
@@ -298,7 +300,7 @@ export function BookingDealsList({ deals, totals }: Props) {
                     : "text-red-700 dark:text-red-400",
                 )}
               >
-                {formatEur(totals.totalMargeNette)}
+                {eur(totals.totalMargeNette)}
               </td>
               {/* col 12 % de marge nette */}
               <td />

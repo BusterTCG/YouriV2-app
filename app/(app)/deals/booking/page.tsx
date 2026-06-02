@@ -10,6 +10,7 @@ import { DealsFilters } from "@/components/deals/deals-filters";
 import { DealsTotals } from "@/components/deals/deals-totals";
 import { BookingDealsList } from "@/components/deals/booking-deals-list";
 import { NewDealButton } from "@/components/deals/new-deal-button";
+import { PrivacyToggle } from "@/components/dashboard/privacy-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,7 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <NewDealButton />
+          <PrivacyToggle />
         </div>
       </div>
 

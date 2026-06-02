@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { Logo } from "@/components/layout/logo";
 import { requireUser } from "@/lib/auth/users";
+import { PrivacyProvider } from "@/lib/privacy-context";
 
 /**
  * Shell des routes protégées Youri V2.
@@ -29,43 +30,45 @@ export default async function AppLayout({
   const isAdmin = user.role === "ADMIN";
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar isAdmin={isAdmin} />
+    <PrivacyProvider>
+      <div className="flex min-h-screen bg-background">
+        <Sidebar isAdmin={isAdmin} />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur md:px-6">
-          <div className="flex items-center gap-2">
-            <MobileNav isAdmin={isAdmin} />
-            {/* Logo visible uniquement sur mobile — sur desktop il est dans la sidebar */}
-            <div className="md:hidden">
-              <Logo />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background/80 px-4 backdrop-blur md:px-6">
+            <div className="flex items-center gap-2">
+              <MobileNav isAdmin={isAdmin} />
+              {/* Logo visible uniquement sur mobile — sur desktop il est dans la sidebar */}
+              <div className="md:hidden">
+                <Logo />
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <UserMenu
-              name={user.name}
-              email={user.email}
-              color={user.color}
-              role={user.role}
-            />
-          </div>
-        </header>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <UserMenu
+                name={user.name}
+                email={user.email}
+                color={user.color}
+                role={user.role}
+              />
+            </div>
+          </header>
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-          {children}
-        </main>
+          <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+            {children}
+          </main>
+        </div>
+
+        {/* Toast global — Sprint 6 Stan 2026-05-31 : undo après validation tâche.
+            Position bottom-right par défaut, theme-aware. */}
+        <Toaster
+          richColors
+          closeButton
+          toastOptions={{
+            duration: 6000,
+          }}
+        />
       </div>
-
-      {/* Toast global — Sprint 6 Stan 2026-05-31 : undo après validation tâche.
-          Position bottom-right par défaut, theme-aware. */}
-      <Toaster
-        richColors
-        closeButton
-        toastOptions={{
-          duration: 6000,
-        }}
-      />
-    </div>
+    </PrivacyProvider>
   );
 }

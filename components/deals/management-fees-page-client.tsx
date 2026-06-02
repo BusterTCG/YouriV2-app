@@ -26,6 +26,8 @@ import { PANGEE_TEAM } from "@/lib/pangee-team";
 import { DEAL_CATEGORY_LABELS, formatEur } from "@/components/deals/deal-helpers";
 import { PERIOD_PRESET_OPTIONS } from "@/lib/period-presets";
 import { updateManagementFee } from "@/lib/actions/management-fees";
+import { useEur } from "@/lib/privacy-context";
+import { PrivacyToggle } from "@/components/dashboard/privacy-toggle";
 import { PaidToggle } from "./paid-toggle";
 import type {
   AssociateKpi,
@@ -88,37 +90,40 @@ export function ManagementFeesPageClient({
 
   return (
     <div className="space-y-5">
-      {/* Ligne 1 : Switcher Mes MF / Tous (Stan 2026-05-26 : sur sa propre
-          ligne pour mieux séparer du reste) */}
+      {/* Ligne 1 : Switcher Mes MF / Tous + PrivacyToggle aligné à droite
+          (Stan 2026-06-02 : eye à côté de Stan/Associés). */}
       {hasMine && (
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="inline-flex rounded-md border bg-muted/40 p-0.5">
-            <button
-              type="button"
-              onClick={() => setScope("mine")}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition-colors",
-                scope === "mine"
-                  ? "bg-background shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <User className="h-3.5 w-3.5" />
-              {myMember?.firstName ?? "Mes MF"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setScope("all")}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition-colors",
-                scope === "all"
-                  ? "bg-background shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Users2 className="h-3.5 w-3.5" />
-              Associés
-            </button>
+          <div className="inline-flex items-center gap-2">
+            <div className="inline-flex rounded-md border bg-muted/40 p-0.5">
+              <button
+                type="button"
+                onClick={() => setScope("mine")}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition-colors",
+                  scope === "mine"
+                    ? "bg-background shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <User className="h-3.5 w-3.5" />
+                {myMember?.firstName ?? "Mes MF"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setScope("all")}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition-colors",
+                  scope === "all"
+                    ? "bg-background shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Users2 className="h-3.5 w-3.5" />
+                Associés
+              </button>
+            </div>
+            <PrivacyToggle />
           </div>
           <span className="text-[11px] text-muted-foreground italic">
             {rows.length} ligne{rows.length > 1 ? "s" : ""} · {rangeLabel}
@@ -334,6 +339,7 @@ function AssociateKpiCard({ kpi }: { kpi: AssociateKpi }) {
   const member = PANGEE_TEAM.find((m) => m.key === kpi.associateKey);
   const displayName = member?.firstName ?? kpi.associateKey;
   const allPaid = kpi.pending === 0 && kpi.total > 0;
+  const eur = useEur();
 
   return (
     <div className="rounded-md border bg-card p-4 space-y-3">
@@ -367,7 +373,7 @@ function AssociateKpiCard({ kpi }: { kpi: AssociateKpi }) {
           Total Management fees
         </div>
         <div className="text-2xl font-semibold tabular-nums">
-          {formatEur(kpi.total)}
+          {eur(kpi.total)}
         </div>
       </div>
 
@@ -378,7 +384,7 @@ function AssociateKpiCard({ kpi }: { kpi: AssociateKpi }) {
             ✅ Encaissé
           </div>
           <div className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
-            {formatEur(kpi.paid)}
+            {eur(kpi.paid)}
           </div>
         </div>
         <div>
@@ -386,7 +392,7 @@ function AssociateKpiCard({ kpi }: { kpi: AssociateKpi }) {
             ⏳ En cours
           </div>
           <div className="text-sm font-semibold tabular-nums text-amber-700 dark:text-amber-400">
-            {formatEur(kpi.pending)}
+            {eur(kpi.pending)}
           </div>
         </div>
       </div>
@@ -412,6 +418,7 @@ function MonthlyBarChart({
   data: { key: string; label: string; amount: number }[];
   associateName: string;
 }) {
+  const eur = useEur();
   // Inverser pour avoir le mois le plus ancien à gauche (chrono ASC).
   // Le data DESC vient de lib/management-fees-list.ts (slice 6 récents).
   const sortedAsc = [...data].sort((a, b) => a.key.localeCompare(b.key));
@@ -462,7 +469,7 @@ function MonthlyBarChart({
                     <div className="rounded-md border bg-popover px-2.5 py-1.5 text-xs shadow-md">
                       <div className="font-medium">{p.label}</div>
                       <div className="tabular-nums text-emerald-700 dark:text-emerald-400 font-semibold">
-                        {formatEur(p.amount)}
+                        {eur(p.amount)}
                       </div>
                     </div>
                   );
@@ -486,6 +493,7 @@ function FeeRow({ row }: { row: ManagementFeeRow }) {
   const member = PANGEE_TEAM.find((m) => m.key === row.associateKey);
   const associateName = member?.firstName ?? row.associateKey;
   const isPaid = row.paymentStatus === "PAID";
+  const eur = useEur();
 
   /** Toggle binaire En cours ↔ Encaissé via PaidToggle. Bascule PAID →
    *  paidAt auto = mois courant. Bascule PAID → en cours → paidAt nullifié
@@ -528,7 +536,7 @@ function FeeRow({ row }: { row: ManagementFeeRow }) {
         {Math.round(row.sharePct)}%
       </td>
       <td className="px-3 py-2 whitespace-nowrap tabular-nums font-medium text-right">
-        {formatEur(row.amount)}
+        {eur(row.amount)}
       </td>
       {/* "Dispo paiement" — feu vert quand budget + artistes + charges sont
           tous payés/encaissés sur le deal. Indique que la marge est définitive

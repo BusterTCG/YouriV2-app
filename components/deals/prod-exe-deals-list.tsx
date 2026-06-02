@@ -20,10 +20,11 @@ import type {
   ProdExeDealRow,
   ProdExeDealsListData,
 } from "@/lib/prod-executive-list";
-import { formatEur, formatPct, dealStatusLabel } from "./deal-helpers";
+import { formatPct, dealStatusLabel } from "./deal-helpers";
 import { DealStatusInline } from "./deal-status-inline";
 import { VENUE_DEAL_KIND_FR } from "@/lib/production-line-labels";
 import { setDealArtistStatus } from "@/lib/actions/deals";
+import { useEur } from "@/lib/privacy-context";
 
 /**
  * Tableau récap /deals/prod-executive — refondu Stan 2026-05-27.
@@ -160,6 +161,7 @@ function ColGroup() {
 
 export function ProdExeDealsList({ deals, totals, periodLabel }: Props) {
   const router = useRouter();
+  const eur = useEur();
 
   return (
     <div className="space-y-4">
@@ -263,12 +265,12 @@ export function ProdExeDealsList({ deals, totals, periodLabel }: Props) {
 
                       {/* 5. CA HT */}
                       <td className="px-2 py-2 text-right tabular-nums">
-                        {deal.caHt > 0 ? formatEur(deal.caHt) : <span className="text-muted-foreground/40">—</span>}
+                        {deal.caHt > 0 ? eur(deal.caHt) : <span className="text-muted-foreground/40">—</span>}
                       </td>
 
                       {/* 6. Artiste (part artiste) */}
                       <td className="px-2 py-2 text-right tabular-nums">
-                        {deal.partArtiste !== 0 ? formatEur(deal.partArtiste) : <span className="text-muted-foreground/40">—</span>}
+                        {deal.partArtiste !== 0 ? eur(deal.partArtiste) : <span className="text-muted-foreground/40">—</span>}
                       </td>
 
                       {/* 7. St. Artiste — pill cliquable */}
@@ -278,7 +280,7 @@ export function ProdExeDealsList({ deals, totals, periodLabel }: Props) {
 
                       {/* 8. Marge Brute */}
                       <td className="px-2 py-2 text-right tabular-nums font-medium">
-                        {deal.margeBrute > 0 ? formatEur(deal.margeBrute) : <span className="text-muted-foreground/40">—</span>}
+                        {deal.margeBrute > 0 ? eur(deal.margeBrute) : <span className="text-muted-foreground/40">—</span>}
                       </td>
 
                       {/* 9. St. Marge (toutes recettes PAID) */}
@@ -300,7 +302,7 @@ export function ProdExeDealsList({ deals, totals, periodLabel }: Props) {
 
                       {/* 12. Mgmt fees */}
                       <td className="px-2 py-2 text-right tabular-nums">
-                        {deal.totalMf > 0 ? formatEur(deal.totalMf) : <span className="text-muted-foreground/40">—</span>}
+                        {deal.totalMf > 0 ? eur(deal.totalMf) : <span className="text-muted-foreground/40">—</span>}
                       </td>
 
                       {/* 13. Marge Nette */}
@@ -312,7 +314,7 @@ export function ProdExeDealsList({ deals, totals, periodLabel }: Props) {
                               : "text-red-700 dark:text-red-400",
                           )}
                         >
-                          {deal.margeNette !== 0 ? formatEur(deal.margeNette) : "—"}
+                          {deal.margeNette !== 0 ? eur(deal.margeNette) : "—"}
                         </span>
                       </td>
 
@@ -337,17 +339,17 @@ export function ProdExeDealsList({ deals, totals, periodLabel }: Props) {
                   </td>
                   {/* col 5 CA HT */}
                   <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
-                    {formatEur(totals.totalRevenue)}
+                    {eur(totals.totalRevenue)}
                   </td>
                   {/* col 6 Artiste (part artiste) */}
                   <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
-                    {formatEur(totals.totalPartArtiste)}
+                    {eur(totals.totalPartArtiste)}
                   </td>
                   {/* col 7 St. Artiste */}
                   <td />
                   {/* col 8 Marge Brute (= commission Pangee cumulée) */}
                   <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
-                    {formatEur(totals.totalCommission)}
+                    {eur(totals.totalCommission)}
                   </td>
                   {/* col 9 St. Marge — split MARGE BRUTE encaissée / à venir
                       (Stan 2026-06-01 fix : col à droite de Marge Brute, donc on
@@ -356,7 +358,7 @@ export function ProdExeDealsList({ deals, totals, periodLabel }: Props) {
                   <td className="px-2 py-2.5 text-[11px] text-muted-foreground whitespace-nowrap">
                     {totals.margeBruteRealisee !== 0 && (
                       <span className="text-emerald-600 dark:text-emerald-400 tabular-nums">
-                        {formatEur(totals.margeBruteRealisee)} encaissée
+                        {eur(totals.margeBruteRealisee)} encaissée
                       </span>
                     )}
                     {totals.margeBruteRealisee !== 0 && totals.margeBruteAttente !== 0 && (
@@ -364,7 +366,7 @@ export function ProdExeDealsList({ deals, totals, periodLabel }: Props) {
                     )}
                     {totals.margeBruteAttente !== 0 && (
                       <span className="text-amber-600 dark:text-amber-400 tabular-nums">
-                        {formatEur(totals.margeBruteAttente)} à venir
+                        {eur(totals.margeBruteAttente)} à venir
                       </span>
                     )}
                   </td>
@@ -374,7 +376,7 @@ export function ProdExeDealsList({ deals, totals, periodLabel }: Props) {
                   <td />
                   {/* col 12 Mgmt fees */}
                   <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
-                    {totals.totalMf > 0 ? formatEur(totals.totalMf) : "—"}
+                    {totals.totalMf > 0 ? eur(totals.totalMf) : "—"}
                   </td>
                   {/* col 13 Marge Nette */}
                   <td
@@ -385,7 +387,7 @@ export function ProdExeDealsList({ deals, totals, periodLabel }: Props) {
                         : "text-red-700 dark:text-red-400",
                     )}
                   >
-                    {formatEur(totals.totalMargeNette)}
+                    {eur(totals.totalMargeNette)}
                   </td>
                   {/* col 14 % marge nette globale */}
                   <td className="px-2 py-2.5 text-center text-[11px] text-muted-foreground tabular-nums">
@@ -421,6 +423,7 @@ function ProdExeTotalsCard({
   totals: ProdExeDealsListData["totals"];
   periodLabel: string;
 }) {
+  const eur = useEur();
   return (
     <div className="rounded-md border-2 border-[--yr-gold]/30 bg-card p-4">
       <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
@@ -436,17 +439,17 @@ function ProdExeTotalsCard({
         <Stat
           icon={<Briefcase className="h-3.5 w-3.5 text-muted-foreground" />}
           label="CA HT"
-          value={formatEur(totals.totalRevenue)}
+          value={eur(totals.totalRevenue)}
         />
         <Stat
           icon={<Sparkles className="h-3.5 w-3.5 text-muted-foreground" />}
           label="Artistes"
-          value={formatEur(totals.totalPartArtiste)}
+          value={eur(totals.totalPartArtiste)}
           sub={
             totals.partArtisteARegler > 0 ? (
               <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
                 <Hourglass className="h-3 w-3" />
-                {formatEur(totals.partArtisteARegler)} à reverser
+                {eur(totals.partArtisteARegler)} à reverser
               </span>
             ) : null
           }
@@ -454,25 +457,25 @@ function ProdExeTotalsCard({
         <Stat
           icon={<HandCoins className="h-3.5 w-3.5 text-muted-foreground" />}
           label="Management Fees"
-          value={formatEur(totals.totalMf)}
+          value={eur(totals.totalMf)}
         />
         <Stat
           icon={<span className="text-emerald-600 text-xs">★</span>}
           label="Marge Nette"
-          value={formatEur(totals.totalMargeNette)}
+          value={eur(totals.totalMargeNette)}
           sub={
             totals.totalMargeNette !== 0 ? (
               <span className="flex items-center gap-2 flex-wrap">
                 {totals.margeRealisee !== 0 && (
                   <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
                     <CheckCircle2 className="h-3 w-3" />
-                    {formatEur(totals.margeRealisee)} encaissée
+                    {eur(totals.margeRealisee)} encaissée
                   </span>
                 )}
                 {totals.margeAttente !== 0 && (
                   <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
                     <Hourglass className="h-3 w-3" />
-                    {formatEur(totals.margeAttente)} à venir
+                    {eur(totals.margeAttente)} à venir
                   </span>
                 )}
               </span>

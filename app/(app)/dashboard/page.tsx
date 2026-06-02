@@ -1,76 +1,128 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LayoutDashboard } from "lucide-react";
+import { requireUser } from "@/lib/auth/users";
+import {
+  getDashboardData,
+  type DashboardPeriod,
+  type DashboardCategoryFilter,
+} from "@/lib/dashboard";
+import { DashboardKpis } from "@/components/dashboard/dashboard-kpis";
+import {
+  DashboardMyTasks,
+  DashboardUpcomingTasks,
+} from "@/components/dashboard/dashboard-my-tasks";
+import { DashboardAlerts } from "@/components/dashboard/dashboard-alerts";
+import { DashboardWeek } from "@/components/dashboard/dashboard-week";
+import { DashboardChart } from "@/components/dashboard/dashboard-chart";
+import { PeriodToggle } from "@/components/dashboard/period-toggle";
+import { CategoryFilter } from "@/components/dashboard/category-filter";
+import { ArtistFilterDropdown } from "@/components/dashboard/artist-filter-dropdown";
+import { PrivacyToggle } from "@/components/dashboard/privacy-toggle";
 
 /**
- * Dashboard placeholder — Sprint 0.
+ * Dashboard Pangee Prod — Sprint 7 Stan 2026-06-02.
  *
- * Cette page sera réécrite au Sprint 7 (Dashboard) avec :
- *   - Mes tâches en cours (tri deadline)
- *   - Alertes (tâches en retard, cachets impayés, deals sans tâche)
- *   - KPIs financiers (CA, marge, encaissé ce mois)
+ * Copie fidèle du dashboard KuroNeko (`/dashboard`) adaptée au modèle Pangee :
+ *   - 3 KPIs : CA HT encaissé, Marge Nette, % Marge Nette
+ *   - Section "Mes tâches courantes" (réutilise Sprint 6 — workflow séquentiel)
+ *   - Section "Cette semaine" (deals < 7 jours)
+ *   - Graphique Marge Nette mensuelle 12 mois glissants
  *
- * Pour Sprint 0 : juste un placeholder qui prouve que l'app rend bien
- * (theme, layout, typo, card shadcn fonctionnels).
+ * Filtres top-bar :
+ *   - Période (month / year) — URL `?period=year`
+ *   - Catégorie (BOOKING / PROD_EXE / CACHETS / all) — URL `?cat=BOOKING`
+ *   - Artiste (slug) — URL `?artist=<slug>`
+ *
+ * Multi-user : "Mes tâches" filtré sur `user.pangeeKey` (Stan/Certe/Angath).
  */
-export default function DashboardPage() {
+
+interface DashboardPageProps {
+  searchParams: Promise<{
+    period?: string;
+    cat?: string;
+    artist?: string;
+  }>;
+}
+
+const CATEGORY_VALUES: DashboardCategoryFilter[] = [
+  "all",
+  "BOOKING",
+  "PROD_EXE",
+  "CACHETS",
+];
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const sp = await searchParams;
+  // Stan 2026-06-02 : défaut = "year" (vue annuelle prioritaire). Mois = opt-in.
+  const period: DashboardPeriod = sp.period === "month" ? "month" : "year";
+  const category: DashboardCategoryFilter =
+    sp.cat && CATEGORY_VALUES.includes(sp.cat as DashboardCategoryFilter)
+      ? (sp.cat as DashboardCategoryFilter)
+      : "all";
+  const artistSlug = sp.artist && sp.artist !== "all" ? sp.artist : null;
+
+  const user = await requireUser();
+  const data = await getDashboardData({
+    period,
+    category,
+    artistSlug,
+    myPangeeKey: user.pangeeKey,
+  });
+
+  const periodLabel = period === "year" ? "année en cours" : "mois en cours";
+
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Tableau de bord</h1>
-        <p className="text-sm text-muted-foreground">
-          Sprint 0 — scaffold initial. Le dashboard réel viendra au Sprint 7.
-        </p>
+    <div className="max-w-6xl space-y-5">
+      {/* ── Header ───────────────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wider">
+            <LayoutDashboard className="h-3.5 w-3.5" />
+            Pilotage Pangee
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground text-sm">
+            Bonjour {user.name.split(" ")[0]} — vue {periodLabel}, tes tâches
+            courantes et l&apos;activité à venir.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end sm:shrink-0">
+          <CategoryFilter />
+          <ArtistFilterDropdown
+            artistSlug={artistSlug}
+            artists={data.artists}
+          />
+          <PeriodToggle />
+          <PrivacyToggle />
+        </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Mes tâches</CardTitle>
-            <CardDescription>Sprint 6+7</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-muted-foreground">—</p>
-          </CardContent>
-        </Card>
+      {/* ── KPIs financiers ─────────────────────────────────────────────── */}
+      <DashboardKpis
+        kpis={data.kpis}
+        period={period}
+        periodLabel={periodLabel}
+      />
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Alertes</CardTitle>
-            <CardDescription>Sprint 7</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-muted-foreground">—</p>
-          </CardContent>
-        </Card>
+      {/* ── Alertes actionnables (n'affiche rien si aucune alerte) ──────── */}
+      <DashboardAlerts
+        aFacturerOld={data.alerts.aFacturerOld}
+        aPayerArtiste={data.alerts.aPayerArtiste}
+      />
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">CA du mois</CardTitle>
-            <CardDescription>Sprint 7</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-muted-foreground">—</p>
-          </CardContent>
-        </Card>
+      {/* ── Graphique 12 mois plein largeur (vision macro, juste sous les KPIs).
+            Stan 2026-06-02 v3 : remonté entre les KPIs et le bloc planning. */}
+      <DashboardChart data={data.monthlyMargeNette} period={period} />
+
+      {/* ── 3 colonnes planning : Mes tâches | À venir | Cette semaine
+            Plan d'action visible d'un coup d'œil. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <DashboardMyTasks
+          tasks={data.myTasks}
+          teamTasksCount={data.teamTasksCount}
+        />
+        <DashboardUpcomingTasks upcoming={data.myUpcomingTasks} />
+        <DashboardWeek items={data.thisWeek} />
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">État du sprint</CardTitle>
-          <CardDescription>Référence</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <p>
-            Cette app est en cours de scaffolding (Sprint 0). Voir{" "}
-            <a className="underline" href="https://github.com/BusterTCG/YouriV2-app" target="_blank" rel="noopener noreferrer">
-              le repo GitHub
-            </a>{" "}
-            et <code>docs/architecture-decisions.md</code> pour le plan complet.
-          </p>
-          <p className="text-muted-foreground">
-            Prochain sprint : <strong>Sprint 1 — Auth + 3 users (Stan ADMIN, Certe MEMBER, Angath MEMBER)</strong>.
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

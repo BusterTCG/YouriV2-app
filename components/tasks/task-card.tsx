@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Calendar, MapPin, MoreVertical } from "lucide-react";
+import { Calendar, MapPin, MoreVertical, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -14,7 +14,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { Check } from "lucide-react";
 import {
   CategoryChip,
   AssigneeChip,
@@ -80,8 +79,9 @@ export function TaskCard({ task, showAssignee = false }: Props) {
       )}
     >
       <div className="px-3 py-2.5 flex items-start gap-3">
-        {/* Bouton ✓ Valider — bouton custom Stan 2026-05-31 v4 (PaidPill avait
-            une logique inadaptée qui affichait "En cours" sur ce cas). */}
+        {/* Bouton "○ Valider" — Stan 2026-06-02 : style aligné sur PaidToggle
+            (cercle outline + label) cohérent avec les autres boutons toggle de
+            l'app (Encaissé / Payé). Au hover passe en vert pour suggérer l'action. */}
         <div className="w-24 shrink-0 pt-0.5">
           <button
             type="button"
@@ -90,11 +90,19 @@ export function TaskCard({ task, showAssignee = false }: Props) {
             title="Marquer la tâche comme faite"
             className={cn(
               "w-full h-7 inline-flex items-center justify-center gap-1 rounded-md border px-2 text-[11px] font-medium transition-colors",
-              "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20",
-              pending && "opacity-50 cursor-wait",
+              "border-border bg-muted/30 text-muted-foreground",
+              "hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-400",
+              pending && "opacity-60 cursor-wait",
             )}
           >
-            <Check className="h-3.5 w-3.5" />
+            <span
+              className={cn(
+                "h-3 w-3 rounded-full border inline-flex items-center justify-center shrink-0",
+                "border-muted-foreground/40",
+              )}
+            >
+              {pending && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+            </span>
             Valider
           </button>
         </div>

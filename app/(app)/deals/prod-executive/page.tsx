@@ -9,6 +9,7 @@ import {
 import { DealsFilters } from "@/components/deals/deals-filters";
 import { ProdExeDealsList } from "@/components/deals/prod-exe-deals-list";
 import { NewDealButton } from "@/components/deals/new-deal-button";
+import { PrivacyToggle } from "@/components/dashboard/privacy-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,7 @@ export default async function ProdExecutivePage({ searchParams }: ProdExePagePro
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <NewDealButton category="PROD_EXE" />
+          <PrivacyToggle />
         </div>
       </div>
 

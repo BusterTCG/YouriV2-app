@@ -149,6 +149,7 @@ export async function createDeal(
       throw taskErr;
     }
     revalidatePath("/deals");
+    revalidatePath("/dashboard");
     revalidatePath("/deals/booking");
     revalidatePath("/deals/prod-executive");
     revalidatePath("/deals/cachets");
@@ -220,6 +221,7 @@ export async function softDeleteDeal(id: string): Promise<ActionResult> {
       prisma.task.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
       prisma.eventBriefing.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
     ]);
+    revalidatePath("/dashboard");
     revalidatePath("/deals/booking");
     revalidatePath("/deals/prod-executive");
     revalidatePath("/deals/cachets");
@@ -262,6 +264,7 @@ export async function addDealArtist(
       select: { id: true },
     });
     await recomputeMfForDeal(dealId);
+    revalidatePath("/dashboard");
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${dealId}`);
     return { id: created.id };
@@ -278,6 +281,7 @@ export async function removeDealArtist(id: string): Promise<ActionResult> {
       select: { dealId: true },
     });
     await recomputeMfForDeal(da.dealId);
+    revalidatePath("/dashboard");
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${da.dealId}`);
   });
@@ -478,6 +482,7 @@ export async function setDealBudgetStatus(
       where: { id: dealId },
       data: { budgetPaymentStatus: status },
     });
+    revalidatePath("/dashboard");
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${dealId}`);
   });
@@ -505,6 +510,7 @@ export async function setDealBudgetPaidAt(
         ? { budgetPaidAt: date, budgetPaymentStatus: PaymentStatus.PAID }
         : { budgetPaidAt: null },
     });
+    revalidatePath("/dashboard");
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${dealId}`);
   });
@@ -532,6 +538,7 @@ export async function setDealArtistStatusBulk(
       where: { dealId, deletedAt: null },
       data: { paymentStatus: status },
     });
+    revalidatePath("/dashboard");
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${dealId}`);
   });
@@ -558,6 +565,7 @@ export async function setDealArtistPaidAtBulk(
         ? { paidAt: date, paymentStatus: PaymentStatus.PAID }
         : { paidAt: null },
     });
+    revalidatePath("/dashboard");
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${dealId}`);
   });
@@ -616,6 +624,7 @@ export async function updateDealBudget(
     if (amount !== undefined) {
       await recomputeMfForDeal(dealId);
     }
+    revalidatePath("/dashboard");
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${dealId}`);
   });
@@ -727,6 +736,7 @@ export async function addDealCharge(
     if (amount !== undefined && amount !== null) {
       await recomputeMfForDeal(dealId);
     }
+    revalidatePath("/dashboard");
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${dealId}`);
     return { id: charge.id };
@@ -780,6 +790,7 @@ export async function updateDealCharge(
     if (amount !== undefined) {
       await recomputeMfForDeal(charge.dealId);
     }
+    revalidatePath("/dashboard");
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${charge.dealId}`);
   });
@@ -795,6 +806,7 @@ export async function removeDealCharge(id: string): Promise<ActionResult> {
       select: { dealId: true },
     });
     await recomputeMfForDeal(charge.dealId);
+    revalidatePath("/dashboard");
     revalidatePath("/deals/booking");
     revalidatePath(`/deals/booking/${charge.dealId}`);
   });

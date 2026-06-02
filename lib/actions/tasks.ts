@@ -1,12 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Prisma, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { getShowKeyFromLabel } from "@/lib/tasks-show-sync-utils";
+import { revalidateAfterTaskMutation } from "@/lib/revalidate-helpers";
 
 /**
  * Si la tâche correspond à une CheckPill de la fiche show (Signature contrat,
@@ -65,10 +65,7 @@ export async function markTaskDone(id: string): Promise<ActionResult> {
     }
     await prisma.$transaction(ops);
 
-    revalidatePath("/taches");
-    revalidatePath(`/deals/booking/${existing.dealId}`);
-    revalidatePath(`/deals/prod-executive/${existing.dealId}`);
-    revalidatePath(`/deals/cachets/${existing.dealId}`);
+    revalidateAfterTaskMutation(existing.dealId);
   });
 }
 
@@ -101,10 +98,7 @@ export async function markTaskTodo(id: string): Promise<ActionResult> {
     }
     await prisma.$transaction(ops);
 
-    revalidatePath("/taches");
-    revalidatePath(`/deals/booking/${existing.dealId}`);
-    revalidatePath(`/deals/prod-executive/${existing.dealId}`);
-    revalidatePath(`/deals/cachets/${existing.dealId}`);
+    revalidateAfterTaskMutation(existing.dealId);
   });
 }
 
@@ -144,10 +138,7 @@ export async function updateTask(
       data,
       select: { dealId: true },
     });
-    revalidatePath("/taches");
-    revalidatePath(`/deals/booking/${updated.dealId}`);
-    revalidatePath(`/deals/prod-executive/${updated.dealId}`);
-    revalidatePath(`/deals/cachets/${updated.dealId}`);
+    revalidateAfterTaskMutation(updated.dealId);
   });
 }
 
@@ -189,10 +180,7 @@ export async function addTaskToDeal(
       select: { id: true },
     });
 
-    revalidatePath("/taches");
-    revalidatePath(`/deals/booking/${data.dealId}`);
-    revalidatePath(`/deals/prod-executive/${data.dealId}`);
-    revalidatePath(`/deals/cachets/${data.dealId}`);
+    revalidateAfterTaskMutation(data.dealId);
     return { id: created.id };
   });
 }
@@ -208,10 +196,7 @@ export async function softDeleteTask(id: string): Promise<ActionResult> {
       data: { deletedAt: new Date() },
       select: { dealId: true },
     });
-    revalidatePath("/taches");
-    revalidatePath(`/deals/booking/${updated.dealId}`);
-    revalidatePath(`/deals/prod-executive/${updated.dealId}`);
-    revalidatePath(`/deals/cachets/${updated.dealId}`);
+    revalidateAfterTaskMutation(updated.dealId);
   });
 }
 
@@ -239,9 +224,6 @@ export async function reorderTasks(
         }),
       ),
     );
-    revalidatePath("/taches");
-    revalidatePath(`/deals/booking/${dealId}`);
-    revalidatePath(`/deals/prod-executive/${dealId}`);
-    revalidatePath(`/deals/cachets/${dealId}`);
+    revalidateAfterTaskMutation(dealId);
   });
 }

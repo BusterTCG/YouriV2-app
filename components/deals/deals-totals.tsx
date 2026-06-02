@@ -1,6 +1,7 @@
 import { Briefcase, CheckCircle2, HandCoins, Hourglass, Percent, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatEur, formatPct } from "@/components/deals/deal-helpers";
+import { formatPct } from "@/components/deals/deal-helpers";
+import { SensitiveAmount } from "@/components/dashboard/sensitive-amount";
 import type { BookingDealsListData } from "@/lib/deals-list-types";
 
 interface Props {
@@ -37,17 +38,17 @@ export function DealsTotals({ totals, periodLabel }: Props) {
         <Stat
           icon={<Briefcase className="h-3.5 w-3.5 text-muted-foreground" />}
           label="CA HT"
-          value={formatEur(totals.totalBudget)}
+          value={<SensitiveAmount value={totals.totalBudget} />}
         />
         <Stat
           icon={<Sparkles className="h-3.5 w-3.5 text-muted-foreground" />}
           label="Artistes"
-          value={formatEur(totals.totalArtistes)}
+          value={<SensitiveAmount value={totals.totalArtistes} />}
           sub={
             totals.artistOwed > 0 ? (
               <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
                 <Hourglass className="h-3 w-3" />
-                {formatEur(totals.artistOwed)} à reverser
+                <SensitiveAmount value={totals.artistOwed} /> à reverser
               </span>
             ) : null
           }
@@ -55,25 +56,25 @@ export function DealsTotals({ totals, periodLabel }: Props) {
         <Stat
           icon={<HandCoins className="h-3.5 w-3.5 text-muted-foreground" />}
           label="Management Fees"
-          value={formatEur(totals.totalMf)}
+          value={<SensitiveAmount value={totals.totalMf} />}
         />
         <Stat
           icon={<span className="text-emerald-600 text-xs">★</span>}
           label="Marge Nette"
-          value={formatEur(totals.totalMargeNette)}
+          value={<SensitiveAmount value={totals.totalMargeNette} />}
           sub={
             totals.totalMarge !== 0 ? (
               <span className="flex items-center gap-2 flex-wrap">
                 {totals.margeRealisee !== 0 && (
                   <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
                     <CheckCircle2 className="h-3 w-3" />
-                    {formatEur(totals.margeRealisee)} encaissée
+                    <SensitiveAmount value={totals.margeRealisee} /> encaissée
                   </span>
                 )}
                 {totals.margeAttente !== 0 && (
                   <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
                     <Hourglass className="h-3 w-3" />
-                    {formatEur(totals.margeAttente)} à venir
+                    <SensitiveAmount value={totals.margeAttente} /> à venir
                   </span>
                 )}
               </span>
@@ -100,7 +101,7 @@ function Stat({
 }: {
   icon?: React.ReactNode;
   label: string;
-  value: string;
+  value: React.ReactNode;
   accent?: boolean;
   sub?: React.ReactNode;
 }) {

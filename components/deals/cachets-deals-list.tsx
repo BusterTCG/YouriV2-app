@@ -17,9 +17,10 @@ import type {
   CachetsDealRow,
   CachetsDealsListData,
 } from "@/lib/cachets-list";
-import { formatEur, formatPct, dealStatusLabel } from "./deal-helpers";
+import { formatPct, dealStatusLabel } from "./deal-helpers";
 import { DealStatusInline } from "./deal-status-inline";
 import { updateDealArtiste } from "@/lib/actions/deals";
+import { useEur } from "@/lib/privacy-context";
 
 /**
  * Tableau récap /deals/cachets — Sprint 5, Stan 2026-05-28.
@@ -153,6 +154,7 @@ function ColGroup() {
 
 export function CachetsDealsList({ deals, totals, periodLabel }: Props) {
   const router = useRouter();
+  const eur = useEur();
 
   return (
     <div className="space-y-4">
@@ -239,14 +241,14 @@ export function CachetsDealsList({ deals, totals, periodLabel }: Props) {
                       {/* 4. CA HT (budget) */}
                       <td className="px-2 py-2 text-right tabular-nums">
                         {deal.budgetAmount != null && deal.budgetAmount > 0
-                          ? formatEur(deal.budgetAmount)
+                          ? eur(deal.budgetAmount)
                           : <span className="text-muted-foreground/40">—</span>}
                       </td>
 
                       {/* 5. Cachet artiste */}
                       <td className="px-2 py-2 text-right tabular-nums">
                         {deal.totalArtistes > 0
-                          ? formatEur(deal.totalArtistes)
+                          ? eur(deal.totalArtistes)
                           : <span className="text-muted-foreground/40">—</span>}
                       </td>
 
@@ -258,7 +260,7 @@ export function CachetsDealsList({ deals, totals, periodLabel }: Props) {
                       {/* 7. Marge Brute */}
                       <td className="px-2 py-2 text-right tabular-nums font-medium">
                         {deal.margeBrute > 0
-                          ? formatEur(deal.margeBrute)
+                          ? eur(deal.margeBrute)
                           : <span className="text-muted-foreground/40">—</span>}
                       </td>
 
@@ -280,7 +282,7 @@ export function CachetsDealsList({ deals, totals, periodLabel }: Props) {
 
                       {/* 10. Mgmt fees */}
                       <td className="px-2 py-2 text-right tabular-nums">
-                        {deal.totalMf > 0 ? formatEur(deal.totalMf) : <span className="text-muted-foreground/40">—</span>}
+                        {deal.totalMf > 0 ? eur(deal.totalMf) : <span className="text-muted-foreground/40">—</span>}
                       </td>
 
                       {/* 11. Marge Nette */}
@@ -292,7 +294,7 @@ export function CachetsDealsList({ deals, totals, periodLabel }: Props) {
                               : "text-red-700 dark:text-red-400",
                           )}
                         >
-                          {formatEur(deal.margeNette)}
+                          {eur(deal.margeNette)}
                         </span>
                       </td>
 
@@ -317,17 +319,17 @@ export function CachetsDealsList({ deals, totals, periodLabel }: Props) {
                   </td>
                   {/* col 4 CA HT */}
                   <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
-                    {formatEur(totals.totalBudget)}
+                    {eur(totals.totalBudget)}
                   </td>
                   {/* col 5 Cachet */}
                   <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
-                    {formatEur(totals.totalArtistes)}
+                    {eur(totals.totalArtistes)}
                   </td>
                   {/* col 6 St. Artiste */}
                   <td />
                   {/* col 7 Marge Brute */}
                   <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
-                    {formatEur(totals.totalMargeBrute)}
+                    {eur(totals.totalMargeBrute)}
                   </td>
                   {/* col 8 St. Marge — split MARGE BRUTE encaissée / à venir
                       (Stan 2026-06-01 fix : col à droite de Marge Brute, donc on
@@ -336,7 +338,7 @@ export function CachetsDealsList({ deals, totals, periodLabel }: Props) {
                   <td className="px-2 py-2.5 text-[11px] text-muted-foreground whitespace-nowrap">
                     {totals.margeBruteRealisee !== 0 && (
                       <span className="text-emerald-600 dark:text-emerald-400 tabular-nums">
-                        {formatEur(totals.margeBruteRealisee)} encaissée
+                        {eur(totals.margeBruteRealisee)} encaissée
                       </span>
                     )}
                     {totals.margeBruteRealisee !== 0 && totals.margeBruteAttente !== 0 && (
@@ -344,7 +346,7 @@ export function CachetsDealsList({ deals, totals, periodLabel }: Props) {
                     )}
                     {totals.margeBruteAttente !== 0 && (
                       <span className="text-amber-600 dark:text-amber-400 tabular-nums">
-                        {formatEur(totals.margeBruteAttente)} à venir
+                        {eur(totals.margeBruteAttente)} à venir
                       </span>
                     )}
                   </td>
@@ -352,7 +354,7 @@ export function CachetsDealsList({ deals, totals, periodLabel }: Props) {
                   <td />
                   {/* col 10 Mgmt fees */}
                   <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
-                    {totals.totalMf > 0 ? formatEur(totals.totalMf) : "—"}
+                    {totals.totalMf > 0 ? eur(totals.totalMf) : "—"}
                   </td>
                   {/* col 11 Marge Nette */}
                   <td
@@ -363,7 +365,7 @@ export function CachetsDealsList({ deals, totals, periodLabel }: Props) {
                         : "text-red-700 dark:text-red-400",
                     )}
                   >
-                    {formatEur(totals.totalMargeNette)}
+                    {eur(totals.totalMargeNette)}
                   </td>
                   {/* col 12 % */}
                   <td className="px-2 py-2.5 text-center text-[11px] text-muted-foreground tabular-nums">
@@ -399,6 +401,7 @@ function CachetsTotalsCard({
   totals: CachetsDealsListData["totals"];
   periodLabel: string;
 }) {
+  const eur = useEur();
   return (
     <div className="rounded-md border-2 border-[--yr-gold]/30 bg-card p-4">
       <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
@@ -414,17 +417,17 @@ function CachetsTotalsCard({
         <Stat
           icon={<Briefcase className="h-3.5 w-3.5 text-muted-foreground" />}
           label="CA HT"
-          value={formatEur(totals.totalBudget)}
+          value={eur(totals.totalBudget)}
         />
         <Stat
           icon={<Sparkles className="h-3.5 w-3.5 text-muted-foreground" />}
           label="Cachets"
-          value={formatEur(totals.totalArtistes)}
+          value={eur(totals.totalArtistes)}
           sub={
             totals.artistOwed > 0 ? (
               <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
                 <Hourglass className="h-3 w-3" />
-                {formatEur(totals.artistOwed)} à reverser
+                {eur(totals.artistOwed)} à reverser
               </span>
             ) : null
           }
@@ -432,25 +435,25 @@ function CachetsTotalsCard({
         <Stat
           icon={<HandCoins className="h-3.5 w-3.5 text-muted-foreground" />}
           label="Management Fees"
-          value={formatEur(totals.totalMf)}
+          value={eur(totals.totalMf)}
         />
         <Stat
           icon={<span className="text-emerald-600 text-xs">★</span>}
           label="Marge Nette"
-          value={formatEur(totals.totalMargeNette)}
+          value={eur(totals.totalMargeNette)}
           sub={
             totals.totalMargeNette !== 0 ? (
               <span className="flex items-center gap-2 flex-wrap">
                 {totals.margeRealisee !== 0 && (
                   <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
                     <CheckCircle2 className="h-3 w-3" />
-                    {formatEur(totals.margeRealisee)} encaissée
+                    {eur(totals.margeRealisee)} encaissée
                   </span>
                 )}
                 {totals.margeAttente !== 0 && (
                   <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
                     <Hourglass className="h-3 w-3" />
-                    {formatEur(totals.margeAttente)} à venir
+                    {eur(totals.margeAttente)} à venir
                   </span>
                 )}
               </span>

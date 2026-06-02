@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
@@ -9,6 +8,7 @@ import {
   labelMatchesShowKey,
   type ShowTaskKey,
 } from "@/lib/tasks-show-sync-utils";
+import { revalidateAfterTaskMutation } from "@/lib/revalidate-helpers";
 
 export type { ShowTaskKey };
 
@@ -65,9 +65,6 @@ export async function syncShowTaskToggle(
           },
     });
 
-    revalidatePath("/taches");
-    revalidatePath(`/deals/prod-executive/${dealId}`);
-    revalidatePath(`/deals/booking/${dealId}`);
-    revalidatePath(`/deals/cachets/${dealId}`);
+    revalidateAfterTaskMutation(dealId);
   });
 }
