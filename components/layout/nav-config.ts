@@ -47,7 +47,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Pilotage",
     items: [
-      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, placeholder: true },
+      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { label: "Tâches", href: "/taches", icon: CheckSquare },
     ],
   },
@@ -72,7 +72,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Outils",
     items: [
-      { label: "Reporting", href: "/reporting", icon: BarChart3, placeholder: true },
+      { label: "Reporting", href: "/reporting", icon: BarChart3 },
       { label: "Corbeille", href: "/trash", icon: Trash2, placeholder: true },
     ],
   },

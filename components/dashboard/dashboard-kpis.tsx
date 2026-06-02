@@ -47,7 +47,7 @@ export function DashboardKpis({ kpis, period, periodLabel }: Props) {
       />
       <Card
         icon={<Percent className="h-3.5 w-3.5 text-muted-foreground" />}
-        label="Taux Marge Nette"
+        label="Marge Nette"
         value={
           kpis.margeNettePct != null
             ? formatPct(kpis.margeNettePct, { integer: true })
