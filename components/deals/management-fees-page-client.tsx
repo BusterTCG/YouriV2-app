@@ -341,11 +341,19 @@ function AssociateKpiCard({ kpi }: { kpi: AssociateKpi }) {
   const allPaid = kpi.pending === 0 && kpi.total > 0;
   const eur = useEur();
 
+  // Stan 2026-06-02 : rond avec la couleur exacte de l'avatar UserMenu de
+  // l'associé (= PANGEE_TEAM.color, aligné sur User.color seed). Fond plein
+  // + texte blanc, comme l'avatar topbar.
+  const avatarColor = member?.color ?? "#94a3b8"; // fallback gris-bleu
+
   return (
     <div className="rounded-md border bg-card p-4 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-full bg-[--yr-gold]/15 text-[--yr-gold] inline-flex items-center justify-center text-sm font-semibold">
+          <div
+            className="h-8 w-8 rounded-full text-white inline-flex items-center justify-center text-sm font-semibold shrink-0"
+            style={{ backgroundColor: avatarColor }}
+          >
             {displayName.slice(0, 1).toUpperCase()}
           </div>
           <div className="text-sm font-semibold leading-tight">

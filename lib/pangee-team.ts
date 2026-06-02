@@ -40,6 +40,11 @@ export interface PangeeMember {
  * Membres de l'équipe Pangee Prod — **ordre alphabétique** par firstName
  * (Stan 2026-05-26). Tout caller qui itère sur PANGEE_TEAM aura les chips /
  * listes / pickers triés alphabétiquement par défaut.
+ *
+ * Stan 2026-06-02 : couleurs alignées sur User.color (cf. prisma/seed.ts)
+ * pour que tous les ronds (avatar UserMenu / cards MF / chips tâches /
+ * AssigneeDot) affichent la même couleur par associé. Source de vérité
+ * implicite : seed.ts. À synchroniser si on modifie l'un ou l'autre.
  */
 export const PANGEE_TEAM: PangeeMember[] = [
   {
@@ -48,7 +53,7 @@ export const PANGEE_TEAM: PangeeMember[] = [
     lastName: "",
     phone: "",
     defaultRole: "PRODUCTION",
-    color: "#10b981", // emerald
+    color: "#f59e0b", // amber — aligné User.color seed
   },
   {
     key: "certe",
@@ -56,7 +61,7 @@ export const PANGEE_TEAM: PangeeMember[] = [
     lastName: "",
     phone: "",
     defaultRole: "PRODUCTION",
-    color: "#8b5cf6", // violet
+    color: "#0ea5e9", // sky — aligné User.color seed
   },
   {
     key: "stan",
@@ -64,7 +69,7 @@ export const PANGEE_TEAM: PangeeMember[] = [
     lastName: "",
     phone: "",
     defaultRole: "PRODUCTION",
-    color: "#f59e0b", // amber
+    color: "#7c3aed", // violet — aligné User.color seed
   },
 ];
 
