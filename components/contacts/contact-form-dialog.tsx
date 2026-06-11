@@ -343,7 +343,7 @@ export function ContactFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center gap-1.5">
-                      <Building2 className="h-3.5 w-3.5 text-[--yr-gold]" />
+                      <Building2 className="h-3.5 w-3.5 text-yr-gold" />
                       Salle rattachée
                     </FormLabel>
                     <Select

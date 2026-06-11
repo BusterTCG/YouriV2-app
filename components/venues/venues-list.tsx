@@ -45,7 +45,7 @@ export function VenuesList({ venues }: Props) {
             <CardContent className="space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <Building2 className="h-3.5 w-3.5 text-[--yr-gold] shrink-0" />
+                  <Building2 className="h-3.5 w-3.5 text-yr-gold shrink-0" />
                   <div className="font-semibold truncate">{v.name}</div>
                 </div>
                 {v.rooms.length > 0 ? (

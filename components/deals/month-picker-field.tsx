@@ -106,7 +106,7 @@ export function MonthPickerField({
                     isSelected
                       ? "bg-primary text-primary-foreground border-primary font-medium"
                       : isCurrent
-                        ? "border-[--yr-gold]/50 hover:bg-accent"
+                        ? "border-yr-gold/50 hover:bg-accent"
                         : "border-transparent hover:bg-accent",
                   )}
                 >

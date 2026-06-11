@@ -156,7 +156,7 @@ function ContactCard({
           {/* Salle rattachée — affichée uniquement si le contact est lié à un Venue. */}
           {contact.venue && (
             <div
-              className="text-xs text-[--yr-gold]/90 inline-flex items-center gap-1 truncate min-w-0"
+              className="text-xs text-yr-gold/90 inline-flex items-center gap-1 truncate min-w-0"
               title={`Salle : ${contact.venue.name}${contact.venue.city ? " · " + contact.venue.city : ""}`}
             >
               <Building2 className="h-3 w-3 shrink-0" />

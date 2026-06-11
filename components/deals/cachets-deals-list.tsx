@@ -403,7 +403,7 @@ function CachetsTotalsCard({
 }) {
   const eur = useEur();
   return (
-    <div className="rounded-md border-2 border-[--yr-gold]/30 bg-card p-4">
+    <div className="rounded-md border-2 border-yr-gold/30 bg-card p-4">
       <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
           Total · {periodLabel}

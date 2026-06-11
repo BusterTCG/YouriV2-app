@@ -158,7 +158,7 @@ export function ArtistInfoExport({ open, onOpenChange, profile }: ArtistInfoExpo
       <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileDown className="h-4 w-4 text-[--yr-gold]" />
+            <FileDown className="h-4 w-4 text-yr-gold" />
             Exporter la fiche
           </DialogTitle>
           <DialogDescription>

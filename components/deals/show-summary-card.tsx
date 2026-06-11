@@ -325,7 +325,7 @@ export function ShowSummaryCard({
                   href={ticketingUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[--yr-gold] hover:underline shrink-0"
+                  className="inline-flex items-center gap-1 text-yr-gold hover:underline shrink-0"
                   title="Ouvrir le lien billetterie"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
@@ -354,7 +354,7 @@ export function ShowSummaryCard({
           className={cn(
             "inline-flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-md border transition-colors",
             isMultiDate
-              ? "bg-[--yr-gold]/15 border-[--yr-gold]/40 text-[--yr-gold] font-semibold"
+              ? "bg-yr-gold/15 border-yr-gold/40 text-yr-gold font-semibold"
               : "border-border bg-muted/30 text-muted-foreground hover:bg-muted",
           )}
         >
@@ -364,7 +364,7 @@ export function ShowSummaryCard({
             className={cn(
               "h-3.5 w-3.5 rounded-sm border inline-flex items-center justify-center text-[10px]",
               isMultiDate
-                ? "bg-[--yr-gold] border-[--yr-gold] text-[--yr-navy]"
+                ? "bg-yr-gold border-yr-gold text-yr-navy"
                 : "border-muted-foreground/40",
             )}
           >

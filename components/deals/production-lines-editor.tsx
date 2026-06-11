@@ -1026,7 +1026,7 @@ function LineEditor({
               }}
               disabled={pending}
               title={`Calcul auto : ${formatEur(totalRevenue)} × 3,5% = ${formatEur(cnmAuto)}`}
-              className="inline-flex items-center rounded border border-[--yr-gold]/40 bg-[--yr-gold]/10 px-1.5 py-0.5 text-[10px] font-medium text-[--yr-gold] hover:bg-[--yr-gold]/20 transition-colors"
+              className="inline-flex items-center rounded border border-yr-gold/40 bg-yr-gold/10 px-1.5 py-0.5 text-[10px] font-medium text-yr-gold hover:bg-yr-gold/20 transition-colors"
             >
               ✨ Auto 3,5%
             </button>

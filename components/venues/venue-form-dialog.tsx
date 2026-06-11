@@ -208,7 +208,7 @@ export function VenueFormDialog({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-[--yr-gold]" />
+            <Building2 className="h-4 w-4 text-yr-gold" />
             {isEdit ? "Modifier le lieu" : "Nouveau lieu"}
           </DialogTitle>
           <DialogDescription>

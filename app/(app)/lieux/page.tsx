@@ -51,7 +51,7 @@ export default async function VenuesPage({ searchParams }: PageProps) {
             <Building2 className="h-3.5 w-3.5" />
             Lieux · {count} salle{count > 1 ? "s" : ""}
             {capacityHint && (
-              <span className="text-[--yr-gold]">· filtre{capacityHint}</span>
+              <span className="text-yr-gold">· filtre{capacityHint}</span>
             )}
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">Lieux</h1>

@@ -56,7 +56,7 @@ export function VenuesSearch({ defaultValue }: { defaultValue: string }) {
         )}
       </div>
       <p className="text-[11px] text-muted-foreground flex items-center gap-1 flex-wrap">
-        <Sparkles className="h-3 w-3 text-[--yr-gold]" />
+        <Sparkles className="h-3 w-3 text-yr-gold" />
         Recherche intelligente : combine capacité + ville. Ex :{" "}
         <code className="text-[10px] bg-muted/60 px-1 rounded">
           moins de 250 places, paris

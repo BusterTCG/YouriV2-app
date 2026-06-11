@@ -194,7 +194,7 @@ L'équipe Pangee Prod`;
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Mail className="h-5 w-5 text-[--yr-gold]" />
+            <Mail className="h-5 w-5 text-yr-gold" />
             Envoyer la FDR par mail
           </DialogTitle>
           <DialogDescription>
@@ -233,7 +233,7 @@ L'équipe Pangee Prod`;
                         checked={isChecked}
                         disabled={!hasEmail}
                         onChange={() => toggle(a.dealArtisteId)}
-                        className="h-4 w-4 accent-[--yr-gold]"
+                        className="h-4 w-4 accent-yr-gold"
                       />
                       <span className="font-medium flex-1 min-w-0 truncate">
                         {a.artistName}
@@ -406,7 +406,7 @@ function AttachmentZone({
         className={cn(
           "rounded-md border-2 border-dashed p-3 transition-colors flex items-center justify-between gap-3 flex-wrap",
           dragging
-            ? "border-[--yr-gold] bg-[--yr-gold]/10"
+            ? "border-yr-gold bg-yr-gold/10"
             : "border-muted-foreground/30 bg-muted/20",
         )}
       >
@@ -419,7 +419,7 @@ function AttachmentZone({
         </div>
         <label
           className={cn(
-            "inline-flex items-center gap-1.5 text-xs font-medium text-[--yr-gold] shrink-0",
+            "inline-flex items-center gap-1.5 text-xs font-medium text-yr-gold shrink-0",
             disabled
               ? "opacity-50 cursor-not-allowed"
               : "cursor-pointer hover:underline",

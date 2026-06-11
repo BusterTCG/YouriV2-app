@@ -313,7 +313,7 @@ function ManagementFeeBlock({
                 className={cn(
                   "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
                   isSelected
-                    ? "border-[--yr-gold]/40 bg-[--yr-gold]/10 text-[--yr-gold]"
+                    ? "border-yr-gold/40 bg-yr-gold/10 text-yr-gold"
                     : "border-border bg-muted/30 text-muted-foreground hover:bg-muted",
                 )}
               >

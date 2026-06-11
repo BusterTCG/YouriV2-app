@@ -212,7 +212,7 @@ export default async function ProdExecutiveDetailPage({ params }: PageProps) {
         <div className="flex items-center gap-2 flex-wrap">
           <Link
             href={`/deals/booking/${deal.id}/fdr`}
-            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors shadow-sm bg-[--yr-gold] text-[#1a2540] hover:bg-[--yr-gold]/90"
+            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors shadow-sm bg-yr-gold text-[#1a2540] hover:bg-yr-gold/90"
           >
             <FileText className="h-4 w-4" />
             Ouvrir la FDR

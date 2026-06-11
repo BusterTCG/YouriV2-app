@@ -239,7 +239,7 @@ export function AddressAutocomplete({
                     international (Photon). Aide à comprendre la qualité de la
                     suggestion en un coup d'œil. */}
                 {s.source === "photon" ? (
-                  <Globe className="h-3.5 w-3.5 mt-0.5 text-[--yr-gold] shrink-0" />
+                  <Globe className="h-3.5 w-3.5 mt-0.5 text-yr-gold shrink-0" />
                 ) : (
                   <MapPin className="h-3.5 w-3.5 mt-0.5 text-muted-foreground shrink-0" />
                 )}

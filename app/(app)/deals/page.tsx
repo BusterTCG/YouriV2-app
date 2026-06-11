@@ -96,7 +96,7 @@ export default async function DealsPage() {
                 <CardHeader>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <Icon className="h-4 w-4 text-[--yr-gold]" />
+                      <Icon className="h-4 w-4 text-yr-gold" />
                       <CardTitle className="text-base">{cat.label}</CardTitle>
                     </div>
                     {cat.wip && (
@@ -122,7 +122,7 @@ export default async function DealsPage() {
                     <span className="text-xs uppercase tracking-wider text-muted-foreground">
                       Marge Youri
                     </span>
-                    <span className="text-base font-medium tabular-nums text-[--yr-gold]">
+                    <span className="text-base font-medium tabular-nums text-yr-gold">
                       {eur(data.totalMarge)}
                     </span>
                   </div>

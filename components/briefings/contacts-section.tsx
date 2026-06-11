@@ -118,7 +118,7 @@ export function ContactsSection({ briefingId, rows }: Props) {
             <span className="font-medium">{displayName}</span>
             {isInline && (
               <span
-                className="text-[10px] uppercase tracking-wider text-[--yr-gold] border border-[--yr-gold]/40 rounded px-1.5 py-0.5"
+                className="text-[10px] uppercase tracking-wider text-yr-gold border border-yr-gold/40 rounded px-1.5 py-0.5"
                 title="Contact ponctuel — non enregistré dans l'annuaire KN"
               >
                 Ponctuel
@@ -260,8 +260,8 @@ function NewKnContactRow({
   }
 
   return (
-    <div className="rounded-md border-2 border-[--yr-gold]/30 bg-[--yr-gold]/5 p-3 space-y-2">
-      <div className="text-[10px] uppercase tracking-wider text-[--yr-gold] font-semibold">
+    <div className="rounded-md border-2 border-yr-gold/30 bg-yr-gold/5 p-3 space-y-2">
+      <div className="text-[10px] uppercase tracking-wider text-yr-gold font-semibold">
         Depuis l&apos;annuaire KN
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -338,8 +338,8 @@ function NewInlineContactRow({
   }
 
   return (
-    <div className="rounded-md border-2 border-[--yr-gold]/30 bg-[--yr-gold]/5 p-3 space-y-2">
-      <div className="text-[10px] uppercase tracking-wider text-[--yr-gold] font-semibold flex items-center gap-1.5">
+    <div className="rounded-md border-2 border-yr-gold/30 bg-yr-gold/5 p-3 space-y-2">
+      <div className="text-[10px] uppercase tracking-wider text-yr-gold font-semibold flex items-center gap-1.5">
         Saisie ponctuelle
         <span className="text-muted-foreground/80 normal-case font-normal italic">
           — pas enregistré dans l&apos;annuaire KN
@@ -472,8 +472,8 @@ function NewPangeeContactRow({
   }
 
   return (
-    <div className="rounded-md border-2 border-[--yr-gold]/30 bg-[--yr-gold]/5 p-3 space-y-2">
-      <div className="text-[10px] uppercase tracking-wider text-[--yr-gold] font-semibold flex items-center gap-1.5">
+    <div className="rounded-md border-2 border-yr-gold/30 bg-yr-gold/5 p-3 space-y-2">
+      <div className="text-[10px] uppercase tracking-wider text-yr-gold font-semibold flex items-center gap-1.5">
         <Users2 className="h-3 w-3" />
         Équipe Pangee
         <span className="text-muted-foreground/80 normal-case font-normal italic">

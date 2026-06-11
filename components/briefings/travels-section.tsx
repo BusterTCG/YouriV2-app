@@ -504,8 +504,8 @@ function TravelFormShell({
   submitLabel: string;
 }) {
   return (
-    <div className="rounded-md border-2 border-[--yr-gold]/30 bg-[--yr-gold]/5 p-3 space-y-2">
-      <div className="text-[10px] uppercase tracking-wider font-semibold text-[--yr-gold] flex items-center gap-1.5">
+    <div className="rounded-md border-2 border-yr-gold/30 bg-yr-gold/5 p-3 space-y-2">
+      <div className="text-[10px] uppercase tracking-wider font-semibold text-yr-gold flex items-center gap-1.5">
         {isEdit ? <Pencil className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
         {title}
       </div>

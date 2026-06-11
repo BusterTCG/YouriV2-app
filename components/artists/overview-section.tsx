@@ -120,7 +120,7 @@ export function OverviewSection({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="space-y-0.5">
           <h2 className="text-sm font-semibold uppercase tracking-wider flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-[--yr-gold]" />
+            <TrendingUp className="h-4 w-4 text-yr-gold" />
             KPIs financiers
           </h2>
           <p className="text-[11px] text-muted-foreground">
@@ -142,7 +142,7 @@ export function OverviewSection({
               className={cn(
                 "rounded-md border p-4 space-y-1.5 transition-colors",
                 def.accent
-                  ? "border-[--yr-gold]/40 bg-[--yr-gold]/5"
+                  ? "border-yr-gold/40 bg-yr-gold/5"
                   : "bg-muted/20",
               )}
             >
@@ -153,7 +153,7 @@ export function OverviewSection({
               <div
                 className={cn(
                   "text-2xl font-semibold tabular-nums",
-                  def.accent && "text-[--yr-gold]",
+                  def.accent && "text-yr-gold",
                 )}
               >
                 {formatEur(bd.total)}

@@ -472,9 +472,9 @@ export function BriefingEditor({
                   setRestaurantCovered(e.target.checked);
                   autoSave({ restaurantCovered: e.target.checked });
                 }}
-                className="h-4 w-4 accent-[--yr-gold]"
+                className="h-4 w-4 accent-yr-gold"
               />
-              <CheckCircle2 className="h-3.5 w-3.5 text-[--yr-gold]" />
+              <CheckCircle2 className="h-3.5 w-3.5 text-yr-gold" />
               Repas pris en charge (même sans adresse encore)
             </label>
             <Field label="Nom du restaurant">
@@ -510,7 +510,7 @@ export function BriefingEditor({
                   setPerDiemFlag(e.target.checked);
                   autoSave({ perDiemFlag: e.target.checked });
                 }}
-                className="h-4 w-4 accent-[--yr-gold]"
+                className="h-4 w-4 accent-yr-gold"
               />
               <Input
                 type="number"
@@ -627,7 +627,7 @@ function Section({
   return (
     <section className="rounded-md border bg-card p-4 space-y-3">
       <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider">
-        <span className="h-7 w-7 rounded-md bg-[--yr-gold]/15 text-[--yr-gold] inline-flex items-center justify-center [&_svg]:h-3.5 [&_svg]:w-3.5">
+        <span className="h-7 w-7 rounded-md bg-yr-gold/15 text-yr-gold inline-flex items-center justify-center [&_svg]:h-3.5 [&_svg]:w-3.5">
           {icon}
         </span>
         {title}
