@@ -149,11 +149,19 @@ export async function updateProductionLine(
       select: { dealId: true },
     });
 
-    // Recompute uniquement si la modif touche au calcul de marge
-    // (amount ou coveredByVenue changent la marge ; le reste non).
+    // Stan 2026-06-11 (audit) : recomputeShowFinancials pose aussi
+    // budgetPaymentStatus/budgetPaidAt (dashboard/reporting) → il faut le
+    // relancer quand l'encaissement d'une ligne REVENUE change, pas seulement
+    // sur la marge. Les MF ne dépendent que de la marge.
     const marginChanged = amount !== undefined || coveredByVenue !== undefined;
-    if (marginChanged) {
+    const paymentChanged =
+      paymentStatus !== undefined ||
+      isPaye !== undefined ||
+      paidAt !== undefined;
+    if (marginChanged || paymentChanged) {
       await recomputeShowFinancials(line.dealId);
+    }
+    if (marginChanged) {
       await recomputeMfForDeal(line.dealId);
     }
 

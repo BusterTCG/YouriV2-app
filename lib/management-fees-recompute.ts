@@ -54,7 +54,7 @@ export async function recomputeMfForDeal(dealId: string): Promise<void> {
       },
       managementFees: {
         where: { deletedAt: null },
-        select: { id: true, sharePct: true },
+        select: { id: true, sharePct: true, paymentStatus: true },
       },
     },
   });
@@ -100,10 +100,20 @@ export async function recomputeMfForDeal(dealId: string): Promise<void> {
     margeYouri = budget - totalArtistes - totalCharges;
   }
 
-  // Update tous les fees en parallèle — le sharePct ne change pas, juste
+  // Update les fees NON payés en parallèle — le sharePct ne change pas, juste
   // l'amount snapshot.
+  //
+  // Stan 2026-06-11 (audit) : on SKIPPE les lignes déjà PAID. Le montant d'un
+  // MF payé est un snapshot du virement réel effectué — le réécrire (ex. après
+  // ajout d'une charge oubliée) falsifierait l'historique de rémunération
+  // (la ligne "Payé 500 €" deviendrait "Payé 450 €" alors que le virement
+  // était bien de 500 €). Tant qu'une ligne n'est pas versée, on la recalcule
+  // normalement à chaque mutation de marge.
+  const recomputable = deal.managementFees.filter(
+    (fee) => fee.paymentStatus !== "PAID",
+  );
   await Promise.all(
-    deal.managementFees.map((fee) => {
+    recomputable.map((fee) => {
       const sharePctNum = Number(fee.sharePct);
       const amount =
         margeYouri > 0

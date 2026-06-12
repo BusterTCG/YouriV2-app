@@ -8,8 +8,13 @@
  *
  * Source : `youri-app/lib/db.ts` lignes 76-82, 121-128, 172-180.
  *
- * Assignations + dueOffsets laissés à `null` (V1 n'en avait pas). Stan les
- * ajustera depuis `/settings/templates` après les premiers deals tests.
+ * Assignation (Stan 2026-06-11 audit) : la 1re étape de chaque pipeline est
+ * attribuée à "stan" par défaut, pour qu'un nouveau deal soit immédiatement
+ * visible dans /taches (sinon pipeline 100% non attribué = deal invisible
+ * partout, le seul filet étant la section "À attribuer"). Les étapes suivantes
+ * restent `null` — assignées au cas par cas, ou captées par "À attribuer".
+ * Stan affine tout depuis /settings/templates.
+ * dueOffsets laissés à `null` (feature retirée de l'UI).
  *
  * Usage :
  *   npx tsx prisma/seed-task-templates.ts          → skip si templates existent
@@ -29,7 +34,7 @@ interface TemplateSeed {
 const TEMPLATES: Record<DealCategory, TemplateSeed[]> = {
   // Repris de youri-app/lib/db.ts:76 (BOOKING_TACHES_DEFAULT)
   BOOKING: [
-    { order: 0, label: "Validation du projet" },
+    { order: 0, label: "Validation du projet", defaultAssigneeKey: "stan" },
     { order: 1, label: "Validation des artistes" },
     { order: 2, label: "Envoi du devis" },
     { order: 3, label: "Envoi de FDR" },
@@ -37,7 +42,7 @@ const TEMPLATES: Record<DealCategory, TemplateSeed[]> = {
   ],
   // Repris de youri-app/lib/db.ts:172 (PROD_EXE_TACHES_DEFAULT)
   PROD_EXE: [
-    { order: 0, label: "Validation date" },
+    { order: 0, label: "Validation date", defaultAssigneeKey: "stan" },
     { order: 1, label: "Signature du contrat" },
     { order: 2, label: "Mise en ligne" },
     { order: 3, label: "Gestion VHR" },
@@ -47,7 +52,7 @@ const TEMPLATES: Record<DealCategory, TemplateSeed[]> = {
   ],
   // Repris de youri-app/lib/db.ts:121 (INTERMITTENCE_TACHES_DEFAULT)
   CACHETS: [
-    { order: 0, label: "Validation du montant Artiste" },
+    { order: 0, label: "Validation du montant Artiste", defaultAssigneeKey: "stan" },
     { order: 1, label: "Validation du Moovin Motion Artiste" },
     { order: 2, label: "Envoi de la facture Artiste" },
     { order: 3, label: "Paiement Artiste de la facture" },

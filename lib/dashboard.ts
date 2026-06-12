@@ -173,16 +173,33 @@ type DealWithFinancials = {
   category: DealCategory;
   budgetAmount: Prisma.Decimal | null;
   commissionAmount: Prisma.Decimal | null;
+  cachetsFeesPct: Prisma.Decimal | null;
+  linkedToOwnProd: boolean;
   dealArtistes: Array<{ cachetAmount: Prisma.Decimal | null }>;
   dealCharges: Array<{ amount: Prisma.Decimal | null }>;
   managementFees: Array<{ amount: Prisma.Decimal | null }>;
 };
 
+/**
+ * Marge BRUTE Pangee par catégorie — formules canoniques alignées sur les
+ * listes (Stan 2026-06-11 audit : avant ce fix, CACHETS utilisait
+ * `budget − artistes − charges` ce qui surévaluait la marge ~37% au lieu
+ * de 10%).
+ *   - PROD_EXE : commissionAmount scalar (= 15% × CA recompute)
+ *   - CACHETS  : budget × cachetsFeesPct% (0 si linkedToOwnProd) — cf.
+ *                cachets-list.ts:277
+ *   - BOOKING  : budget − Σ artistes − Σ charges
+ */
 function computeMargeBrute(d: DealWithFinancials): number {
   if (d.category === "PROD_EXE") {
     return d.commissionAmount != null ? Number(d.commissionAmount) : 0;
   }
   const budget = d.budgetAmount != null ? Number(d.budgetAmount) : 0;
+  if (d.category === "CACHETS") {
+    if (d.linkedToOwnProd || budget <= 0) return 0;
+    const pct = d.cachetsFeesPct != null ? Number(d.cachetsFeesPct) : 10;
+    return Math.round((budget * pct) / 100);
+  }
   const artistes = d.dealArtistes.reduce(
     (acc, a) => acc + (a.cachetAmount != null ? Number(a.cachetAmount) : 0),
     0,
@@ -243,6 +260,9 @@ export async function getDashboardData(opts: {
 
   // Inclusion commune pour les calculs de marge.
   const FINANCIAL_INCLUDE = {
+    // Scalars nécessaires au calcul de marge CACHETS (Stan 2026-06-11 audit).
+    cachetsFeesPct: true,
+    linkedToOwnProd: true,
     dealArtistes: {
       where: { deletedAt: null },
       select: { cachetAmount: true },

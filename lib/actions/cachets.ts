@@ -29,7 +29,7 @@ async function recomputeCachetsBudget(dealId: string): Promise<void> {
   const [prestations, deal] = await Promise.all([
     prisma.cachetPrestation.findMany({
       where: { dealId, deletedAt: null },
-      select: { amount: true },
+      select: { amount: true, paymentStatus: true, paidAt: true },
     }),
     prisma.deal.findUnique({
       where: { id: dealId },
@@ -46,9 +46,32 @@ async function recomputeCachetsBudget(dealId: string): Promise<void> {
     0,
   );
 
+  // Stan 2026-06-11 (audit) : on normalise l'encaissement sur le deal pour que
+  // le dashboard/reporting (filtre budgetPaymentStatus=PAID) captent les deals
+  // CACHETS — avant ce fix ils étaient toujours invisibles. Même règle que
+  // cachets-list.ts (`allPrestationsPaid`).
+  const significant = prestations.filter(
+    (p) => (p.amount != null ? Number(p.amount) : 0) > 0,
+  );
+  const allPrestationsPaid =
+    significant.length > 0 &&
+    significant.every((p) => p.paymentStatus === "PAID");
+  let prestationsPaidAt: Date | null = null;
+  for (const p of significant) {
+    if (p.paymentStatus === "PAID" && p.paidAt) {
+      if (!prestationsPaidAt || p.paidAt > prestationsPaidAt) {
+        prestationsPaidAt = p.paidAt;
+      }
+    }
+  }
+
   await prisma.deal.update({
     where: { id: dealId },
-    data: { budgetAmount: total > 0 ? new Prisma.Decimal(total) : null },
+    data: {
+      budgetAmount: total > 0 ? new Prisma.Decimal(total) : null,
+      budgetPaymentStatus: allPrestationsPaid ? "PAID" : "N_A",
+      budgetPaidAt: allPrestationsPaid ? prestationsPaidAt : null,
+    },
   });
 
   // Auto-update du cachet artiste (sauf mode linkedToOwnProd).
@@ -253,9 +276,18 @@ export async function updateCachetPrestation(
       select: { dealId: true },
     });
 
-    // Si le montant a changé → recompute budget + MF
-    if (amount !== undefined) {
+    // Stan 2026-06-11 (audit) : le budget se recalcule si le montant OU
+    // l'encaissement change (le recompute pose désormais budgetPaymentStatus/
+    // budgetPaidAt utilisés par dashboard/reporting). La marge (MF) ne dépend
+    // que du montant.
+    const paymentChanged =
+      paymentStatus !== undefined ||
+      isPaye !== undefined ||
+      paidAt !== undefined;
+    if (amount !== undefined || paymentChanged) {
       await recomputeCachetsBudget(updated.dealId);
+    }
+    if (amount !== undefined) {
       await recomputeMfForDeal(updated.dealId);
     }
 

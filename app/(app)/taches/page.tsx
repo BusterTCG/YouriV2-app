@@ -1,4 +1,4 @@
-import { CheckSquare, Clock, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckSquare, Clock, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { requireUser } from "@/lib/auth/users";
@@ -6,6 +6,7 @@ import {
   getCurrentTasksForAssignee,
   getUpcomingTasksForAssignee,
   getAllCurrentTasks,
+  getUnassignedCurrentTasks,
   getTasksKpiForAssignee,
   type TaskWithDeal,
 } from "@/lib/queries/tasks";
@@ -41,12 +42,16 @@ export default async function TachesPage({ searchParams }: PageProps) {
   // Pangee key de l'user — défaut "stan" si pas défini (dev seed).
   const myKey = user.pangeeKey ?? "stan";
 
-  const [myTasks, upcomingTasks, allTasks, kpi] = await Promise.all([
-    getCurrentTasksForAssignee(myKey),
-    getUpcomingTasksForAssignee(myKey),
-    tab === "team" ? getAllCurrentTasks() : Promise.resolve([] as TaskWithDeal[]),
-    getTasksKpiForAssignee(myKey),
-  ]);
+  const [myTasks, upcomingTasks, allTasks, unassignedTasks, kpi] =
+    await Promise.all([
+      getCurrentTasksForAssignee(myKey),
+      getUpcomingTasksForAssignee(myKey),
+      tab === "team"
+        ? getAllCurrentTasks()
+        : Promise.resolve([] as TaskWithDeal[]),
+      getUnassignedCurrentTasks(),
+      getTasksKpiForAssignee(myKey),
+    ]);
 
   // Groupage tab "Équipe" : par assigné (Stan/Certe/Angath/Non attribué).
   const byAssignee = groupByAssignee(allTasks);
@@ -120,6 +125,31 @@ export default async function TachesPage({ searchParams }: PageProps) {
           </span>
         </TabLink>
       </div>
+
+      {/* À attribuer — Stan 2026-06-11 audit : deals dont la tâche courante
+          n'a aucun assigné. Invisibles ailleurs (ni Mes tâches, ni À venir, ni
+          Équipe) tant que personne ne se les attribue. Affiché sur les 2 tabs
+          car c'est une file de triage partagée. Cliquer ouvre le deal pour
+          assigner via le pipeline. */}
+      {unassignedTasks.length > 0 && (
+        <div className="rounded-md border-2 border-amber-500/40 bg-amber-500/5 p-3 space-y-2">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-amber-700 dark:text-amber-400 font-semibold">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            À attribuer
+            <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] normal-case">
+              {unassignedTasks.length}
+            </span>
+            <span className="text-[10px] text-muted-foreground italic normal-case font-normal">
+              personne n&apos;est encore sur ces deals — ouvre-les pour assigner
+            </span>
+          </div>
+          <div className="space-y-2">
+            {unassignedTasks.map((t) => (
+              <TaskCard key={t.id} task={t} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       {tab === "mine" ? (

@@ -202,6 +202,20 @@ export async function getAllCurrentTasks(): Promise<TaskWithDeal[]> {
 }
 
 /**
+ * Tâches courantes NON attribuées — "À débloquer" (Stan 2026-06-11 audit).
+ *
+ * Retourne la 1re TODO de chaque deal dont l'assigné est null. Ces deals
+ * étaient invisibles partout (ni "Mes tâches", ni "À venir", ni "Équipe")
+ * tant que personne ne s'était attribué la tâche courante — un trou noir
+ * silencieux puisque le seed des templates ne pose aucun assigné par défaut.
+ * Cette section les rend visibles pour qu'un associé se les attribue.
+ */
+export async function getUnassignedCurrentTasks(): Promise<TaskWithDeal[]> {
+  const allFirstTodos = await getFirstTodoPerDeal();
+  return allFirstTodos.filter((t) => t.assigneeKey == null);
+}
+
+/**
  * Toutes les tâches d'un deal (tous statuts confondus), triées par order ASC.
  * Utilisée dans la section "Tâches" inline sur la fiche détail deal.
  */
