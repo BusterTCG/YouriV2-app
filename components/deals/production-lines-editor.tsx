@@ -33,6 +33,7 @@ import {
   productionLineHint,
 } from "@/lib/production-line-labels";
 import { formatEur } from "@/components/deals/deal-helpers";
+import { SensitiveAmount } from "@/components/dashboard/sensitive-amount";
 import {
   upsertProductionLine,
   addEmptyProductionLine,
@@ -415,7 +416,7 @@ export function ProductionLinesEditor({
                 : "text-red-700 dark:text-red-400",
             )}
           >
-            {formatEur(margin)}
+            <SensitiveAmount value={margin} />
           </div>
         </div>
       </div>
@@ -637,7 +638,7 @@ function Section({
                 totalAccent === "negative" && "text-red-600 dark:text-red-400",
               )}
             >
-              {formatEur(total)}
+              <SensitiveAmount value={total} />
             </span>
           </div>
         )}

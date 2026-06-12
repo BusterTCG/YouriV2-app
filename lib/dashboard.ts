@@ -401,17 +401,17 @@ export async function getDashboardData(opts: {
           },
         })
       : Promise.resolve([]),
-    // Tâches en cours équipe : total des 1re TODO par deal (vue d'ensemble).
-    prisma.task.count({
+    // Tâches en cours équipe : nombre de DEALS avec au moins une tâche TODO
+    // (= 1 par deal, cohérent avec "Mes tâches" qui montre la tâche courante
+    // de chaque deal). Stan 2026-06-11 audit : avant on comptait TOUTES les
+    // TODO (≈ 6× car ~6 tâches/pipeline), chiffre faux.
+    prisma.deal.count({
       where: {
-        status: "TODO",
         deletedAt: null,
-        deal: {
-          deletedAt: null,
-          status: { not: "ANNULE" },
-          ...catWhere,
-          ...artistWhere,
-        },
+        status: { not: "ANNULE" },
+        ...catWhere,
+        ...artistWhere,
+        tasks: { some: { status: "TODO", deletedAt: null } },
       },
     }),
     // KPI MF encaissés par l'user connecté sur la période. Stan 2026-06-02 :
@@ -456,6 +456,11 @@ export async function getDashboardData(opts: {
     // Alerte "À facturer > 30j" : deals dont la date show est passée depuis
     // plus de 30 jours mais dont le budget n'est toujours pas PAID. Stan
     // 2026-06-02 : argent à aller chercher en priorité.
+    // Stan 2026-06-11 audit : on filtre sur `not PAID` (au lieu de la liste
+    // TO_INVOICE/INVOICED/DISPUTE) pour capter aussi le statut par défaut N_A
+    // — le cas le plus courant (deal créé, montant saisi, statut jamais
+    // statué). On exige budgetAmount > 0 pour ne pas alerter sur un deal sans
+    // budget.
     prisma.deal.findMany({
       where: {
         ...catWhere,
@@ -463,7 +468,8 @@ export async function getDashboardData(opts: {
         deletedAt: null,
         status: { not: "ANNULE" },
         date: { lt: threshold30dAgo },
-        budgetPaymentStatus: { in: ["TO_INVOICE", "INVOICED", "DISPUTE"] },
+        budgetPaymentStatus: { not: "PAID" },
+        budgetAmount: { gt: 0 },
       },
       orderBy: { date: "asc" },
       take: 10,
@@ -486,10 +492,11 @@ export async function getDashboardData(opts: {
         deletedAt: null,
         status: { not: "ANNULE" },
         budgetPaymentStatus: "PAID",
+        // Stan 2026-06-11 audit : `not PAID` capte aussi le défaut N_A.
         dealArtistes: {
           some: {
             deletedAt: null,
-            paymentStatus: { in: ["TO_INVOICE", "INVOICED", "DISPUTE"] },
+            paymentStatus: { not: "PAID" },
             cachetAmount: { gt: 0 },
           },
         },
@@ -504,7 +511,7 @@ export async function getDashboardData(opts: {
         dealArtistes: {
           where: {
             deletedAt: null,
-            paymentStatus: { in: ["TO_INVOICE", "INVOICED", "DISPUTE"] },
+            paymentStatus: { not: "PAID" },
             cachetAmount: { gt: 0 },
           },
           select: {

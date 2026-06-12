@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { formatEur } from "./deal-helpers";
+import { SensitiveAmount } from "@/components/dashboard/sensitive-amount";
 
 /**
  * Header de section deal — copie fidèle KN production-lines-editor.tsx § Section.
@@ -61,7 +61,7 @@ export function DealSectionHeader({
               totalAccent === "negative" && "text-red-600 dark:text-red-400",
             )}
           >
-            {formatEur(total)}
+            <SensitiveAmount value={total} />
           </span>
         </div>
       ) : null}

@@ -1,6 +1,7 @@
 import { Sparkles } from "lucide-react";
-import { formatEur, formatPct } from "./deal-helpers";
+import { formatPct } from "./deal-helpers";
 import { cn } from "@/lib/utils";
+import { SensitiveAmount } from "@/components/dashboard/sensitive-amount";
 
 /**
  * Section Résultat — style KN show "RÉPARTITION CO-PROD".
@@ -39,18 +40,22 @@ export function DealResultSection({
       <div className="px-4 py-3 space-y-1 text-sm">
         <div className="flex justify-between">
           <span>Budget Youri</span>
-          <span className="tabular-nums">{formatEur(budgetAmount)}</span>
+          <span className="tabular-nums">
+            <SensitiveAmount value={budgetAmount} />
+          </span>
         </div>
         <div className="flex justify-between text-muted-foreground">
           <span>− Total artistes</span>
           <span className="tabular-nums">
-            {totalArtistes > 0 ? `- ${formatEur(totalArtistes)}` : formatEur(totalArtistes)}
+            {totalArtistes > 0 && "- "}
+            <SensitiveAmount value={totalArtistes} />
           </span>
         </div>
         <div className="flex justify-between text-muted-foreground">
           <span>− Total charges</span>
           <span className="tabular-nums">
-            {totalCharges > 0 ? `- ${formatEur(totalCharges)}` : formatEur(totalCharges)}
+            {totalCharges > 0 && "- "}
+            <SensitiveAmount value={totalCharges} />
           </span>
         </div>
       </div>
@@ -88,7 +93,7 @@ export function DealResultSection({
                 : "text-red-700 dark:text-red-400",
             )}
           >
-            {formatEur(marge)}
+            <SensitiveAmount value={marge} />
           </div>
           {margePct != null && (
             <div className="text-xs text-muted-foreground tabular-nums">

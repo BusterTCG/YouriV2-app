@@ -25,7 +25,7 @@ import type { VenueDealKind } from "@prisma/client";
 import { updateShowDetails } from "@/lib/actions/prod-executive";
 import { syncShowTaskToggle } from "@/lib/actions/sync-show-tasks";
 import { MultiDatesPicker } from "./multi-dates-picker";
-import { formatEur } from "@/components/deals/deal-helpers";
+import { useEur } from "@/lib/privacy-context";
 import { cn } from "@/lib/utils";
 
 /**
@@ -93,6 +93,7 @@ export function ShowSummaryCard({
   vhrBooked,
   totalRevenue,
 }: Props) {
+  const eur = useEur();
   const [pending, startTransition] = useTransition();
   const [persistError, setPersistError] = useState<string | null>(null);
 
@@ -436,7 +437,7 @@ export function ShowSummaryCard({
         <ReadOnlyStat
           icon={<Ticket className="h-3.5 w-3.5" />}
           label="Ticket moyen"
-          value={ticketMoyen != null ? formatEur(ticketMoyen) : "—"}
+          value={ticketMoyen != null ? eur(ticketMoyen) : "—"}
           hint={
             venueDealKind === "CO_REAL" ? "CA global ÷ payants" : "Recettes ÷ payants"
           }

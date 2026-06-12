@@ -2,7 +2,8 @@
 
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatEur, formatPct } from "./deal-helpers";
+import { formatPct } from "./deal-helpers";
+import { useEur } from "@/lib/privacy-context";
 
 /**
  * Section Marge Brute Pangee — variante CACHETS (Stan 2026-05-30).
@@ -27,6 +28,7 @@ export function CachetMargeSection({
   cachetsFeesPct,
   allPrestationsPaid,
 }: Props) {
+  const eur = useEur();
   const margeBrute =
     totalBudget > 0 ? Math.round((totalBudget * cachetsFeesPct) / 100) : 0;
   const margePct = totalBudget > 0 ? (margeBrute / totalBudget) * 100 : null;
@@ -43,12 +45,12 @@ export function CachetMargeSection({
       <div className="px-4 py-3 space-y-1 text-sm">
         <div className="flex justify-between">
           <span>CA total facturé</span>
-          <span className="tabular-nums">{formatEur(totalBudget)}</span>
+          <span className="tabular-nums">{eur(totalBudget)}</span>
         </div>
         <div className="flex justify-between text-muted-foreground">
           <span>× Frais Pangee {cachetsFeesPct}%</span>
           <span className="tabular-nums">
-            ↳ {formatEur(margeBrute)}
+            ↳ {eur(margeBrute)}
           </span>
         </div>
       </div>
@@ -84,7 +86,7 @@ export function CachetMargeSection({
                 : "text-red-700 dark:text-red-400",
             )}
           >
-            {formatEur(margeBrute)}
+            {eur(margeBrute)}
           </div>
           {margePct != null && (
             <div className="text-xs text-muted-foreground tabular-nums">

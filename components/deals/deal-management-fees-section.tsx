@@ -8,7 +8,7 @@ import {
   setManagementFeePool,
   updateManagementFee,
 } from "@/lib/actions/management-fees";
-import { formatEur } from "@/components/deals/deal-helpers";
+import { SensitiveAmount } from "@/components/dashboard/sensitive-amount";
 import { cn } from "@/lib/utils";
 import { PaidToggle } from "./paid-toggle";
 import { DealSectionHeader } from "./deal-section-header";
@@ -202,7 +202,7 @@ export function DealManagementFeesSection({
                   : "text-red-700 dark:text-red-400",
               )}
             >
-              {formatEur(margeNette)}
+              <SensitiveAmount value={margeNette} />
             </div>
             {budgetAmount > 0 && (
               <div className="text-xs text-muted-foreground tabular-nums">
@@ -370,7 +370,7 @@ function ManagementFeeRow({ fee }: { fee: DealManagementFeeRow }) {
 
       {/* Montant € */}
       <span className="font-medium shrink-0 text-right sm:w-20">
-        {formatEur(fee.amount ?? 0)}
+        <SensitiveAmount value={fee.amount ?? 0} />
       </span>
 
       {/* PaidToggle manuel — Stan coche quand il a versé le cash à l'associé */}
