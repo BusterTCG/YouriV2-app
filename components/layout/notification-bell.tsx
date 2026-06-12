@@ -68,7 +68,7 @@ export function NotificationBell({ notifications }: Props) {
       <PopoverContent
         align="end"
         sideOffset={6}
-        className="w-[380px] max-h-[70vh] overflow-y-auto p-0"
+        className="w-[calc(100vw-2rem)] sm:w-[380px] max-h-[70vh] overflow-y-auto p-0"
       >
         {/* Header */}
         <div className="px-3 py-2 border-b bg-muted/30 flex items-center justify-between gap-2">

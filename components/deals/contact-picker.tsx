@@ -112,7 +112,7 @@ export function ContactPicker({ value, onChange, className }: Props) {
           </div>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[380px] p-0" align="start">
+      <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[380px] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="Rechercher (nom, société, ville…)"

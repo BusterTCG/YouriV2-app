@@ -118,7 +118,7 @@ export function DealPipelineBar({ dealId, tasks }: Props) {
       <PopoverContent
         align="start"
         sideOffset={6}
-        className="w-[480px] max-h-[70vh] overflow-y-auto p-3"
+        className="w-[calc(100vw-2rem)] sm:w-[480px] max-h-[70vh] overflow-y-auto p-3"
       >
         <div className="flex items-center justify-between gap-2 mb-2 px-1">
           <div className="flex items-center gap-2">
@@ -220,9 +220,12 @@ function PipelineList({
 
   return (
     <div className="space-y-2 pb-1">
-      <div className="rounded-md border overflow-hidden bg-card">
+      {/* Stan 2026-06-02 : sur mobile chaque tâche dans sa propre card pour
+          mieux ressortir visuellement. Desktop garde le pattern compact en
+          divide-y (dense pour lecture rapide). */}
+      <div className="space-y-2 sm:space-y-0 sm:rounded-md sm:border sm:overflow-hidden sm:bg-card">
         {orderedTasks.length === 0 ? (
-          <div className="px-3 py-6 text-xs text-muted-foreground italic text-center">
+          <div className="rounded-md border bg-card px-3 py-6 text-xs text-muted-foreground italic text-center">
             Aucune tâche.
           </div>
         ) : (
@@ -235,7 +238,7 @@ function PipelineList({
               items={orderedIds}
               strategy={verticalListSortingStrategy}
             >
-              <div className="divide-y">
+              <div className="space-y-2 sm:space-y-0 sm:divide-y">
                 {orderedTasks.map((t) => (
                   <TaskRow
                     key={t.id}
@@ -347,11 +350,13 @@ function TaskRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex items-center gap-1.5 px-2 py-1 hover:bg-accent/30 transition-colors text-xs",
+        // Mobile : card encadrée avec ombre légère. Desktop : pas de bordure
+        // (le wrapper parent gère le divide-y dense).
+        "flex items-center gap-1.5 px-3 py-2 sm:px-2 sm:py-1 text-xs transition-colors rounded-md border sm:rounded-none sm:border-0 bg-card sm:bg-transparent hover:bg-accent/30",
         pending && "opacity-60",
         isDragging && "opacity-50 bg-blue-500/10 shadow-lg z-10 relative",
         (isDone || isSkipped) && !isDragging && "bg-muted/20",
-        isCurrent && !isDone && !isSkipped && !isDragging && "bg-blue-500/5",
+        isCurrent && !isDone && !isSkipped && !isDragging && "bg-blue-500/5 border-blue-500/40 sm:border-0",
       )}
     >
       {/* Drag handle */}
@@ -403,18 +408,20 @@ function TaskRow({
         />
       </div>
 
-      {/* Assignée (rond couleur + nom compact) */}
+      {/* Assignée (rond couleur seul sur mobile, + nom sur desktop) */}
       <div className="shrink-0">
         <Select
           value={assigneeKey || "_none"}
           onValueChange={onAssigneeChange}
           disabled={pending}
         >
-          <SelectTrigger className="h-6 text-[11px] w-auto gap-1 px-2 border-transparent hover:border-input">
+          <SelectTrigger className="h-6 text-[11px] w-auto gap-1 px-1.5 sm:px-2 border-transparent hover:border-input">
             <SelectValue placeholder="—">
               <span className="inline-flex items-center gap-1.5">
                 <AssigneeDot assigneeKey={assigneeKey || null} size="sm" />
-                {getAssigneeName(assigneeKey || null)}
+                <span className="hidden sm:inline">
+                  {getAssigneeName(assigneeKey || null)}
+                </span>
               </span>
             </SelectValue>
           </SelectTrigger>
@@ -437,8 +444,10 @@ function TaskRow({
         </Select>
       </div>
 
-      {/* Statut (chip très compact) */}
-      <TaskStatusChip status={task.status} />
+      {/* Statut (chip) — masqué sur mobile (la checkbox visuelle suffit). */}
+      <div className="hidden sm:block">
+        <TaskStatusChip status={task.status} />
+      </div>
 
       {/* Action delete */}
       <button

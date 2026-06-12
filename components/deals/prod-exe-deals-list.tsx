@@ -22,6 +22,7 @@ import type {
 } from "@/lib/prod-executive-list";
 import { formatPct, dealStatusLabel } from "./deal-helpers";
 import { DealStatusInline } from "./deal-status-inline";
+import { MobileDealCard } from "./mobile-deal-card";
 import { VENUE_DEAL_KIND_FR } from "@/lib/production-line-labels";
 import { setDealArtistStatus } from "@/lib/actions/deals";
 import { useEur } from "@/lib/privacy-context";
@@ -175,7 +176,36 @@ export function ProdExeDealsList({ deals, totals, periodLabel }: Props) {
           Aucun deal Prod Exécutive pour ces filtres.
         </div>
       ) : (
-        <div className="rounded-md border overflow-hidden">
+        <>
+        {/* Vue mobile — cards empilées. */}
+        <div className="md:hidden space-y-2">
+          {deals.map((deal) => {
+            const projectTitle =
+              deal.primaryArtistName && deal.showName
+                ? `${deal.primaryArtistName} - ${deal.showName}`
+                : deal.primaryArtistName ?? deal.showName ?? deal.title;
+            const venueLine = deal.venueName ?? deal.venueCity ?? null;
+            return (
+              <MobileDealCard
+                key={deal.id}
+                dealId={deal.id}
+                category="PROD_EXE"
+                date={deal.date}
+                title={projectTitle}
+                venue={venueLine}
+                status={deal.status as never}
+                isPaid={deal.allRevenuePaid}
+                caHt={deal.caHt}
+                margeNette={deal.margeNette}
+                margeNettePct={deal.margeNettePct}
+                isAnnule={deal.status === "ANNULE"}
+              />
+            );
+          })}
+        </div>
+
+        {/* Vue desktop — tableau classique. */}
+        <div className="hidden md:block rounded-md border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-[1400px] text-sm table-fixed xl:min-w-0 xl:w-full">
               <ColGroup />
@@ -400,6 +430,7 @@ export function ProdExeDealsList({ deals, totals, periodLabel }: Props) {
             </table>
           </div>
         </div>
+        </>
       )}
     </div>
   );

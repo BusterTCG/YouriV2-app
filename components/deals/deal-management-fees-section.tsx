@@ -327,15 +327,15 @@ function ManagementFeeBlock({
         </div>
       </div>
 
-      {/* Lignes par associé — ultra compactes */}
+      {/* Lignes par associé — ultra compactes. Indentation réduite mobile. */}
       {fees.length > 0 ? (
-        <div className="space-y-0.5 pl-5">
+        <div className="space-y-1 sm:space-y-0.5 pl-0 sm:pl-5">
           {fees.map((fee) => (
             <ManagementFeeRow key={fee.id} fee={fee} />
           ))}
         </div>
       ) : (
-        <div className="pl-5 text-[11px] text-muted-foreground italic">
+        <div className="pl-0 sm:pl-5 text-[11px] text-muted-foreground italic">
           Aucun associé — clique sur un chip pour ajouter.
         </div>
       )}
@@ -354,9 +354,14 @@ function ManagementFeeRow({ fee }: { fee: DealManagementFeeRow }) {
   }
 
   return (
-    <div className="flex items-center gap-3 text-sm tabular-nums">
+    // Stan 2026-06-02 mobile : largeurs fixes (80+40+80+128px + gaps + pl-5)
+    // débordaient sur iPhone 390px → le toggle "Encaissé" était coupé.
+    // Mobile : nom en flex-1 truncate + toggle réduit w-24. Desktop inchangé.
+    <div className="flex items-center gap-2 sm:gap-3 text-sm tabular-nums min-w-0">
       {/* Nom */}
-      <span className="font-medium w-20 shrink-0">{displayName}</span>
+      <span className="font-medium flex-1 min-w-0 truncate sm:flex-none sm:w-20 sm:shrink-0">
+        {displayName}
+      </span>
 
       {/* Part % — entier sans décimale (Stan 2026-05-26) */}
       <span className="text-muted-foreground text-xs w-10 shrink-0 text-right">
@@ -364,12 +369,12 @@ function ManagementFeeRow({ fee }: { fee: DealManagementFeeRow }) {
       </span>
 
       {/* Montant € */}
-      <span className="font-medium w-20 shrink-0 text-right">
+      <span className="font-medium shrink-0 text-right sm:w-20">
         {formatEur(fee.amount ?? 0)}
       </span>
 
       {/* PaidToggle manuel — Stan coche quand il a versé le cash à l'associé */}
-      <div className="w-32 shrink-0">
+      <div className="w-24 sm:w-32 shrink-0">
         <PaidToggle
           isOn={fee.paymentStatus === "PAID"}
           onToggle={togglePaye}

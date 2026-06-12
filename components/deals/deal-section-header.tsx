@@ -45,10 +45,12 @@ export function DealSectionHeader({
         </h2>
         {subtitle && <>{subtitle}</>}
       </div>
+      {/* Stan 2026-06-02 mobile : ml-auto pour rester aligné à droite même
+          quand le flex-wrap pousse le bloc Total sur une 2e ligne. */}
       {rightSlot ? (
-        <div className="text-right">{rightSlot}</div>
+        <div className="text-right ml-auto">{rightSlot}</div>
       ) : total !== undefined ? (
-        <div className="text-right">
+        <div className="text-right ml-auto">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mr-2">
             Total
           </span>

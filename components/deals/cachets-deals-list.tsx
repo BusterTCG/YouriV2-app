@@ -19,6 +19,7 @@ import type {
 } from "@/lib/cachets-list";
 import { formatPct, dealStatusLabel } from "./deal-helpers";
 import { DealStatusInline } from "./deal-status-inline";
+import { MobileDealCard } from "./mobile-deal-card";
 import { updateDealArtiste } from "@/lib/actions/deals";
 import { useEur } from "@/lib/privacy-context";
 
@@ -167,7 +168,33 @@ export function CachetsDealsList({ deals, totals, periodLabel }: Props) {
           Aucun deal Cachets pour ces filtres.
         </div>
       ) : (
-        <div className="rounded-md border overflow-hidden">
+        <>
+        {/* Vue mobile — cards empilées. Cachets n'a pas de lieu (paie GUSO). */}
+        <div className="md:hidden space-y-2">
+          {deals.map((deal) => {
+            const isPaid =
+              deal.allPrestationsPaid &&
+              deal.dealArtistes.every((a) => a.paymentStatus === "PAID");
+            return (
+              <MobileDealCard
+                key={deal.id}
+                dealId={deal.id}
+                category="CACHETS"
+                date={deal.date}
+                title={deal.title}
+                status={deal.status as never}
+                isPaid={isPaid}
+                caHt={deal.budgetAmount ?? 0}
+                margeNette={deal.margeNette}
+                margeNettePct={deal.margeNettePct}
+                isAnnule={deal.status === "ANNULE"}
+              />
+            );
+          })}
+        </div>
+
+        {/* Vue desktop — tableau classique. */}
+        <div className="hidden md:block rounded-md border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-[1200px] text-sm table-fixed xl:min-w-0 xl:w-full">
               <ColGroup />
@@ -378,6 +405,7 @@ export function CachetsDealsList({ deals, totals, periodLabel }: Props) {
             </table>
           </div>
         </div>
+        </>
       )}
     </div>
   );

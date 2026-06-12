@@ -58,8 +58,8 @@ export function ArtistFilterCombobox({
   const selected = value ? artists.find((a) => a.slug === value) : null;
 
   return (
-    <div className="flex items-center gap-1.5">
-      <label className="text-xs uppercase tracking-wider text-muted-foreground">
+    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-1.5 min-w-0">
+      <label className="text-[10px] sm:text-xs uppercase tracking-wider text-muted-foreground font-semibold shrink-0">
         {label}
       </label>
       <Popover open={open} onOpenChange={setOpen}>
@@ -69,19 +69,19 @@ export function ArtistFilterCombobox({
             role="combobox"
             aria-expanded={open}
             className={cn(
-              "h-8 justify-between gap-2 min-w-[160px] font-normal",
+              "h-9 sm:h-8 w-full sm:w-auto sm:min-w-[160px] justify-between gap-2 font-normal",
               !selected && "text-muted-foreground",
               className,
             )}
           >
-            <span className="inline-flex items-center gap-1.5 truncate">
+            <span className="inline-flex items-center gap-1.5 truncate min-w-0">
               <Mic2 className="h-3.5 w-3.5 shrink-0" />
-              {selected ? selected.name : "Tous"}
+              <span className="truncate">{selected ? selected.name : "Tous"}</span>
             </span>
             <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[260px] p-0" align="start">
+        <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[260px] p-0" align="start">
           <Command>
             <CommandInput placeholder="Rechercher un artiste…" />
             <CommandList>

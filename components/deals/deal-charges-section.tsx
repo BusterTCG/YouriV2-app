@@ -120,48 +120,59 @@ function ChargeRow({ row }: { row: BookingDealChargeRow }) {
   }
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2 hover:bg-accent/30 transition-colors flex-wrap sm:flex-nowrap">
-      {/* Label — Stan 2026-06-01 : w-[200px] fixe pour aligner avec Budget /
-          Artistes. */}
-      <div className="w-full sm:w-[200px] sm:shrink-0 min-w-0">
-        <EditableLabel value={row.label} onCommit={commitLabel} />
+    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-3 py-2 hover:bg-accent/30 transition-colors">
+      {/* Label — w-[200px] fixe desktop, full width mobile avec bouton
+          supprimer aligné à droite. */}
+      <div className="flex items-center justify-between gap-2 sm:w-[200px] sm:shrink-0 min-w-0">
+        <div className="flex-1 min-w-0">
+          <EditableLabel value={row.label} onCommit={commitLabel} />
+        </div>
+        <button
+          type="button"
+          onClick={handleRemove}
+          disabled={removing}
+          title="Supprimer cette charge"
+          className="sm:hidden h-7 w-7 shrink-0 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
       </div>
 
-      {/* Montant — w-32 (uniforme avec Budget / Artistes) */}
-      <div className="w-32 shrink-0">
-        <MoneyInput value={row.amount} onCommit={commitAmount} />
+      {/* Grid 2-col mobile / contents desktop pour les inputs */}
+      <div className="grid grid-cols-2 gap-2 sm:contents">
+        <div className="sm:w-32 sm:shrink-0">
+          <MoneyInput value={row.amount} onCommit={commitAmount} />
+        </div>
+
+        <div className="hidden sm:block sm:w-16 sm:shrink-0" />
+
+        <div className="sm:w-36 sm:shrink-0">
+          <PaidToggle
+            isOn={row.paymentStatus === "PAID"}
+            onToggle={togglePaye}
+            label="Payé"
+            className="w-full justify-center"
+          />
+        </div>
+
+        <div className="col-span-2 sm:flex-1 sm:min-w-[120px]">
+          <input
+            type="text"
+            defaultValue={row.notes ?? ""}
+            onBlur={commitNotes}
+            placeholder="Notes…"
+            className="h-8 w-full rounded-md border bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-foreground/20"
+          />
+        </div>
       </div>
 
-      {/* Spacer % — pour aligner avec la col % des Artistes */}
-      <div className="hidden sm:block w-16 shrink-0" />
-
-      {/* Toggle Payé — w-36 (uniforme). Charges = sortie cash → "Payé". */}
-      <div className="w-36 shrink-0">
-        <PaidToggle
-          isOn={row.paymentStatus === "PAID"}
-          onToggle={togglePaye}
-          label="Payé"
-          className="w-full justify-center"
-        />
-      </div>
-
-      {/* Notes */}
-      <div className="flex-1 min-w-[120px]">
-        <input
-          type="text"
-          defaultValue={row.notes ?? ""}
-          onBlur={commitNotes}
-          className="h-8 w-full rounded-md border bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-foreground/20"
-        />
-      </div>
-
-      {/* Supprimer */}
+      {/* Supprimer desktop — caché mobile (mis à côté du label). */}
       <button
         type="button"
         onClick={handleRemove}
         disabled={removing}
         title="Supprimer cette charge"
-        className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+        className="hidden sm:flex h-7 w-7 shrink-0 rounded-md items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>

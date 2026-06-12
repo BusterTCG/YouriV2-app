@@ -29,7 +29,7 @@ export function DashboardKpis({ kpis, period, periodLabel }: Props) {
   void periodLabel;
   const prevLabel = period === "year" ? "vs an dernier" : "vs mois dernier";
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <Card
         icon={<Briefcase className="h-3.5 w-3.5 text-muted-foreground" />}
         label="CA HT encaissé"
@@ -118,12 +118,12 @@ function Card({
         ? "text-red-700 dark:text-red-400"
         : "";
   return (
-    <div className="rounded-md border bg-card p-4 space-y-1">
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+    <div className="rounded-md border bg-card p-3 sm:p-4 space-y-1 min-w-0">
+      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold min-w-0">
         {icon}
-        {label}
+        <span className="truncate">{label}</span>
       </div>
-      <div className={`text-2xl font-semibold tabular-nums ${accentClass}`}>
+      <div className={`text-lg sm:text-2xl font-semibold tabular-nums truncate ${accentClass}`}>
         {value}
       </div>
       <DeltaBadge delta={delta} label={deltaLabel} />

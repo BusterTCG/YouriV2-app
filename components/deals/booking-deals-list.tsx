@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import type { BookingDealRow, BookingDealsListData } from "@/lib/deals-list-types";
 import { formatPct, dealStatusLabel } from "./deal-helpers";
 import { DealStatusInline } from "./deal-status-inline";
+import { MobileDealCard } from "./mobile-deal-card";
 import { useEur } from "@/lib/privacy-context";
 
 /**
@@ -111,7 +112,36 @@ export function BookingDealsList({ deals, totals }: Props) {
   }
 
   return (
-    <div className="rounded-md border overflow-hidden">
+    <>
+    {/* Vue mobile — cards empilées (Stan 2026-06-02 : pas de scroll-x). */}
+    <div className="md:hidden space-y-2">
+      {deals.map((deal) => {
+        const venueLine = deal.venueName ?? deal.venueCity ?? null;
+        const isPaid =
+          deal.budgetPaymentStatus === "PAID" &&
+          deal.dealArtistes.every((a) => a.paymentStatus === "PAID") &&
+          deal.dealCharges.every((c) => c.paymentStatus === "PAID");
+        return (
+          <MobileDealCard
+            key={deal.id}
+            dealId={deal.id}
+            category={deal.category}
+            date={deal.date}
+            title={deal.title}
+            venue={venueLine}
+            status={deal.status}
+            isPaid={isPaid}
+            caHt={deal.budgetAmount ?? 0}
+            margeNette={deal.margeNette}
+            margeNettePct={deal.margeNettePct}
+            isAnnule={deal.status === "ANNULE"}
+          />
+        );
+      })}
+    </div>
+
+    {/* Vue desktop — tableau classique. */}
+    <div className="hidden md:block rounded-md border overflow-hidden">
       <div className="overflow-x-auto">
         <table className="min-w-[1208px] text-sm table-fixed xl:min-w-0 xl:w-full">
           <DealsListColGroup />
@@ -309,5 +339,6 @@ export function BookingDealsList({ deals, totals }: Props) {
         </table>
       </div>
     </div>
+    </>
   );
 }

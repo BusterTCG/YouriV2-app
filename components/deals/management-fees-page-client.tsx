@@ -282,9 +282,19 @@ export function ManagementFeesPageClient({
         </div>
       )}
 
-      {/* Tableau lignes détaillées */}
+      {/* Lignes détaillées — cards mobile (Stan 2026-06-11 : 1 box par entrée
+          comme les autres pages deals, plus lisible que le tableau scroll-x). */}
       {rows.length > 0 && (
-        <div className="rounded-md border overflow-hidden">
+        <div className="md:hidden space-y-2">
+          {rows.map((r) => (
+            <FeeCard key={r.id} row={r} />
+          ))}
+        </div>
+      )}
+
+      {/* Tableau lignes détaillées — desktop */}
+      {rows.length > 0 && (
+        <div className="hidden md:block rounded-md border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/40 border-b text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
@@ -597,5 +607,103 @@ function FeeRow({ row }: { row: ManagementFeeRow }) {
         </Link>
       </td>
     </tr>
+  );
+}
+
+/**
+ * Card mobile pour une ligne MF — Stan 2026-06-11 : 1 box par entrée comme
+ * MobileDealCard sur les autres pages deals. Remplace le tableau scroll-x
+ * sur < md.
+ */
+function FeeCard({ row }: { row: ManagementFeeRow }) {
+  const router = useRouter();
+  const member = PANGEE_TEAM.find((m) => m.key === row.associateKey);
+  const associateName = member?.firstName ?? row.associateKey;
+  const avatarColor = member?.color ?? "#94a3b8";
+  const isPaid = row.paymentStatus === "PAID";
+  const eur = useEur();
+
+  async function togglePaid(next: boolean) {
+    const res = await updateManagementFee({
+      id: row.id,
+      isPaye: next,
+    });
+    if (res.ok) router.refresh();
+  }
+
+  const dealHref =
+    row.dealCategory === DealCategory.BOOKING
+      ? `/deals/booking/${row.dealId}`
+      : `/deals`;
+
+  return (
+    <div className="rounded-md border bg-card p-3">
+      {/* Ligne 1 : date + catégorie · dispo paiement */}
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="text-xs text-muted-foreground tabular-nums">
+          {format(row.dealDate, "d MMM yyyy", { locale: fr })}
+          <span className="mx-1.5 text-muted-foreground/50">·</span>
+          <span className="text-[10px] uppercase tracking-wider">
+            {DEAL_CATEGORY_LABELS[row.dealCategory]}
+          </span>
+        </div>
+        {row.dealReadyToPay ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+            <CheckCircle2 className="h-3 w-3" />
+            Dispo
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground italic">
+            <Clock className="h-3 w-3" />
+            En attente
+          </span>
+        )}
+      </div>
+
+      {/* Ligne 2 : titre deal */}
+      <Link href={dealHref} className="font-medium text-sm leading-tight hover:underline block truncate">
+        {row.dealTitle}
+      </Link>
+
+      {/* Ligne 3 : associé (rond couleur) + rôle + part % */}
+      <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground min-w-0">
+        <span
+          className="inline-flex items-center justify-center h-5 w-5 rounded-full text-[9px] font-semibold text-white shrink-0"
+          style={{ backgroundColor: avatarColor }}
+        >
+          {associateName.slice(0, 1).toUpperCase()}
+        </span>
+        <span className="font-medium text-foreground">{associateName}</span>
+        <span className="text-muted-foreground/60">·</span>
+        <span className="truncate">{ROLE_LABELS[row.role]}</span>
+        <span className="text-muted-foreground/60">·</span>
+        <span className="tabular-nums shrink-0">{Math.round(row.sharePct)}%</span>
+      </div>
+
+      {/* Footer : montant + toggle Encaissé + mois paiement */}
+      <div className="mt-2 pt-2 border-t flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">
+            Montant
+          </div>
+          <div className="text-base font-semibold tabular-nums">
+            {eur(row.amount)}
+          </div>
+        </div>
+        {row.paidAt && (
+          <div className="text-xs text-muted-foreground tabular-nums shrink-0">
+            payé {format(row.paidAt, "MM/yy", { locale: fr })}
+          </div>
+        )}
+        <div className="w-28 shrink-0">
+          <PaidToggle
+            isOn={isPaid}
+            onToggle={togglePaid}
+            label="Encaissé"
+            className="w-full justify-center"
+          />
+        </div>
+      </div>
+    </div>
   );
 }
