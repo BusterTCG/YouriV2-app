@@ -551,6 +551,15 @@ model Deal {
   // ── Prestations facturées (Sprint 5 CACHETS) — N prestataires/mois ──
   cachetPrestations CachetPrestation[]
 
+  /// Échéancier de paiement (Stan 2026-06-13) — BOOKING uniquement. Découpe le
+  /// `budgetAmount` reçu de l'organisateur en N tranches datées (acompte +
+  /// solde…), chacune avec son statut d'encaissement et son mois réel. Quand
+  /// des échéances existent, `budgetPaymentStatus` / `budgetPaidAt` sont
+  /// dérivés de leur état (cf. lib/finance/deal-installments.ts) — le toggle
+  /// "Encaissé" global est remplacé par l'échéancier. PROD_EXE (ProductionLine)
+  /// et CACHETS (CachetPrestation) ont déjà du multi-ligne daté → exclus.
+  installments DealInstallment[]
+
   /// Tâches du deal (Sprint 6 — Stan 2026-05-31). Instanciées auto à la
   /// création depuis `TaskTemplate where category = deal.category`. Cascade
   /// delete via la relation Task → Deal.
@@ -812,6 +821,58 @@ model CachetPrestation {
   deletedAt DateTime?
 
   @@index([dealId, deletedAt])
+}
+
+// ─────────────────────────── Échéancier de paiement (Stan 2026-06-13) ───────────────────────────
+//
+// BOOKING uniquement. Un deal Booking reçoit un `budgetAmount` de l'organisateur
+// payé en une ou plusieurs tranches (acompte à la signature + solde après le
+// show, par ex.). Chaque DealInstallment = une tranche datée avec son montant,
+// son statut d'encaissement et son mois réel d'encaissement.
+//
+// Modèle inspiré de KN `DealInstallment` mais SIMPLIFIÉ : KN a 2 axes de statut
+// (artiste + commission) car ses deals ont 2 flux ; côté Youri Booking il n'y a
+// qu'UN axe = l'encaissement du budget Pangee (la part artiste est gérée
+// séparément par DealArtiste). Pas de soft-delete (édition inline = vrai delete,
+// comme les charges/prestations le faisaient avant — ici on hard-delete car
+// l'échéancier est une donnée de structure, pas un historique).
+//
+// Quand des échéances existent, le recompute (deal-installments.ts) dérive
+// `Deal.budgetPaymentStatus` (agrégat) + `Deal.budgetPaidAt` (date max des
+// tranches PAID) → s'intègre au dashboard/reporting comme une encaisse normale.
+// La somme des tranches doit égaler `budgetAmount` (contrôle côté UI).
+model DealInstallment {
+  id     String @id @default(cuid())
+  dealId String
+  deal   Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  /// Libellé libre de la tranche (ex. "Acompte signature", "Solde prestation").
+  label String
+
+  /// Montant brut de cette tranche (part du budgetAmount du deal). Decimal
+  /// pour préserver la précision (SQLite TEXT, Postgres numeric).
+  amount Decimal?
+
+  /// Date d'échéance prévue de la tranche. Optionnelle — sert de date
+  /// d'affichage et de base au mois d'encaissement par défaut.
+  dueDate DateTime?
+
+  /// Statut d'encaissement de cette tranche (workflow Pangee → organisateur).
+  /// Wording identique aux autres statuts : À facturer / Facturée / Encaissée /
+  /// Litige / N_A.
+  paymentStatus PaymentStatus @default(N_A)
+
+  /// Mois d'encaissement réel de la tranche (cash-flow entrant). Sert à la
+  /// ventilation mensuelle dashboard/reporting (chaque tranche à son mois).
+  paidAt DateTime?
+
+  /// Ordre d'affichage (0, 1, 2…) — préserve l'ordre saisi.
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dealId])
 }
 
 // ─────────────────────────── Tâches (Sprint 6) ───────────────────────────

@@ -18,6 +18,7 @@ import { getTasksForDeal } from "@/lib/queries/tasks";
 import { DealArtistsSection } from "@/components/deals/deal-artists-section";
 import { DealChargesSection } from "@/components/deals/deal-charges-section";
 import { DealResultSection } from "@/components/deals/deal-result-section";
+import type { DealInstallmentRow } from "@/lib/actions/deal-installments";
 import { DealActions } from "@/components/deals/deal-actions";
 import { DealStatusInline } from "@/components/deals/deal-status-inline";
 import {
@@ -64,6 +65,9 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
         where: { deletedAt: null },
         orderBy: [{ role: "asc" }, { createdAt: "asc" }],
       },
+      installments: {
+        orderBy: { sortOrder: "asc" },
+      },
       createdBy: { select: { name: true } },
     },
   });
@@ -89,6 +93,16 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
     paymentStatus: c.paymentStatus,
     paidAt: c.paidAt,
     notes: c.notes,
+  }));
+
+  const installments: DealInstallmentRow[] = deal.installments.map((i) => ({
+    id: i.id,
+    label: i.label,
+    amount: i.amount != null ? Number(i.amount) : null,
+    dueDate: i.dueDate,
+    paymentStatus: i.paymentStatus,
+    paidAt: i.paidAt,
+    sortOrder: i.sortOrder,
   }));
 
   const budgetAmount = deal.budgetAmount != null ? Number(deal.budgetAmount) : null;
@@ -198,12 +212,15 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Sections */}
+      {/* Section CA (ex-Budget) — inclut l'échéancier de paiement intégré
+          (Stan 2026-06-13). Quand des tranches existent, elles pilotent
+          l'encaissement du CA. */}
       <DealBudgetSection
         dealId={deal.id}
         budgetAmount={budgetAmount}
         isEncaisse={isEncaisse}
         paidAt={deal.budgetPaidAt}
+        installments={installments}
       />
 
       <DealArtistsSection

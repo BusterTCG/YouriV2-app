@@ -3,6 +3,7 @@ import "server-only";
 import type { DealCategory, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { sortArtistsDiversLast } from "@/lib/artists";
+import { getBookingInstallmentUnits } from "@/lib/finance/deal-installments";
 import {
   formatPeriodRangeLabel,
   getPeriodRange,
@@ -165,17 +166,36 @@ export async function getReportingData(opts: {
 
   // Where pour les deals encaissés sur la période (KPIs + top artistes +
   // breakdown). Si périodeStart=null (= "all"), on ne filtre pas par date.
+  //
+  // `installments: { none: {} }` exclut les deals BOOKING qui ont un échéancier :
+  // ils sont comptés séparément, tranche par tranche, via
+  // getBookingInstallmentUnits (ventilation au mois d'encaissement réel + part
+  // marge/MF au prorata du CA encaissé). Évite le double-comptage.
   const periodDealWhere: Prisma.DealWhereInput = {
     ...artistWhere,
     deletedAt: null,
     status: { not: "ANNULE" },
     budgetPaymentStatus: "PAID",
+    installments: { none: {} },
     ...(periodStart && periodEnd
       ? { budgetPaidAt: { gte: periodStart, lt: periodEnd } }
       : {}),
   };
 
-  const [periodDeals, chartDeals, artistsRaw] = await Promise.all([
+  // Fenêtre des tranches d'échéancier sur la période. "all" (périodeStart=null)
+  // → fenêtre très large pour tout capter.
+  const installmentPeriodRange =
+    periodStart && periodEnd
+      ? { start: periodStart, end: periodEnd }
+      : { start: new Date(2000, 0, 1), end: new Date(2100, 0, 1) };
+
+  const [
+    periodDeals,
+    chartDeals,
+    artistsRaw,
+    periodInstallmentUnits,
+    chartInstallmentUnits,
+  ] = await Promise.all([
     prisma.deal.findMany({
       where: periodDealWhere,
       select: {
@@ -191,6 +211,7 @@ export async function getReportingData(opts: {
         deletedAt: null,
         status: { not: "ANNULE" },
         budgetPaymentStatus: "PAID",
+        installments: { none: {} },
         budgetPaidAt: { gte: chartStart, lt: chartEnd },
       },
       select: {
@@ -206,6 +227,15 @@ export async function getReportingData(opts: {
       orderBy: { name: "asc" },
       select: { id: true, name: true, slug: true, color: true },
     }),
+    // Reporting = pas de filtre catégorie → BOOKING s'applique toujours.
+    getBookingInstallmentUnits(installmentPeriodRange, {
+      applies: true,
+      artistWhere,
+    }),
+    getBookingInstallmentUnits(
+      { start: chartStart, end: chartEnd },
+      { applies: true, artistWhere },
+    ),
   ]);
 
   // ── KPIs ──────────────────────────────────────────────────────────────
@@ -221,6 +251,14 @@ export async function getReportingData(opts: {
     );
     margeBrute += computeMargeBrute(d);
     totalMf += computeTotalMf(d);
+  }
+  // Tranches d'échéancier BOOKING encaissées sur la période — comptées au
+  // prorata du CA encaissé (cf. getBookingInstallmentUnits).
+  for (const u of periodInstallmentUnits) {
+    caHt += u.caHt;
+    totalArtistes += u.totalArtistes;
+    margeBrute += u.margeBrute;
+    totalMf += u.totalMf;
   }
   const margeNette = margeBrute - totalMf;
   const margeNettePct = caHt > 0 ? (margeNette / caHt) * 100 : null;
@@ -253,6 +291,29 @@ export async function getReportingData(opts: {
       }
     }
   }
+  // Tranches d'échéancier — chaque tranche apporte sa part de CA à l'artiste
+  // (caShare = CA tranche ÷ nb artistes). Le `count` (nb de deals) est
+  // dédupliqué par dealId pour ne pas gonfler avec le nombre de tranches.
+  const countedInstArtistDeals = new Set<string>();
+  for (const u of periodInstallmentUnits) {
+    for (const a of u.artists) {
+      const existing = artistTotals.get(a.id);
+      const firstForDeal = !countedInstArtistDeals.has(`${a.id}::${u.dealId}`);
+      countedInstArtistDeals.add(`${a.id}::${u.dealId}`);
+      if (existing) {
+        existing.caHt += a.caShare;
+        if (firstForDeal) existing.count += 1;
+      } else {
+        artistTotals.set(a.id, {
+          name: a.name,
+          slug: a.slug,
+          color: a.color,
+          caHt: a.caShare,
+          count: firstForDeal ? 1 : 0,
+        });
+      }
+    }
+  }
   const topArtists: TopArtistRow[] = Array.from(artistTotals.entries())
     .map(([id, info]) => ({
       id,
@@ -272,6 +333,11 @@ export async function getReportingData(opts: {
     const net = computeMargeBrute(d) - computeTotalMf(d);
     byCatMap.set(d.category, (byCatMap.get(d.category) ?? 0) + net);
   }
+  // Tranches d'échéancier → toujours catégorie BOOKING.
+  for (const u of periodInstallmentUnits) {
+    const net = u.margeBrute - u.totalMf;
+    byCatMap.set("BOOKING", (byCatMap.get("BOOKING") ?? 0) + net);
+  }
   const byCategory: CategoryBreakdownSlice[] = (
     ["BOOKING", "PROD_EXE", "CACHETS"] as DealCategory[]
   )
@@ -290,6 +356,11 @@ export async function getReportingData(opts: {
     const key = `${d.budgetPaidAt.getFullYear()}-${String(d.budgetPaidAt.getMonth()).padStart(2, "0")}`;
     const net = computeMargeBrute(d) - computeTotalMf(d);
     monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + net);
+  }
+  // Tranches d'échéancier — ventilées au mois de leur date d'encaissement.
+  for (const u of chartInstallmentUnits) {
+    const key = `${u.paidAt.getFullYear()}-${String(u.paidAt.getMonth()).padStart(2, "0")}`;
+    monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + (u.margeBrute - u.totalMf));
   }
   const monthly: MonthlyBucket[] = [];
   for (let i = 0; i < bucketCount; i++) {

@@ -3,6 +3,10 @@ import { prisma } from "@/lib/db";
 import type { DealCategory, Prisma } from "@prisma/client";
 import { sortArtistsDiversLast } from "@/lib/artists";
 import { getUpcomingTasksForAssignee } from "@/lib/queries/tasks";
+import {
+  getBookingInstallmentUnits,
+  type InstallmentEncaissementUnit,
+} from "@/lib/finance/deal-installments";
 
 /**
  * Server data fetcher pour la page /dashboard (Sprint 7 — Stan 2026-06-02).
@@ -257,6 +261,9 @@ export async function getDashboardData(opts: {
 
   const catWhere = categoryWhere(category);
   const artistWhere = artistDealWhere(artistSlug);
+  // Stan 2026-06-14 : l'échéancier (BOOKING) ventile l'encaissement par mois.
+  // Quand le filtre cible PROD_EXE/CACHETS, aucune tranche BOOKING ne compte.
+  const bookingApplies = category === "all" || category === "BOOKING";
 
   // Inclusion commune pour les calculs de marge.
   const FINANCIAL_INCLUDE = {
@@ -289,9 +296,14 @@ export async function getDashboardData(opts: {
     aFacturerOldRaw,
     aPayerArtisteRaw,
     artistsRaw,
+    installmentUnits,
+    installmentUnitsPrev,
+    chartInstallmentUnits,
   ] = await Promise.all([
     // KPIs financiers : tous les deals encaissés sur la période (budgetPaidAt
     // dans la fenêtre). On lit les finances pour calculer Marge Brute + MF.
+    // Stan 2026-06-14 : on EXCLUT les deals BOOKING à échéancier (installments
+    // non vide) — leurs tranches sont comptées séparément, ventilées au mois.
     prisma.deal.findMany({
       where: {
         ...catWhere,
@@ -300,6 +312,7 @@ export async function getDashboardData(opts: {
         status: { not: "ANNULE" },
         budgetPaymentStatus: "PAID",
         budgetPaidAt: { gte: periodStart, lt: periodEnd },
+        installments: { none: {} },
       },
       select: {
         category: true,
@@ -318,6 +331,7 @@ export async function getDashboardData(opts: {
         status: { not: "ANNULE" },
         budgetPaymentStatus: "PAID",
         budgetPaidAt: { gte: prevPeriodStart, lt: prevPeriodEnd },
+        installments: { none: {} },
       },
       select: {
         category: true,
@@ -353,6 +367,7 @@ export async function getDashboardData(opts: {
       },
     }),
     // Chart 12 mois — tous les deals encaissés dans la fenêtre glissante.
+    // Idem : exclut les BOOKING à échéancier (comptés via leurs tranches).
     prisma.deal.findMany({
       where: {
         ...catWhere,
@@ -361,6 +376,7 @@ export async function getDashboardData(opts: {
         status: { not: "ANNULE" },
         budgetPaymentStatus: "PAID",
         budgetPaidAt: { gte: chartStart, lt: chartEnd },
+        installments: { none: {} },
       },
       select: {
         category: true,
@@ -527,6 +543,20 @@ export async function getDashboardData(opts: {
       orderBy: { name: "asc" },
       select: { id: true, name: true, slug: true, color: true },
     }),
+    // Tranches d'échéancier BOOKING encaissées — ventilées au mois (Stan
+    // 2026-06-14). Période courante, N-1, et fenêtre chart.
+    getBookingInstallmentUnits(
+      { start: periodStart, end: periodEnd },
+      { applies: bookingApplies, artistWhere },
+    ),
+    getBookingInstallmentUnits(
+      { start: prevPeriodStart, end: prevPeriodEnd },
+      { applies: bookingApplies, artistWhere },
+    ),
+    getBookingInstallmentUnits(
+      { start: chartStart, end: chartEnd },
+      { applies: bookingApplies, artistWhere },
+    ),
   ]);
 
   // ── KPIs ──────────────────────────────────────────────────────────────
@@ -547,8 +577,28 @@ export async function getDashboardData(opts: {
     return { caHt, margeBrute, totalMf: mf };
   }
 
-  const current = aggregateKpis(encaissesDeals);
-  const prev = aggregateKpis(encaissesDealsPrev);
+  /** Ajoute les tranches d'échéancier (ventilées au mois) aux totaux deals. */
+  function addInstallmentUnits(
+    base: { caHt: number; margeBrute: number; totalMf: number },
+    units: InstallmentEncaissementUnit[],
+  ): { caHt: number; margeBrute: number; totalMf: number } {
+    let { caHt, margeBrute, totalMf } = base;
+    for (const u of units) {
+      caHt += u.caHt;
+      margeBrute += u.margeBrute;
+      totalMf += u.totalMf;
+    }
+    return { caHt, margeBrute, totalMf };
+  }
+
+  const current = addInstallmentUnits(
+    aggregateKpis(encaissesDeals),
+    installmentUnits,
+  );
+  const prev = addInstallmentUnits(
+    aggregateKpis(encaissesDealsPrev),
+    installmentUnitsPrev,
+  );
   const caHtEncaisse = current.caHt;
   const margeNette = current.margeBrute - current.totalMf;
   const margeNettePct =
@@ -650,6 +700,12 @@ export async function getDashboardData(opts: {
     const marge =
       computeMargeBrute(d) - computeTotalMf(d);
     monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + marge);
+  }
+  // Tranches d'échéancier : chaque tranche encaissée à son mois (Stan
+  // 2026-06-14) — marge nette au prorata = margeBrute − MF de la tranche.
+  for (const u of chartInstallmentUnits) {
+    const key = `${u.paidAt.getFullYear()}-${String(u.paidAt.getMonth()).padStart(2, "0")}`;
+    monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + (u.margeBrute - u.totalMf));
   }
   const monthlyMargeNette: DashboardData["monthlyMargeNette"] = [];
   for (let i = 0; i < 12; i++) {
