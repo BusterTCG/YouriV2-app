@@ -1,10 +1,12 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Prisma, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
 import { safeAction, type ActionResult } from "@/lib/errors";
+import { logAudit } from "@/lib/audit";
 import { getShowKeyFromLabel } from "@/lib/tasks-show-sync-utils";
 import { revalidateAfterTaskMutation } from "@/lib/revalidate-helpers";
 
@@ -194,9 +196,69 @@ export async function softDeleteTask(id: string): Promise<ActionResult> {
     const updated = await prisma.task.update({
       where: { id },
       data: { deletedAt: new Date() },
-      select: { dealId: true },
+      select: { dealId: true, label: true },
+    });
+    await logAudit({
+      entity: "Task",
+      entityId: id,
+      action: "delete",
+      summary: `Tâche supprimée : « ${updated.label} »`,
     });
     revalidateAfterTaskMutation(updated.dealId);
+    revalidatePath("/trash");
+  });
+}
+
+/**
+ * Restaure une tâche soft-deletée depuis la corbeille. Une tâche appartient
+ * toujours à un deal ; on ne la restaure que si son deal parent est vivant
+ * (sinon elle reviendra via `restoreDeal`).
+ */
+export async function restoreTask(id: string): Promise<ActionResult> {
+  return safeAction("restoreTask", async () => {
+    await requireUser();
+    if (!id) throw new Error("ID tâche manquant");
+    const task = await prisma.task.findUnique({
+      where: { id },
+      select: { id: true, label: true, dealId: true, deletedAt: true, deal: { select: { deletedAt: true } } },
+    });
+    if (!task) throw new Error("Tâche introuvable");
+    if (!task.deletedAt) throw new Error("Cette tâche n'est pas supprimée");
+    if (task.deal.deletedAt) {
+      throw new Error("Le deal parent est dans la corbeille — restaurez-le pour récupérer ses tâches");
+    }
+    await prisma.task.update({ where: { id }, data: { deletedAt: null } });
+    await logAudit({
+      entity: "Task",
+      entityId: id,
+      action: "restore",
+      summary: `Tâche restaurée : « ${task.label} »`,
+    });
+    revalidateAfterTaskMutation(task.dealId);
+    revalidatePath("/trash");
+  });
+}
+
+/** Suppression DÉFINITIVE (irréversible) d'une tâche depuis la corbeille. */
+export async function permanentlyDeleteTask(id: string): Promise<ActionResult> {
+  return safeAction("permanentlyDeleteTask", async () => {
+    await requireUser();
+    if (!id) throw new Error("ID tâche manquant");
+    const task = await prisma.task.findUnique({
+      where: { id },
+      select: { id: true, label: true, dealId: true, status: true, dueAt: true },
+    });
+    if (!task) throw new Error("Tâche introuvable");
+    await prisma.task.delete({ where: { id } });
+    await logAudit({
+      entity: "Task",
+      entityId: id,
+      action: "permanently_delete",
+      before: task,
+      summary: `Tâche supprimée définitivement : « ${task.label} »`,
+    });
+    revalidateAfterTaskMutation(task.dealId);
+    revalidatePath("/trash");
   });
 }
 

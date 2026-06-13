@@ -7,6 +7,7 @@ import { DealCategory, DealStatus, PaymentStatus, Prisma, VenueDealKind } from "
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
 import { safeAction, type ActionResult } from "@/lib/errors";
+import { logAudit } from "@/lib/audit";
 import { listContacts, listVenues, type KnContact, type KnVenue } from "@/lib/kn-client";
 import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
 import { recomputeShowFinancials } from "@/lib/finance/show-financials";
@@ -210,7 +211,15 @@ export async function softDeleteDeal(id: string): Promise<ActionResult> {
   return safeAction("softDeleteDeal", async () => {
     await requireUser();
     if (!id) throw new Error("ID deal manquant");
+    const existing = await prisma.deal.findUnique({
+      where: { id },
+      select: { id: true, title: true, category: true, deletedAt: true },
+    });
+    if (!existing || existing.deletedAt) throw new Error("Deal introuvable");
     const now = new Date();
+    // Cascade soft-delete : tous les enfants reçoivent le MÊME timestamp `now`,
+    // ce qui permet à `restoreDeal` de ne restaurer QUE les enfants supprimés
+    // avec le deal (et pas ceux retirés individuellement auparavant).
     await prisma.$transaction([
       prisma.deal.update({ where: { id }, data: { deletedAt: now } }),
       prisma.dealArtiste.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
@@ -221,12 +230,90 @@ export async function softDeleteDeal(id: string): Promise<ActionResult> {
       prisma.task.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
       prisma.eventBriefing.updateMany({ where: { dealId: id, deletedAt: null }, data: { deletedAt: now } }),
     ]);
-    revalidatePath("/dashboard");
-    revalidatePath("/deals/booking");
-    revalidatePath("/deals/prod-executive");
-    revalidatePath("/deals/cachets");
-    revalidatePath("/deals/management-fees");
+    await logAudit({
+      entity: "Deal",
+      entityId: id,
+      action: "delete",
+      summary: `Deal supprimé : « ${existing.title} » (${existing.category})`,
+    });
+    revalidateDealWide();
   });
+}
+
+/**
+ * Restaure un deal soft-deleté + sa cascade d'enfants. On ne restaure QUE les
+ * enfants dont le `deletedAt` correspond EXACTEMENT à celui du deal (= ceux
+ * supprimés par la même cascade), pour ne pas ressusciter un DealArtiste /
+ * tâche retiré individuellement avant la suppression du deal.
+ */
+export async function restoreDeal(id: string): Promise<ActionResult> {
+  return safeAction("restoreDeal", async () => {
+    await requireUser();
+    if (!id) throw new Error("ID deal manquant");
+    const existing = await prisma.deal.findUnique({
+      where: { id },
+      select: { id: true, title: true, deletedAt: true },
+    });
+    if (!existing) throw new Error("Deal introuvable");
+    if (!existing.deletedAt) throw new Error("Ce deal n'est pas supprimé");
+    const at = existing.deletedAt;
+    await prisma.$transaction([
+      prisma.deal.update({ where: { id }, data: { deletedAt: null } }),
+      prisma.dealArtiste.updateMany({ where: { dealId: id, deletedAt: at }, data: { deletedAt: null } }),
+      prisma.dealCharge.updateMany({ where: { dealId: id, deletedAt: at }, data: { deletedAt: null } }),
+      prisma.dealManagementFee.updateMany({ where: { dealId: id, deletedAt: at }, data: { deletedAt: null } }),
+      prisma.productionLine.updateMany({ where: { dealId: id, deletedAt: at }, data: { deletedAt: null } }),
+      prisma.cachetPrestation.updateMany({ where: { dealId: id, deletedAt: at }, data: { deletedAt: null } }),
+      prisma.task.updateMany({ where: { dealId: id, deletedAt: at }, data: { deletedAt: null } }),
+      prisma.eventBriefing.updateMany({ where: { dealId: id, deletedAt: at }, data: { deletedAt: null } }),
+    ]);
+    await logAudit({
+      entity: "Deal",
+      entityId: id,
+      action: "restore",
+      summary: `Deal restauré : « ${existing.title} »`,
+    });
+    revalidateDealWide();
+  });
+}
+
+/**
+ * Suppression DÉFINITIVE (irréversible) d'un deal depuis la corbeille. Le
+ * `onDelete: Cascade` du schéma supprime tous les enfants (artistes, charges,
+ * MF, prod lines, cachets, tâches, FDR) au niveau DB.
+ */
+export async function permanentlyDeleteDeal(id: string): Promise<ActionResult> {
+  return safeAction("permanentlyDeleteDeal", async () => {
+    await requireUser();
+    if (!id) throw new Error("ID deal manquant");
+    const existing = await prisma.deal.findUnique({
+      where: { id },
+      select: { id: true, title: true, category: true, date: true, deletedAt: true },
+    });
+    if (!existing) throw new Error("Deal introuvable");
+    await prisma.deal.delete({ where: { id } });
+    await logAudit({
+      entity: "Deal",
+      entityId: id,
+      action: "permanently_delete",
+      before: existing,
+      summary: `Deal supprimé définitivement : « ${existing.title} »`,
+    });
+    revalidateDealWide();
+  });
+}
+
+/** Revalide toutes les surfaces impactées par une suppression/restauration
+ *  de deal (listes, dashboard, reporting, corbeille). */
+function revalidateDealWide(): void {
+  revalidatePath("/dashboard");
+  revalidatePath("/reporting");
+  revalidatePath("/deals/booking");
+  revalidatePath("/deals/prod-executive");
+  revalidatePath("/deals/cachets");
+  revalidatePath("/deals/management-fees");
+  revalidatePath("/artistes");
+  revalidatePath("/trash");
 }
 
 /**

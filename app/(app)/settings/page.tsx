@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ListChecks, Settings as SettingsIcon, Users } from "lucide-react";
 import { requireUser } from "@/lib/auth/users";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export const metadata = {
 export default async function SettingsIndexPage() {
   const user = await requireUser();
   const isAdmin = user.role === "ADMIN";
+  const auditCount = await prisma.auditEntry.count();
 
   return (
     <div className="max-w-3xl space-y-5">
@@ -48,6 +50,12 @@ export default async function SettingsIndexPage() {
           />
         )}
       </div>
+
+      <p className="text-xs text-muted-foreground border-t pt-3">
+        Journal d&apos;audit : <span className="font-medium tabular-nums">{auditCount}</span>{" "}
+        opération{auditCount > 1 ? "s" : ""} tracée{auditCount > 1 ? "s" : ""}
+        {" "}(création / modification / suppression / restauration).
+      </p>
     </div>
   );
 }

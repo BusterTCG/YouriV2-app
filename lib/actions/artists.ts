@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
 import { safeAction, type ActionResult } from "@/lib/errors";
+import { logAudit } from "@/lib/audit";
 import { uniqueSlug } from "@/lib/slug";
 import { PANGEE_ARTIST_COLOR } from "@/lib/artists-constants";
 
@@ -281,16 +282,94 @@ export async function softDeleteArtist(
     await requireUser();
     const { id } = DeleteArtistSchema.parse(input);
 
-    // Sprint 3 : on bloquera si des DealArtiste référencent l'artiste.
-    // Pour Sprint 2, pas encore de DealArtiste — soft-delete inconditionnel.
-    // TODO Sprint 3 : ajouter check sur prisma.dealArtiste.count({ where: {
-    //   artistId: id, deal: { deletedAt: null } } })
+    const artist = await prisma.artist.findUnique({
+      where: { id },
+      select: { id: true, name: true, deletedAt: true },
+    });
+    if (!artist || artist.deletedAt) throw new Error("Artiste introuvable");
 
     await prisma.artist.update({
       where: { id },
       data: { deletedAt: new Date(), active: false },
     });
+    await logAudit({
+      entity: "Artist",
+      entityId: id,
+      action: "delete",
+      summary: `Artiste supprimé : « ${artist.name} »`,
+    });
 
     revalidatePath("/artistes");
+    revalidatePath("/trash");
+  });
+}
+
+/**
+ * Restaure un artiste soft-deleté depuis la corbeille (réactive aussi
+ * `active`, mis à false lors de la suppression).
+ */
+export async function restoreArtist(id: string): Promise<ActionResult> {
+  return safeAction("restoreArtist", async () => {
+    await requireUser();
+    if (!id) throw new Error("ID artiste manquant");
+    const artist = await prisma.artist.findUnique({
+      where: { id },
+      select: { id: true, name: true, deletedAt: true },
+    });
+    if (!artist) throw new Error("Artiste introuvable");
+    if (!artist.deletedAt) throw new Error("Cet artiste n'est pas supprimé");
+
+    await prisma.artist.update({
+      where: { id },
+      data: { deletedAt: null, active: true },
+    });
+    await logAudit({
+      entity: "Artist",
+      entityId: id,
+      action: "restore",
+      summary: `Artiste restauré : « ${artist.name} »`,
+    });
+
+    revalidatePath("/artistes");
+    revalidatePath("/trash");
+  });
+}
+
+/**
+ * Suppression DÉFINITIVE (irréversible) d'un artiste depuis la corbeille.
+ * Bloquée si des DealArtiste le référencent (FK `onDelete: Restrict`) : on
+ * ne veut pas casser l'historique financier des deals. On vérifie en amont
+ * pour renvoyer un message clair plutôt qu'une erreur Prisma P2003.
+ */
+export async function permanentlyDeleteArtist(id: string): Promise<ActionResult> {
+  return safeAction("permanentlyDeleteArtist", async () => {
+    await requireUser();
+    if (!id) throw new Error("ID artiste manquant");
+    const artist = await prisma.artist.findUnique({
+      where: { id },
+      select: { id: true, name: true, slug: true },
+    });
+    if (!artist) throw new Error("Artiste introuvable");
+
+    // Garde : tout DealArtiste (même soft-deleté) bloque la suppression
+    // définitive via la FK Restrict. On compte large (l'extension est no-op).
+    const linked = await prisma.dealArtiste.count({ where: { artistId: id } });
+    if (linked > 0) {
+      throw new Error(
+        `Impossible : « ${artist.name} » est lié à ${linked} deal(s). Supprimez d'abord ces deals définitivement.`,
+      );
+    }
+
+    await prisma.artist.delete({ where: { id } });
+    await logAudit({
+      entity: "Artist",
+      entityId: id,
+      action: "permanently_delete",
+      before: artist,
+      summary: `Artiste supprimé définitivement : « ${artist.name} »`,
+    });
+
+    revalidatePath("/artistes");
+    revalidatePath("/trash");
   });
 }

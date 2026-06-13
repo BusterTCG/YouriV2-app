@@ -223,6 +223,10 @@ model User {
   /// SetNull si user désactivé pour préserver la trace historique.
   tasksCompleted Task[] @relation("TaskDoneBy")
 
+  /// Entrées d'audit dont l'user est l'acteur (Sprint 10). SetNull côté
+  /// AuditEntry si l'user est supprimé, mais `actorName` garde la trace.
+  auditEntries AuditEntry[] @relation("AuditActor")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -1143,4 +1147,35 @@ model AppSetting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────── AUDIT (Sprint 10) ───────────────────────────
+
+/// Journal d'audit des opérations sensibles (create / update / delete /
+/// restore / permanently_delete). Copie du pattern KuroNeko `AuditEntry`,
+/// enrichi d'un ACTEUR (`actorId` + `actorName` snapshot) car Youri est
+/// multi-user (Stan / Certe / Angath) — on veut savoir QUI a fait l'action.
+///
+/// Écrit en best-effort par `logAudit()` (lib/audit.ts) : ne bloque jamais
+/// le flux métier si l'insertion échoue. Pas d'UI d'historique dédiée pour
+/// l'instant (comme KN) — surfacé en compteur dans /settings.
+model AuditEntry {
+  id       String @id @default(cuid())
+  entity   String /// ex: "Deal", "Task", "Artist"
+  entityId String
+  action   String /// "create" | "update" | "delete" | "restore" | "permanently_delete"
+  before   String? /// JSON stringifié de l'état antérieur (tronqué à 5000 car.)
+  summary  String? /// Description courte ("Deal supprimé : « … »")
+
+  /// Acteur de l'opération. SetNull si l'user est supprimé ; `actorName`
+  /// conserve la trace lisible même sans relation.
+  actorId   String?
+  actor     User?   @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorName String?
+
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@index([actorId])
 }
