@@ -1,0 +1,35 @@
+[Unit]
+Description=Youri Next.js production server
+After=network.target
+
+[Service]
+Type=simple
+User=stan
+Group=stan
+WorkingDirectory=/home/stan/youri
+EnvironmentFile=/home/stan/youri/.env
+Environment=NODE_OPTIONS=--max-old-space-size=2048
+# CRITIQUE : timezone Paris pour que le SSR formate les dates dans le bon
+# fuseau. Sans ça, les dates stockées en UTC (ex: 2027-05-11T22:00:00Z
+# = 12 mai 2027 00h00 Paris) sont affichées au mauvais jour côté serveur.
+# Bug réel rencontré sur KN (show "La Source - Traversière").
+Environment=TZ=Europe/Paris
+# Port d'écoute interne (Youri = 3001, KN = 3000 sur le même VPS). Utilisé
+# aussi par la génération PDF FDR pour le self-call loopback (lib/fdr-pdf.ts).
+Environment=PORT=3001
+# Chrome système pour la génération PDF FDR (Puppeteer). Le deploy fait
+# npm ci avec PUPPETEER_SKIP_DOWNLOAD=true → pas de Chromium bundled, donc
+# google-chrome-stable doit être installé sur le VPS (apt).
+Environment=PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+ExecStart=/usr/bin/npm run start:prod
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+# Sécurité : restrictions standard Linux
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

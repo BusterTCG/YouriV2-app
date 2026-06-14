@@ -5,36 +5,27 @@ VPS Hetzner sur lequel sont hébergées les apps de Stan. Pour Youri V2, le sous
 ## Stack VPS
 
 - **OS** : Linux (Ubuntu/Debian, user `stan`)
-- **Postgres** : instance unique sur le VPS, 2 bases distinctes — `kuroneko` (existante) et `youri` (à créer au Sprint 0). Pas de schéma `shared` — Contact/Venue restent dans la base `kuroneko`, Youri y accède via API HTTPS sur KN (token `INTER_APP_TOKEN`).
+- **Base de données** : **SQLite** (fichier `/home/stan/youri/prisma/prod.db`), comme KN (`provider="sqlite"`). PAS de Postgres — décision Sprint 12 2026-06-15 : KN tourne déjà en prod sur SQLite, suffisant pour un outil interne 3 users. Contact/Venue restent dans la base KN, Youri y accède via API HTTPS sur KN (token `INTER_APP_TOKEN`). Backup : `scripts/vps-backup.sh` (dump `.backup` + rotation 14j, préfixe `youri-`).
+- **Chrome** : `google-chrome-stable` installé via apt (génération PDF FDR via Puppeteer + `PUPPETEER_EXECUTABLE_PATH`, cf. `scripts/youri.service`). `npm ci` fait avec `PUPPETEER_SKIP_DOWNLOAD=true`.
 - **nginx** : reverse proxy HTTPS, vhost par sous-domaine
 - **Certbot** : certificats Let's Encrypt par sous-domaine
 - **systemd** : un service par app (`kuroneko.service` existe déjà, créer `youri.service` au Sprint 0)
 - **Node** : installé globalement, `npm run start` lance le serveur Next.js sur un port local (3000 pour KN, 3001 envisagé pour Youri)
 - **Backups** : `/home/stan/backups/` (rotation 14j sur VPS, pull manuel local depuis `pull-vps-backup.ps1`)
 
-## Service systemd pattern (cf. `scripts/kuroneko.service` chez KN)
+## Service systemd
 
-```ini
-[Unit]
-Description=Youri Next.js production server
-After=network.target
+Le fichier prêt à l'emploi est **`scripts/youri.service`** (copié/adapté de
+`kuroneko.service`). Points clés : `WorkingDirectory=/home/stan/youri`,
+`ExecStart=/usr/bin/npm run start:prod` (= `next start -p 3001`, PAS `npm run
+start` qui écouterait sur 3000), `TZ=Europe/Paris`, `PORT=3001`,
+`PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable`.
 
-[Service]
-Type=simple
-User=stan
-WorkingDirectory=/home/stan/youri
-EnvironmentFile=/home/stan/youri/.env
-Environment=NODE_OPTIONS=--max-old-space-size=2048
-Environment=TZ=Europe/Paris        # CRITIQUE pour formatage dates SSR Paris
-ExecStart=/usr/bin/npm run start
-Restart=on-failure
-RestartSec=10
-NoNewPrivileges=yes
-ProtectSystem=full
-PrivateTmp=yes
-
-[Install]
-WantedBy=multi-user.target
+Installation (one-time) :
+```bash
+sudo cp /home/stan/youri/scripts/youri.service /etc/systemd/system/youri.service
+sudo systemctl daemon-reload
+sudo systemctl enable youri
 ```
 
 **Pourquoi `TZ=Europe/Paris`** : sans ça, les dates stockées UTC (`2027-05-11T22:00:00Z` = 12 mai 00h Paris) s'affichent au mauvais jour côté SSR alors que le client affiche le bon. Bug réel rencontré sur KN sur le show "La Source - Traversière".
