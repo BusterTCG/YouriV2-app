@@ -16,8 +16,13 @@ import { prisma } from "@/lib/db";
  *
  * Puppeteer demande Node Runtime (pas Edge) — d'où le `import "server-only"`.
  *
- * Note prod : sur VPS / Vercel, `puppeteer` bundled ne marche pas. Migrer
- * vers `puppeteer-core` + `@sparticuz/chromium` au déploiement.
+ * Chromium utilisé (approche KN, validée en prod) :
+ *   - Dev local Windows/Mac : `puppeteer` bundled fonctionne tel quel.
+ *   - Prod VPS Ubuntu : Google Chrome système via la variable d'env
+ *     `PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable` (lue
+ *     automatiquement par `puppeteer.launch()`). Le deploy fait `npm ci` avec
+ *     `PUPPETEER_SKIP_DOWNLOAD=true` → pas de Chromium bundled côté serveur,
+ *     donc Chrome système obligatoire (installer `google-chrome-stable`).
  */
 
 export interface FdrPdfResult {
@@ -68,7 +73,17 @@ export async function generateFdrPdf(
     .replace(/[^\w\s\-,]/g, "")
     .trim();
 
-  const printUrl = `${origin}/print/fdr/${dealId}?preview=1`;
+  // En PROD, l'app est derrière nginx (TLS) qui proxy vers le port local en
+  // HTTP. Viser le domaine public (https://app.pangeeprod.com) donnerait un
+  // mélange proto https forwardé + port interne http → net::ERR_SSL_PROTOCOL_
+  // ERROR. Puppeteer tournant sur la MÊME machine, on vise la loopback HTTP
+  // (bypass nginx/TLS). En dev, l'`origin` passé (localhost:port) est correct.
+  // Port Youri prod = 3001 (next start -p 3001) — cf. PORT env si surchargé.
+  const internalBase =
+    process.env.NODE_ENV === "production"
+      ? `http://127.0.0.1:${process.env.PORT ?? "3001"}`
+      : origin;
+  const printUrl = `${internalBase}/print/fdr/${dealId}?preview=1`;
 
   let browser;
   try {
@@ -79,16 +94,15 @@ export async function generateFdrPdf(
     const page = await browser.newPage();
     await page.setViewport({ width: 794, height: 1123 }); // A4 @ 96dpi
 
-    // Forward du cookie de session — bypass le middleware auth de Youri V2.
-    const url = new URL(printUrl);
-    await page.setCookie({
-      name: "youri-session",
-      value: sessionToken,
-      domain: url.hostname,
-      path: "/",
-      httpOnly: true,
-      sameSite: "Lax",
-    });
+    // Forward du cookie de session via header — bypass le middleware auth de
+    // Youri (Puppeteer = navigateur neuf sans cookie, sinon rend /login en PDF).
+    // Via header plutôt que page.setCookie : plus robuste sur la loopback
+    // (pas de contrainte de match domaine / flag secure).
+    if (sessionToken) {
+      await page.setExtraHTTPHeaders({
+        Cookie: `youri-session=${sessionToken}`,
+      });
+    }
 
     await page.goto(printUrl, { waitUntil: "networkidle0", timeout: 30_000 });
 
