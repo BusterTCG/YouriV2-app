@@ -42,7 +42,9 @@ const USERS = [
     pangeeKey: "certe",
   },
   {
-    email: "angath@pangeeprod.com",
+    // Angath se connecte avec la boîte admin@ (cf. accès Youri V1).
+    // `pangeeKey` reste "angath" (identifiant interne management fees).
+    email: "admin@pangeeprod.com",
     name: "Angath",
     role: UserRole.MEMBER,
     color: "#f59e0b", // amber
