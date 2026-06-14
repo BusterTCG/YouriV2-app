@@ -31,6 +31,7 @@ export interface DealInstallmentRow {
 export async function getDealInstallments(
   dealId: string,
 ): Promise<DealInstallmentRow[]> {
+  await requireUser();
   if (!dealId) return [];
   const rows = await prisma.dealInstallment.findMany({
     where: { dealId },

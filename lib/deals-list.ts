@@ -301,6 +301,9 @@ export async function getDealsCategoryRecap(): Promise<
       category: true,
       budgetAmount: true,
       commissionAmount: true,
+      // Scalars nécessaires à la marge CACHETS (budget × cachetsFeesPct%).
+      cachetsFeesPct: true,
+      linkedToOwnProd: true,
       dealArtistes: {
         where: { deletedAt: null },
         select: { cachetAmount: true },
@@ -323,7 +326,16 @@ export async function getDealsCategoryRecap(): Promise<
       // Marge Brute Pangee = commission scalar (snapshot recompute).
       entry.totalMarge +=
         d.commissionAmount != null ? Number(d.commissionAmount) : 0;
+    } else if (d.category === "CACHETS") {
+      // Marge CACHETS = budget × cachetsFeesPct% (0 si lié à une prod Pangee).
+      // Aligné sur computeMargeBrute (lib/dashboard.ts) — audit 2026-06-15.
+      const budget = d.budgetAmount != null ? Number(d.budgetAmount) : 0;
+      if (!d.linkedToOwnProd && budget > 0) {
+        const pct = d.cachetsFeesPct != null ? Number(d.cachetsFeesPct) : 10;
+        entry.totalMarge += Math.round((budget * pct) / 100);
+      }
     } else {
+      // BOOKING : budget − artistes − charges.
       const budget = d.budgetAmount != null ? Number(d.budgetAmount) : 0;
       const artistes = d.dealArtistes.reduce(
         (acc, da) => acc + (da.cachetAmount != null ? Number(da.cachetAmount) : 0),

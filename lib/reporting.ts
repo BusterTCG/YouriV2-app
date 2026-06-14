@@ -77,7 +77,9 @@ function chartWindow(period: ReportingPeriod): { start: Date; end: Date; bucketC
 /** Filtre artiste (slug) sur la relation DealArtiste. */
 function artistDealWhere(artistSlug: string | null): Prisma.DealWhereInput {
   if (!artistSlug || artistSlug === "all") return {};
-  return { dealArtistes: { some: { artist: { slug: artistSlug } } } };
+  // `deletedAt: null` : ne pas matcher via un DealArtiste soft-deleté (artiste
+  // détaché du deal) — cohérent avec les listes (audit 2026-06-15).
+  return { dealArtistes: { some: { deletedAt: null, artist: { slug: artistSlug } } } };
 }
 
 /** Calcule la marge brute d'un deal — adapté Pangee :

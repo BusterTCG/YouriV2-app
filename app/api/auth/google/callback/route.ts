@@ -138,8 +138,15 @@ export async function GET(req: Request) {
     })
     .catch((e) => console.error("[google/callback] lastLogin update failed", e));
 
-  // 6. Redirect vers la destination originelle (ou /dashboard)
-  const dest = state.startsWith("/") ? state : "/dashboard";
+  // 6. Redirect vers la destination originelle (ou /dashboard).
+  // Garde anti open-redirect : on rejette les URLs protocol-relative (`//evil`)
+  // et `/\evil` qui résoudraient vers un domaine externe (audit 2026-06-15).
+  const dest =
+    state.startsWith("/") &&
+    !state.startsWith("//") &&
+    !state.startsWith("/\\")
+      ? state
+      : "/dashboard";
   return NextResponse.redirect(new URL(dest, req.url));
 }
 

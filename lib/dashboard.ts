@@ -150,7 +150,9 @@ function categoryWhere(cat: DashboardCategoryFilter): Prisma.DealWhereInput {
 /** Artiste filter (slug) → Prisma where via DealArtiste. */
 function artistDealWhere(artistSlug: string | null): Prisma.DealWhereInput {
   if (!artistSlug || artistSlug === "all") return {};
-  return { dealArtistes: { some: { artist: { slug: artistSlug } } } };
+  // `deletedAt: null` : ne pas matcher un deal via un DealArtiste soft-deleté
+  // (artiste détaché du deal) — cohérent avec les listes (audit 2026-06-15).
+  return { dealArtistes: { some: { deletedAt: null, artist: { slug: artistSlug } } } };
 }
 
 /**

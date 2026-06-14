@@ -20,7 +20,15 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const oauthError = searchParams.get("error");
-  const from = searchParams.get("from") ?? "/dashboard";
+  const rawFrom = searchParams.get("from") ?? "/dashboard";
+  // Garde anti open-redirect : seules les URLs internes (`/...` mais pas `//`
+  // ni `/\`) sont acceptées comme destination post-login (audit 2026-06-15).
+  const from =
+    rawFrom.startsWith("/") &&
+    !rawFrom.startsWith("//") &&
+    !rawFrom.startsWith("/\\")
+      ? rawFrom
+      : "/dashboard";
 
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [email, setEmail] = useState("");
