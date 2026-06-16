@@ -11,6 +11,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { prisma } from "@/lib/db";
+import { getVenue } from "@/lib/kn-client";
 import { computeProdExeBrute } from "@/lib/finance/show-financials";
 import { getTasksForDeal } from "@/lib/queries/tasks";
 import { formatShowTime } from "@/components/deals/deal-helpers";
@@ -76,6 +77,33 @@ export default async function ProdExecutiveDetailPage({ params }: PageProps) {
   if (!deal) notFound();
 
   const tasks = await getTasksForDeal(deal.id);
+
+  // Lieu KN lié (pour le menu déroulant jauge : capacité + sous-salles).
+  // Best-effort : si l'API KN est indisponible ou le venue introuvable, on
+  // retombe sur l'input libre (venue = null) sans casser la page.
+  let venue: {
+    id: string;
+    name: string;
+    capacity: number | null;
+    rooms: Array<{ id: string; name: string; capacity: number | null }>;
+  } | null = null;
+  if (deal.venueId) {
+    try {
+      const v = await getVenue(deal.venueId);
+      venue = {
+        id: v.id,
+        name: v.name,
+        capacity: v.capacity,
+        rooms: v.rooms.map((r) => ({
+          id: r.id,
+          name: r.name,
+          capacity: r.capacity,
+        })),
+      };
+    } catch {
+      venue = null;
+    }
+  }
 
   // Projection artistes (multi-artiste)
   const artistes: BookingDealArtistRow[] = deal.dealArtistes.map((da) => ({
@@ -254,6 +282,8 @@ export default async function ProdExecutiveDetailPage({ params }: PageProps) {
         dealDate={deal.date}
         capacity={deal.capacity}
         paying={deal.paying}
+        venue={venue}
+        venueRoomId={deal.venueRoomId}
         venueDealKind={deal.venueDealKind}
         prodExePct={deal.prodExePct != null ? Number(deal.prodExePct) : null}
         coRealKnPct={deal.coRealKnPct != null ? Number(deal.coRealKnPct) : null}

@@ -33,8 +33,9 @@ import { cn } from "@/lib/utils";
  * show-summary-card.tsx`, simplifiée pour Pangee Prod :
  *   - PROD_EXE pur (pas de modèle artiste choisi par l'user)
  *   - Pas d'invités (Stan ne s'en sert pas)
- *   - Jauge en Input libre (pas de venue.rooms côté Youri V2 — pattern
- *     snapshot annuaire KN distant, on aura cette donnée plus tard)
+ *   - Jauge : menu déroulant des jauges du lieu (capacité par défaut +
+ *     sous-salles) quand le deal a un venue KN en base, sinon input libre
+ *     (Stan 2026-06-16). Sélectionner reprend la donnée existante du lieu.
  *
  * Édition inline directe (pas de bouton Modifier). Chaque champ s'auto-
  * sauvegarde au blur (onBlur) ou onChange (selects).
@@ -60,6 +61,16 @@ interface Props {
   dealDate: Date;
   capacity: number | null;
   paying: number | null;
+  /** Lieu KN lié (capacité par défaut + sous-salles) — alimente le menu
+   *  déroulant jauge. null = pas de venue en base → jauge en input libre. */
+  venue: {
+    id: string;
+    name: string;
+    capacity: number | null;
+    rooms: Array<{ id: string; name: string; capacity: number | null }>;
+  } | null;
+  /** Sous-salle choisie au sein du venue (persistée sur le deal). */
+  venueRoomId: string | null;
   venueDealKind: VenueDealKind | null;
   prodExePct: number | null;
   coRealKnPct: number | null;
@@ -80,6 +91,8 @@ export function ShowSummaryCard({
   dealDate,
   capacity,
   paying,
+  venue,
+  venueRoomId,
   venueDealKind,
   prodExePct,
   coRealKnPct,
@@ -124,6 +137,52 @@ export function ShowSummaryCard({
         setPersistError(`${res.error}${details}`);
       }
     });
+  }
+
+  // ─ Menu déroulant Jauge (copie KN) ─
+  // Quand le deal a un venue KN en base (capacité par défaut OU sous-salles),
+  // le champ Jauge devient un Select pour reprendre la donnée existante du
+  // lieu. Valeurs spéciales : "__none__" (pas défini), "__default__" (jauge du
+  // lieu), "__custom__" (saisie manuelle → Input), ou un roomId (sous-salle).
+  const JAUGE_NONE = "__none__";
+  const JAUGE_DEFAULT = "__default__";
+  const JAUGE_CUSTOM = "__custom__";
+  const hasVenueJaugeOptions = Boolean(
+    venue && (venue.capacity != null || venue.rooms.length > 0),
+  );
+  const [forceCustom, setForceCustom] = useState(false);
+
+  function computeJaugeSelectValue(): string {
+    if (venueRoomId && venue?.rooms.find((r) => r.id === venueRoomId)) {
+      return venueRoomId;
+    }
+    if (capacity == null) return JAUGE_NONE;
+    if (venue?.capacity === capacity) return JAUGE_DEFAULT;
+    return JAUGE_CUSTOM;
+  }
+  const jaugeSelectValue = forceCustom ? JAUGE_CUSTOM : computeJaugeSelectValue();
+
+  function onChangeJauge(next: string) {
+    if (next === JAUGE_CUSTOM) {
+      setForceCustom(true);
+      return;
+    }
+    setForceCustom(false);
+    if (next === JAUGE_NONE) {
+      setFormCapacity("");
+      persist({ capacity: null, venueRoomId: null });
+      return;
+    }
+    if (next === JAUGE_DEFAULT && venue?.capacity != null) {
+      setFormCapacity(String(venue.capacity));
+      persist({ capacity: venue.capacity, venueRoomId: null });
+      return;
+    }
+    const room = venue?.rooms.find((r) => r.id === next);
+    if (room) {
+      setFormCapacity(room.capacity != null ? String(room.capacity) : "");
+      persist({ capacity: room.capacity, venueRoomId: room.id });
+    }
   }
 
   // Capacité totale : jauge si simple date, jauge × repr. si série
@@ -399,17 +458,56 @@ export function ShowSummaryCard({
               : null
           }
         >
-          <Input
-            type="number"
-            value={formCapacity}
-            onChange={(e) => setFormCapacity(e.target.value)}
-            onBlur={() => {
-              const n = formCapacity === "" ? null : Number(formCapacity);
-              if (n !== capacity) persist({ capacity: n });
-            }}
-            placeholder="ex. 350"
-            className="h-9 text-sm tabular-nums"
-          />
+          {hasVenueJaugeOptions ? (
+            <div className="space-y-1.5">
+              <Select value={jaugeSelectValue} onValueChange={onChangeJauge}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Choisir…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={JAUGE_NONE}>— Pas défini —</SelectItem>
+                  {venue?.capacity != null && (
+                    <SelectItem value={JAUGE_DEFAULT}>
+                      Jauge du lieu · {venue.capacity}
+                    </SelectItem>
+                  )}
+                  {venue?.rooms.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
+                      {r.capacity != null ? ` · ${r.capacity}` : ""}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={JAUGE_CUSTOM}>Saisir manuellement…</SelectItem>
+                </SelectContent>
+              </Select>
+              {jaugeSelectValue === JAUGE_CUSTOM && (
+                <Input
+                  type="number"
+                  value={formCapacity}
+                  onChange={(e) => setFormCapacity(e.target.value)}
+                  onBlur={() => {
+                    const n = formCapacity === "" ? null : Number(formCapacity);
+                    if (n !== capacity) persist({ capacity: n });
+                  }}
+                  placeholder="ex. 350"
+                  className="h-9 text-sm tabular-nums"
+                  autoFocus
+                />
+              )}
+            </div>
+          ) : (
+            <Input
+              type="number"
+              value={formCapacity}
+              onChange={(e) => setFormCapacity(e.target.value)}
+              onBlur={() => {
+                const n = formCapacity === "" ? null : Number(formCapacity);
+                if (n !== capacity) persist({ capacity: n });
+              }}
+              placeholder="ex. 350"
+              className="h-9 text-sm tabular-nums"
+            />
+          )}
         </Field>
         <Field
           label="Payants"
