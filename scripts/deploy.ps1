@@ -57,7 +57,14 @@ function Invoke-RemoteBash {
         $cleaned = $Script -replace "`r", ""
         $utf8NoBom = New-Object System.Text.UTF8Encoding $false
         [IO.File]::WriteAllText($tmpFile, $cleaned, $utf8NoBom)
-        cmd /c "ssh $Host_ `"bash -s`" < `"$tmpFile`""
+        # EAP=Continue + 2>&1 : les commandes distantes (npm ci…) ecrivent des
+        # warnings sur stderr ; sans ca, PS 5.1 les prend pour des erreurs
+        # fatales (NativeCommandError) et avorte le deploy en plein build.
+        # On verifie le vrai succes via $LASTEXITCODE chez l'appelant.
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        cmd /c "ssh $Host_ `"bash -s`" < `"$tmpFile`" 2>&1"
+        $ErrorActionPreference = $prevEAP
     } finally {
         Remove-Item $tmpFile -ErrorAction SilentlyContinue
     }
