@@ -285,12 +285,15 @@ export async function getBookingDealsList(opts: {
  * Récap par catégorie pour la page parent /deals (3 cards Booking / Prod Exé /
  * Cachet) — affiche le total Marge Pangee par catégorie.
  *
- * Stan 2026-05-27 audit : la formule diffère par catégorie.
- *   - BOOKING / CACHETS : budget − artistes − charges (modèle classique)
- *   - PROD_EXE          : commissionAmount scalar (= 15% × CA HT, snapshot
- *                         recalculé par recomputeShowFinancials)
- * Sinon, PROD_EXE affichait toujours une marge négative car budgetAmount
- * est null sur cette catégorie.
+ * Stan 2026-05-27 audit : la formule diffère par catégorie. Alignée sur
+ * computeMargeBrute (lib/dashboard.ts) — fix marge CACHETS audit 2026-06-15.
+ *   - BOOKING  : budget − Σ artistes − Σ charges (modèle classique)
+ *   - PROD_EXE : commissionAmount scalar (= 15% × CA HT, snapshot recalculé
+ *                par recomputeShowFinancials). Sinon marge toujours négative
+ *                car budgetAmount est null sur cette catégorie.
+ *   - CACHETS  : budget × cachetsFeesPct% (0 si linkedToOwnProd), défaut 10%.
+ *                Avant le fix : budget − artistes − charges, ce qui surévaluait
+ *                la marge ~37% au lieu de ~10% du budget.
  */
 export async function getDealsCategoryRecap(): Promise<
   Array<{ category: DealCategory; count: number; totalMarge: number }>
