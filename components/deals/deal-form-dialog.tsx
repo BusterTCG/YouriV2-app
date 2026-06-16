@@ -43,6 +43,7 @@ import { VenuePicker, type VenueSnapshot } from "./venue-picker";
 import { ContactFormDialog } from "@/components/contacts/contact-form-dialog";
 import { VenueFormDialog } from "@/components/venues/venue-form-dialog";
 import { ArtistSelect } from "./artist-select";
+import { NewArtistDialog } from "@/components/artists/new-artist-dialog";
 import { VENUE_DEAL_KIND_FR } from "@/lib/production-line-labels";
 
 /**
@@ -130,9 +131,13 @@ export function DealFormDialog({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Sous-dialogs (création rapide contact/lieu)
+  // Sous-dialogs (création rapide contact/lieu/artiste)
   const [openContactDialog, setOpenContactDialog] = useState(false);
   const [openVenueDialog, setOpenVenueDialog] = useState(false);
+  const [openArtistDialog, setOpenArtistDialog] = useState(false);
+  // Bumpé après création rapide d'un artiste → force l'ArtistSelect à re-fetch
+  // sa liste pour afficher le nouvel artiste fraîchement sélectionné.
+  const [artistReloadSignal, setArtistReloadSignal] = useState(0);
 
   // State global (les champs Prod Exé restent silencieux côté Booking)
   const [title, setTitle] = useState(deal?.title ?? "");
@@ -451,7 +456,18 @@ export function DealFormDialog({
               {isCachets ? (
                 <div className="grid gap-3 grid-cols-[1fr_180px] max-w-[520px]">
                   <div className="space-y-1.5 min-w-0">
-                    <FieldLabel required>Artiste</FieldLabel>
+                    <div className="flex items-center justify-between gap-2">
+                      <FieldLabel required>Artiste</FieldLabel>
+                      <button
+                        type="button"
+                        onClick={() => setOpenArtistDialog(true)}
+                        title="Créer un nouvel artiste"
+                        className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Plus className="h-3 w-3" />
+                        Nouvel artiste
+                      </button>
+                    </div>
                     <ArtistSelect
                       value={artistId}
                       onChange={(id, name) => {
@@ -459,6 +475,7 @@ export function DealFormDialog({
                         setArtistName(name ?? null);
                       }}
                       disabled={pending}
+                      reloadSignal={artistReloadSignal}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -481,7 +498,18 @@ export function DealFormDialog({
                   {/* Prod Exé : Artiste obligatoire avant la date */}
                   {isProdExe && (
                     <div className="space-y-1.5">
-                      <FieldLabel required>Artiste</FieldLabel>
+                      <div className="flex items-center justify-between gap-2">
+                        <FieldLabel required>Artiste</FieldLabel>
+                        <button
+                          type="button"
+                          onClick={() => setOpenArtistDialog(true)}
+                          title="Créer un nouvel artiste"
+                          className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <Plus className="h-3 w-3" />
+                          Nouvel artiste
+                        </button>
+                      </div>
                       <ArtistSelect
                         value={artistId}
                         onChange={(id, name) => {
@@ -489,6 +517,7 @@ export function DealFormDialog({
                           setArtistName(name ?? null);
                         }}
                         disabled={pending}
+                        reloadSignal={artistReloadSignal}
                       />
                     </div>
                   )}
@@ -905,6 +934,15 @@ export function DealFormDialog({
         onOpenChange={setOpenVenueDialog}
         onCreated={(v) => {
           setVenue({ id: v.id, name: v.name, city: v.city });
+        }}
+      />
+      <NewArtistDialog
+        open={openArtistDialog}
+        onOpenChange={setOpenArtistDialog}
+        onCreated={(a) => {
+          setArtistId(a.id);
+          setArtistName(a.name);
+          setArtistReloadSignal((n) => n + 1);
         }}
       />
     </>

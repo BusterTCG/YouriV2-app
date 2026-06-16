@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, ChevronsUpDown, Loader2, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import {
   Command,
   CommandEmpty,
@@ -17,8 +17,6 @@ import {
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { listPangeeArtists } from "@/lib/actions/deals";
-import { createArtist } from "@/lib/actions/artists";
-import { PANGEE_ARTIST_COLOR } from "@/lib/artists-constants";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,6 +26,10 @@ import { cn } from "@/lib/utils";
  *
  * Fetch la liste complète au mount via `listPangeeArtists` (Pangee gère
  * < 100 artistes, pas de pagination). Filtrage par CommandInput shadcn.
+ *
+ * `reloadSignal` : incrémenté par le parent après une création rapide d'artiste
+ * (bouton "+ Nouvel artiste" du formulaire de deal) → re-fetch la liste pour que
+ * le nouvel artiste apparaisse et puisse être affiché comme sélectionné.
  */
 interface Props {
   value: string | null;
@@ -36,6 +38,7 @@ interface Props {
   disabled?: boolean;
   placeholder?: string;
   className?: string;
+  reloadSignal?: number;
 }
 
 interface ArtistOption {
@@ -50,13 +53,11 @@ export function ArtistSelect({
   disabled,
   placeholder = "Choisir un artiste…",
   className,
+  reloadSignal = 0,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [artists, setArtists] = useState<ArtistOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -72,41 +73,9 @@ export function ArtistSelect({
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [reloadSignal]);
 
   const selected = artists.find((a) => a.id === value);
-
-  // Ajout rapide : si la recherche ne correspond à aucun artiste existant, on
-  // propose de créer l'artiste à la volée (Stan 2026-06-16 — éviter de sortir
-  // du formulaire de deal pour créer l'artiste puis revenir).
-  const trimmed = search.trim();
-  const exactMatch = artists.some(
-    (a) => a.name.toLowerCase() === trimmed.toLowerCase(),
-  );
-  const showCreate = trimmed.length > 0 && !exactMatch;
-
-  async function handleQuickCreate() {
-    if (!trimmed || creating) return;
-    setCreating(true);
-    setCreateError(null);
-    const res = await createArtist({ name: trimmed });
-    setCreating(false);
-    if (res.ok && res.data) {
-      const created = {
-        id: res.data.id,
-        name: trimmed,
-        color: PANGEE_ARTIST_COLOR,
-      };
-      setArtists((prev) =>
-        [...prev, created].sort((a, b) => a.name.localeCompare(b.name, "fr")),
-      );
-      onChange(res.data.id, trimmed);
-      setSearch("");
-      setOpen(false);
-    } else {
-      setCreateError(res.ok ? null : res.error);
-    }
-  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -148,13 +117,9 @@ export function ArtistSelect({
       </PopoverTrigger>
       <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]" align="start">
         <Command>
-          <CommandInput
-            placeholder="Rechercher ou créer un artiste…"
-            value={search}
-            onValueChange={setSearch}
-          />
+          <CommandInput placeholder="Rechercher un artiste…" />
           <CommandList>
-            {!showCreate && <CommandEmpty>Aucun artiste trouvé.</CommandEmpty>}
+            <CommandEmpty>Aucun artiste trouvé.</CommandEmpty>
             <CommandGroup>
               {artists.map((a) => (
                 <CommandItem
@@ -177,31 +142,6 @@ export function ArtistSelect({
                 </CommandItem>
               ))}
             </CommandGroup>
-            {showCreate && (
-              <CommandGroup>
-                <CommandItem
-                  value={trimmed}
-                  onSelect={handleQuickCreate}
-                  disabled={creating}
-                  className="text-yr-gold data-[selected=true]:text-yr-gold"
-                >
-                  {creating ? (
-                    <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
-                  ) : (
-                    <Plus className="h-3.5 w-3.5 mr-2" />
-                  )}
-                  <span className="flex-1">
-                    Créer l&apos;artiste «{" "}
-                    <span className="font-medium">{trimmed}</span> »
-                  </span>
-                </CommandItem>
-              </CommandGroup>
-            )}
-            {createError && (
-              <div className="px-3 py-2 text-xs text-destructive">
-                {createError}
-              </div>
-            )}
           </CommandList>
         </Command>
       </PopoverContent>
