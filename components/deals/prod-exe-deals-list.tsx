@@ -109,9 +109,18 @@ function ArtisteStatusPill({ deal }: { deal: ProdExeDealRow }) {
   );
 }
 
-/** Pill "X à régler" — affiche le nombre de lignes COST + cachet non payées. */
-function PaiementsPill({ count }: { count: number }) {
+/** Pill statut paiements : "Soldé" (tout réglé), "X à régler", ou "—" (deal
+ *  vide). Stan 2026-06-16 : un deal sans rien renseigné avait `linesToPay===0`
+ *  donc affichait "Soldé" à tort — on distingue maintenant le deal vide. */
+function PaiementsPill({ count, hasContent }: { count: number; hasContent: boolean }) {
   if (count === 0) {
+    if (!hasContent) {
+      return (
+        <span className="inline-flex items-center gap-1 rounded border border-border bg-muted/40 px-2 py-0.5 text-xs whitespace-nowrap text-muted-foreground">
+          —
+        </span>
+      );
+    }
     return (
       <span className="inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs whitespace-nowrap text-emerald-700 dark:text-emerald-400">
         <Check className="h-3 w-3" />
@@ -327,7 +336,14 @@ export function ProdExeDealsList({ deals, totals, periodLabel }: Props) {
 
                       {/* 11. Statut paiements (X à régler) */}
                       <td className="px-2 py-2 whitespace-nowrap">
-                        <PaiementsPill count={deal.linesToPay} />
+                        <PaiementsPill
+                          count={deal.linesToPay}
+                          hasContent={
+                            deal.caHt !== 0 ||
+                            deal.totalCost !== 0 ||
+                            deal.partArtiste !== 0
+                          }
+                        />
                       </td>
 
                       {/* 12. Mgmt fees */}

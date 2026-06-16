@@ -10,7 +10,10 @@ import {
 } from "@/lib/tasks-show-sync-utils";
 import { revalidateAfterTaskMutation } from "@/lib/revalidate-helpers";
 
-export type { ShowTaskKey };
+// NB : pas de `export type { ShowTaskKey }` ici — ce fichier est "use server",
+// et un re-export de type y casse le build prod (turbopack le transforme en
+// référence runtime → ReferenceError). Les consommateurs importent ShowTaskKey
+// directement depuis "@/lib/tasks-show-sync-utils" (audit prod 2026-06-16).
 
 /**
  * Synchronisation Show → Tâches (sens fiche → pipeline).
