@@ -31,33 +31,32 @@ interface TemplateSeed {
   defaultDueOffsetDays?: number | null;
 }
 
+// Assignations par défaut définies par Stan (config prod 2026-06-16).
+// Clés = pangeeKey : "stan", "angath" (= admin@pangeeprod.com), null = non assigné.
 const TEMPLATES: Record<DealCategory, TemplateSeed[]> = {
-  // Repris de youri-app/lib/db.ts:76 (BOOKING_TACHES_DEFAULT)
   BOOKING: [
-    { order: 0, label: "Validation du projet", defaultAssigneeKey: "stan" },
+    { order: 0, label: "Validation du projet" },
     { order: 1, label: "Validation des artistes" },
-    { order: 2, label: "Envoi du devis" },
+    { order: 2, label: "Envoi du devis", defaultAssigneeKey: "angath" },
     { order: 3, label: "Envoi de FDR" },
-    { order: 4, label: "Envoi de Facture" },
+    { order: 4, label: "Envoi de Facture", defaultAssigneeKey: "angath" },
   ],
-  // Repris de youri-app/lib/db.ts:172 (PROD_EXE_TACHES_DEFAULT)
   PROD_EXE: [
     { order: 0, label: "Validation date", defaultAssigneeKey: "stan" },
-    { order: 1, label: "Signature du contrat" },
+    { order: 1, label: "Signature du contrat", defaultAssigneeKey: "stan" },
     { order: 2, label: "Mise en ligne" },
     { order: 3, label: "Gestion VHR" },
     { order: 4, label: "Envoie FDR" },
     { order: 5, label: "Envoie Facture" },
-    { order: 6, label: "Paiement Artiste" },
+    { order: 6, label: "Paiement Artiste", defaultAssigneeKey: "angath" },
   ],
-  // Repris de youri-app/lib/db.ts:121 (INTERMITTENCE_TACHES_DEFAULT)
   CACHETS: [
-    { order: 0, label: "Validation du montant Artiste", defaultAssigneeKey: "stan" },
-    { order: 1, label: "Validation du Moovin Motion Artiste" },
-    { order: 2, label: "Envoi de la facture Artiste" },
-    { order: 3, label: "Paiement Artiste de la facture" },
-    { order: 4, label: "Emission du cachet" },
-    { order: 5, label: "Paiement du cachet" },
+    { order: 0, label: "Validation du montant Artiste", defaultAssigneeKey: "angath" },
+    { order: 1, label: "Validation du Moovin Motion Artiste", defaultAssigneeKey: "angath" },
+    { order: 2, label: "Envoi de la facture Artiste", defaultAssigneeKey: "angath" },
+    { order: 3, label: "Paiement Artiste de la facture", defaultAssigneeKey: "angath" },
+    { order: 4, label: "Emission du cachet", defaultAssigneeKey: "angath" },
+    { order: 5, label: "Paiement du cachet", defaultAssigneeKey: "angath" },
   ],
 };
 
