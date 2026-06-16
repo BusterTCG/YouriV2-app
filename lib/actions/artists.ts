@@ -39,7 +39,7 @@ export type UpdateArtistInput = z.infer<typeof UpdateArtistSchema>;
 
 // ─────────── Create ───────────
 
-export async function createArtist(input: unknown): Promise<ActionResult<{ slug: string }>> {
+export async function createArtist(input: unknown): Promise<ActionResult<{ slug: string; id: string }>> {
   return safeAction("createArtist", async () => {
     await requireUser();
     const data = CreateArtistSchema.parse(input);
@@ -71,11 +71,11 @@ export async function createArtist(input: unknown): Promise<ActionResult<{ slug:
           },
         },
       },
-      select: { slug: true },
+      select: { slug: true, id: true },
     });
 
     revalidatePath("/artistes");
-    return { slug: created.slug };
+    return { slug: created.slug, id: created.id };
   });
 }
 
