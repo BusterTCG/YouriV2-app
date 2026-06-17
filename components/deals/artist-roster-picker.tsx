@@ -23,6 +23,7 @@ import {
   type PangeeArtistOption,
 } from "@/lib/actions/deals";
 import { artistInitials } from "@/lib/artists";
+import { NewArtistDialog } from "@/components/artists/new-artist-dialog";
 
 /**
  * ArtistRosterPicker — combobox d'ajout d'un artiste Pangee à un deal.
@@ -46,6 +47,7 @@ export function ArtistRosterPicker({ dealId, excludeIds }: Props) {
   const [loading, setLoading] = useState(false);
   const [adding, startAddTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [artistDialogOpen, setArtistDialogOpen] = useState(false);
 
   // Fetch roster à l'ouverture (+ refetch quand excludeIds change pendant l'ouverture)
   useEffect(() => {
@@ -81,7 +83,23 @@ export function ArtistRosterPicker({ dealId, excludeIds }: Props) {
     });
   }
 
+  // Création rapide : un artiste pas encore dans le portfolio peut être créé
+  // depuis le picker (Stan 2026-06-17 — même UX que le formulaire de deal). À
+  // la création, on le rattache directement au deal.
+  function handleArtistCreated(artist: { id: string }) {
+    setError(null);
+    startAddTransition(async () => {
+      const res = await addDealArtist({ dealId, artistId: artist.id });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
   return (
+    <>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
@@ -140,13 +158,27 @@ export function ArtistRosterPicker({ dealId, excludeIds }: Props) {
                 {error}
               </div>
             )}
-            <div className="border-t px-3 py-2 text-[10px] text-muted-foreground italic flex items-center gap-1.5">
-              <UserPlus className="h-3 w-3" />
-              Crée un nouvel artiste depuis <span className="font-medium">/artistes</span>.
-            </div>
           </CommandList>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              setArtistDialogOpen(true);
+            }}
+            className="flex w-full items-center gap-1.5 border-t px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+          >
+            <UserPlus className="h-3 w-3" />
+            Créer un nouvel artiste
+          </button>
         </Command>
       </PopoverContent>
     </Popover>
+
+      <NewArtistDialog
+        open={artistDialogOpen}
+        onOpenChange={setArtistDialogOpen}
+        onCreated={handleArtistCreated}
+      />
+    </>
   );
 }
