@@ -34,6 +34,12 @@ interface Props {
 }
 
 export function DealArtistsSection({ dealId, budgetAmount, artistes }: Props) {
+  // Tri alphabétique français (case + accents insensibles) sur le nom affiché,
+  // cohérent avec listPangeeArtists (Stan 2026-06-17). L'ordre d'insertion en
+  // BDD n'a pas de sens fonctionnel.
+  const sortedArtistes = [...artistes].sort((a, b) =>
+    a.artist.name.localeCompare(b.artist.name, "fr", { sensitivity: "base" }),
+  );
   const total = artistes.reduce((acc, a) => acc + (a.amount ?? 0), 0);
   const excludeIds = artistes.map((a) => a.artist.id);
   const paidCount = artistes.filter((a) => a.paymentStatus === "PAID").length;
@@ -66,7 +72,7 @@ export function DealArtistsSection({ dealId, budgetAmount, artistes }: Props) {
             Aucun artiste rattaché à ce deal.
           </div>
         ) : (
-          artistes.map((a) => (
+          sortedArtistes.map((a) => (
             <ArtistRow key={a.id} row={a} budgetAmount={budgetAmount} />
           ))
         )}

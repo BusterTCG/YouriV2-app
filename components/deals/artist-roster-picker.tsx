@@ -48,15 +48,32 @@ export function ArtistRosterPicker({ dealId, excludeIds }: Props) {
   const [adding, startAddTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [artistDialogOpen, setArtistDialogOpen] = useState(false);
+  // IDs ajoutés au deal dans cette session mais pas encore reflétés dans
+  // `excludeIds` (le temps que router.refresh propage les nouvelles props).
+  // Évite qu'un artiste tout juste ajouté réapparaisse dans la liste si on
+  // rouvre le picker avant la fin du refresh serveur — flagrant en dev où le
+  // refresh peut prendre plusieurs secondes (Stan 2026-06-17 : "la liste ne se
+  // met pas à jour").
+  const [pendingAdded, setPendingAdded] = useState<string[]>([]);
 
-  // Fetch roster à l'ouverture (+ refetch quand excludeIds change pendant l'ouverture)
+  // Purge les ids une fois reflétés dans excludeIds (refresh terminé). Garde la
+  // même référence si rien ne change pour éviter une boucle de rendu.
+  useEffect(() => {
+    setPendingAdded((prev) => {
+      const next = prev.filter((id) => !excludeIds.includes(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [excludeIds]);
+
+  // Fetch roster à l'ouverture (exclut artistes du deal + ajouts en attente).
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
+    const exclude = [...excludeIds, ...pendingAdded];
     (async () => {
-      const res = await listPangeeArtists(excludeIds);
+      const res = await listPangeeArtists(exclude);
       if (cancelled) return;
       setLoading(false);
       if (res.ok && res.data) {
@@ -68,7 +85,7 @@ export function ArtistRosterPicker({ dealId, excludeIds }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [open, excludeIds]);
+  }, [open, excludeIds, pendingAdded]);
 
   function pick(artistId: string) {
     setError(null);
@@ -78,6 +95,11 @@ export function ArtistRosterPicker({ dealId, excludeIds }: Props) {
         setError(res.error);
         return;
       }
+      // Retrait optimiste immédiat + exclusion locale jusqu'au refresh serveur.
+      setItems((prev) => prev.filter((a) => a.id !== artistId));
+      setPendingAdded((prev) =>
+        prev.includes(artistId) ? prev : [...prev, artistId],
+      );
       setOpen(false);
       router.refresh();
     });
@@ -94,6 +116,10 @@ export function ArtistRosterPicker({ dealId, excludeIds }: Props) {
         setError(res.error);
         return;
       }
+      setItems((prev) => prev.filter((a) => a.id !== artist.id));
+      setPendingAdded((prev) =>
+        prev.includes(artist.id) ? prev : [...prev, artist.id],
+      );
       router.refresh();
     });
   }

@@ -352,8 +352,11 @@ export async function addDealArtist(
     });
     await recomputeMfForDeal(dealId);
     revalidatePath("/dashboard");
-    revalidatePath("/deals/booking");
-    revalidatePath(`/deals/booking/${dealId}`);
+    revalidatePath("/artistes");
+    // Le picker artistes est partagé par les 3 catégories (Booking + Prod Exé
+    // + Cachets) — on revalide les 3 fiches, sinon la liste reste figée hors
+    // Booking (Stan 2026-06-17).
+    revalidateAllDealRoutes(dealId, true);
     return { id: created.id };
   });
 }
@@ -369,8 +372,8 @@ export async function removeDealArtist(id: string): Promise<ActionResult> {
     });
     await recomputeMfForDeal(da.dealId);
     revalidatePath("/dashboard");
-    revalidatePath("/deals/booking");
-    revalidatePath(`/deals/booking/${da.dealId}`);
+    revalidatePath("/artistes");
+    revalidateAllDealRoutes(da.dealId, true);
   });
 }
 
