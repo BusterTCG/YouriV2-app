@@ -7,39 +7,25 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
-import { computeCachetBreakdownFromBudget } from "@/lib/finance/cachet-payroll";
 
 /**
  * Recompute server-side d'un deal CACHETS :
- *   1. `Deal.budgetAmount` = Σ prestations.amount actives (CA total facturé)
- *   2. `DealArtiste.cachetAmount` (1er artiste actif) =
- *           budgetAmount × (100 − cachetsFeesPct) / 100
- *      → le cachet brut versé à l'artiste est déduit du CA via une simple
- *      règle de partage. Pangee garde `cachetsFeesPct`% (Marge Brute), le
- *      reste va à l'artiste. Stan 2026-05-28.
+ *   `Deal.budgetAmount` = Σ prestations.amount actives (CA total facturé)
+ *   + normalisation du statut d'encaissement (budgetPaymentStatus / paidAt).
+ *
+ * Stan 2026-06-17 : on NE recalcule PLUS le cachet brut de l'artiste depuis le
+ * CA — il est désormais saisi à la main (cellule vide par défaut). La marge
+ * brute = Σ prestations − cachet brut est calculée à l'affichage.
  *
  * À appeler après TOUTE mutation impactant le CA :
  *   - addCachetPrestation / updateCachetPrestation / deleteCachetPrestation
- *   - updateCachetsDetails (si cachetsFeesPct ou linkedToOwnProd changent)
- *
- * Si `linkedToOwnProd` → on ne recalcule PAS le cachet artiste (Stan le
- * saisit manuellement, le CA n'est pas la base).
+ *   - updateCachetsDetails (si linkedToOwnProd change)
  */
 async function recomputeCachetsBudget(dealId: string): Promise<void> {
-  const [prestations, deal] = await Promise.all([
-    prisma.cachetPrestation.findMany({
-      where: { dealId, deletedAt: null },
-      select: { amount: true, paymentStatus: true, paidAt: true },
-    }),
-    prisma.deal.findUnique({
-      where: { id: dealId },
-      select: {
-        cachetsFeesPct: true,
-        linkedToOwnProd: true,
-      },
-    }),
-  ]);
-  if (!deal) return;
+  const prestations = await prisma.cachetPrestation.findMany({
+    where: { dealId, deletedAt: null },
+    select: { amount: true, paymentStatus: true, paidAt: true },
+  });
 
   const total = prestations.reduce(
     (acc, p) => acc + (p.amount != null ? Number(p.amount) : 0),
@@ -73,27 +59,6 @@ async function recomputeCachetsBudget(dealId: string): Promise<void> {
       budgetPaidAt: allPrestationsPaid ? prestationsPaidAt : null,
     },
   });
-
-  // Auto-update du cachet artiste (sauf mode linkedToOwnProd).
-  // Stan 2026-05-30 : on stocke le BRUT GUSO (= ce qui apparaît sur la fiche
-  // de paie déclarée). Calcul : enveloppe = budget × (100−pct)% ; brut =
-  // enveloppe / (1 + chargesPatronales/100). Voir lib/finance/cachet-payroll.
-  //
-  // Audit Stan 2026-05-30 : si total = 0 (pas de prestations encore), on ne
-  // touche PAS au cachetAmount existant — sinon on efface un brut manuel
-  // saisi en mode linkedToOwnProd qu'on aurait basculé temporairement.
-  if (!deal.linkedToOwnProd && total > 0) {
-    const pct =
-      deal.cachetsFeesPct != null ? Number(deal.cachetsFeesPct) : 10;
-    const breakdown = computeCachetBreakdownFromBudget(total, pct);
-    await prisma.dealArtiste.updateMany({
-      where: { dealId, deletedAt: null },
-      data: {
-        cachetAmount:
-          breakdown.brut > 0 ? new Prisma.Decimal(breakdown.brut) : null,
-      },
-    });
-  }
 }
 
 /**
