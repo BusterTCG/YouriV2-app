@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
+  ArrowLeft,
   ArrowRight,
   CheckCircle2,
   Clock,
@@ -20,10 +21,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { DealCategory, type ManagementFeeRole } from "@prisma/client";
+import type { ManagementFeeRole } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { PANGEE_TEAM } from "@/lib/pangee-team";
-import { DEAL_CATEGORY_LABELS, formatEur } from "@/components/deals/deal-helpers";
+import { DEAL_CATEGORY_LABELS, dealHref, formatEur } from "@/components/deals/deal-helpers";
 import { PERIOD_PRESET_OPTIONS } from "@/lib/period-presets";
 import { updateManagementFee } from "@/lib/actions/management-fees";
 import { useEur } from "@/lib/privacy-context";
@@ -263,21 +264,41 @@ export function ManagementFeesPageClient({
         <div className="rounded-md border bg-muted/10 py-10 text-center text-sm text-muted-foreground italic">
           Aucune management fee sur ce filtre.
         </div>
-      ) : scope === "mine" && kpiByAssociate.length === 1 ? (
-        <div className="grid gap-3 md:grid-cols-[minmax(260px,320px)_1fr]">
-          <AssociateKpiCard kpi={kpiByAssociate[0]} />
-          <MonthlyBarChart
-            data={kpiByAssociate[0].monthlyPaid}
-            associateName={
-              PANGEE_TEAM.find((m) => m.key === kpiByAssociate[0].associateKey)
-                ?.firstName ?? kpiByAssociate[0].associateKey
-            }
-          />
+      ) : kpiByAssociate.length === 1 ? (
+        // Vue mono-associé (Mes MF, OU un associé sélectionné en cliquant sa
+        // carte en mode équipe) : carte + graphe mensuel. Stan 2026-06-17.
+        <div className="space-y-2">
+          {scope === "all" && filters.associateKey && (
+            <button
+              type="button"
+              onClick={() => setScope("all")}
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-3 w-3" />
+              Tous les associés
+            </button>
+          )}
+          <div className="grid gap-3 md:grid-cols-[minmax(260px,320px)_1fr]">
+            <AssociateKpiCard kpi={kpiByAssociate[0]} />
+            <MonthlyBarChart
+              data={kpiByAssociate[0].monthlyPaid}
+              associateName={
+                PANGEE_TEAM.find((m) => m.key === kpiByAssociate[0].associateKey)
+                  ?.firstName ?? kpiByAssociate[0].associateKey
+              }
+            />
+          </div>
         </div>
       ) : (
+        // Vue équipe : grille de cartes cliquables → filtre la page sur
+        // l'associé (carte + graphe + lignes). Stan 2026-06-17.
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {kpiByAssociate.map((kpi) => (
-            <AssociateKpiCard key={kpi.associateKey} kpi={kpi} />
+            <AssociateKpiCard
+              key={kpi.associateKey}
+              kpi={kpi}
+              onSelect={() => setParam("associate", kpi.associateKey)}
+            />
           ))}
         </div>
       )}
@@ -345,7 +366,14 @@ export function ManagementFeesPageClient({
 
 // ──────────────────────────── Sous-composants ────────────────────────────
 
-function AssociateKpiCard({ kpi }: { kpi: AssociateKpi }) {
+function AssociateKpiCard({
+  kpi,
+  onSelect,
+}: {
+  kpi: AssociateKpi;
+  /** Si fourni, la carte est cliquable → filtre la page sur cet associé. */
+  onSelect?: () => void;
+}) {
   const member = PANGEE_TEAM.find((m) => m.key === kpi.associateKey);
   const displayName = member?.firstName ?? kpi.associateKey;
   const allPaid = kpi.pending === 0 && kpi.total > 0;
@@ -357,7 +385,27 @@ function AssociateKpiCard({ kpi }: { kpi: AssociateKpi }) {
   const avatarColor = member?.color ?? "#94a3b8"; // fallback gris-bleu
 
   return (
-    <div className="rounded-md border bg-card p-4 space-y-3">
+    <div
+      className={cn(
+        "rounded-md border bg-card p-4 space-y-3",
+        onSelect &&
+          "cursor-pointer transition-colors hover:border-yr-gold/40 hover:bg-accent/30",
+      )}
+      onClick={onSelect}
+      role={onSelect ? "button" : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onKeyDown={
+        onSelect
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect();
+              }
+            }
+          : undefined
+      }
+      title={onSelect ? `Voir les MF de ${displayName}` : undefined}
+    >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <div
@@ -415,6 +463,20 @@ function AssociateKpiCard({ kpi }: { kpi: AssociateKpi }) {
         </div>
       </div>
 
+      {/* Dispo à verser — cumul des MF en cours dont TOUT l'amont du deal est
+          OK (budget encaissé + artistes/charges payés). = cash versable
+          maintenant sans risque cash-flow (Stan 2026-06-17). */}
+      {kpi.dispo > 0 && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-2.5 py-1.5">
+          <div className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold text-emerald-700 dark:text-emerald-400">
+            <CheckCircle2 className="h-3 w-3" />
+            Dispo à verser
+          </div>
+          <div className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+            {eur(kpi.dispo)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -534,11 +596,7 @@ function FeeRow({ row }: { row: ManagementFeeRow }) {
       </td>
       <td className="px-3 py-2 min-w-[180px]">
         <Link
-          href={
-            row.dealCategory === DealCategory.BOOKING
-              ? `/deals/booking/${row.dealId}`
-              : `/deals`
-          }
+          href={dealHref(row.dealCategory, row.dealId)}
           className="font-medium hover:underline"
         >
           {row.dealTitle}
@@ -595,11 +653,7 @@ function FeeRow({ row }: { row: ManagementFeeRow }) {
       </td>
       <td className="px-3 py-2 w-8">
         <Link
-          href={
-            row.dealCategory === DealCategory.BOOKING
-              ? `/deals/booking/${row.dealId}`
-              : `/deals`
-          }
+          href={dealHref(row.dealCategory, row.dealId)}
           className="text-muted-foreground hover:text-foreground"
           title="Ouvrir le deal"
         >
@@ -631,11 +685,6 @@ function FeeCard({ row }: { row: ManagementFeeRow }) {
     if (res.ok) router.refresh();
   }
 
-  const dealHref =
-    row.dealCategory === DealCategory.BOOKING
-      ? `/deals/booking/${row.dealId}`
-      : `/deals`;
-
   return (
     <div className="rounded-md border bg-card p-3">
       {/* Ligne 1 : date + catégorie · dispo paiement */}
@@ -661,7 +710,7 @@ function FeeCard({ row }: { row: ManagementFeeRow }) {
       </div>
 
       {/* Ligne 2 : titre deal */}
-      <Link href={dealHref} className="font-medium text-sm leading-tight hover:underline block truncate">
+      <Link href={dealHref(row.dealCategory, row.dealId)} className="font-medium text-sm leading-tight hover:underline block truncate">
         {row.dealTitle}
       </Link>
 

@@ -17,7 +17,7 @@ import {
   type MonthlyBucket,
   type ReportingData,
   type ReportingPeriod,
-  type TopArtistRow,
+  type TopDealRow,
 } from "./reporting-types";
 
 export {
@@ -201,6 +201,8 @@ export async function getReportingData(opts: {
     prisma.deal.findMany({
       where: periodDealWhere,
       select: {
+        id: true,
+        title: true,
         category: true,
         budgetAmount: true,
         commissionAmount: true,
@@ -265,68 +267,44 @@ export async function getReportingData(opts: {
   const margeNette = margeBrute - totalMf;
   const margeNettePct = caHt > 0 ? (margeNette / caHt) * 100 : null;
 
-  // ── Top artistes — CA HT au prorata si plusieurs artistes sur un deal ─
-  const artistTotals = new Map<
+  // ── Top deals — par MARGE NETTE générée sur la période (Stan 2026-06-17,
+  //    remplace le top artistes). Agrégé par dealId : periodDeals (1 entrée /
+  //    deal) + tranches d'échéancier BOOKING (somme des tranches encaissées). ─
+  const dealTotals = new Map<
     string,
-    { name: string; slug: string; color: string | null; caHt: number; count: number }
+    { title: string; category: DealCategory; margeNette: number }
   >();
   for (const d of periodDeals) {
-    const dealCa = d.budgetAmount != null ? Number(d.budgetAmount) : 0;
-    if (dealCa === 0 || d.dealArtistes.length === 0) continue;
-    // Prorata simple : on divise le CA par le nb d'artistes du deal. Pas
-    // de sharePct ici car simplification (cohérent avec dashboard).
-    const share = dealCa / d.dealArtistes.length;
-    for (const da of d.dealArtistes) {
-      const id = da.artist.id;
-      const existing = artistTotals.get(id);
-      if (existing) {
-        existing.caHt += share;
-        existing.count += 1;
-      } else {
-        artistTotals.set(id, {
-          name: da.artist.name,
-          slug: da.artist.slug,
-          color: da.artist.color,
-          caHt: share,
-          count: 1,
-        });
-      }
-    }
+    const net = computeMargeBrute(d) - computeTotalMf(d);
+    if (net === 0) continue;
+    dealTotals.set(d.id, {
+      title: d.title,
+      category: d.category,
+      margeNette: net,
+    });
   }
-  // Tranches d'échéancier — chaque tranche apporte sa part de CA à l'artiste
-  // (caShare = CA tranche ÷ nb artistes). Le `count` (nb de deals) est
-  // dédupliqué par dealId pour ne pas gonfler avec le nombre de tranches.
-  const countedInstArtistDeals = new Set<string>();
   for (const u of periodInstallmentUnits) {
-    for (const a of u.artists) {
-      const existing = artistTotals.get(a.id);
-      const firstForDeal = !countedInstArtistDeals.has(`${a.id}::${u.dealId}`);
-      countedInstArtistDeals.add(`${a.id}::${u.dealId}`);
-      if (existing) {
-        existing.caHt += a.caShare;
-        if (firstForDeal) existing.count += 1;
-      } else {
-        artistTotals.set(a.id, {
-          name: a.name,
-          slug: a.slug,
-          color: a.color,
-          caHt: a.caShare,
-          count: firstForDeal ? 1 : 0,
-        });
-      }
+    const net = u.margeBrute - u.totalMf;
+    const existing = dealTotals.get(u.dealId);
+    if (existing) {
+      existing.margeNette += net;
+    } else {
+      dealTotals.set(u.dealId, {
+        title: u.dealTitle,
+        category: "BOOKING",
+        margeNette: net,
+      });
     }
   }
-  const topArtists: TopArtistRow[] = Array.from(artistTotals.entries())
+  const topDeals: TopDealRow[] = Array.from(dealTotals.entries())
     .map(([id, info]) => ({
       id,
-      name: info.name,
-      slug: info.slug,
-      color: info.color,
-      caHt: info.caHt,
-      count: info.count,
-      pct: caHt > 0 ? (info.caHt / caHt) * 100 : 0,
+      title: info.title,
+      category: info.category,
+      margeNette: info.margeNette,
+      pct: margeNette > 0 ? (info.margeNette / margeNette) * 100 : 0,
     }))
-    .sort((a, b) => b.caHt - a.caHt)
+    .sort((a, b) => b.margeNette - a.margeNette)
     .slice(0, 10);
 
   // ── Breakdown par catégorie (marge nette) ────────────────────────────
@@ -386,7 +364,7 @@ export async function getReportingData(opts: {
       dealsCount: periodDeals.length,
     },
     monthly,
-    topArtists,
+    topDeals,
     byCategory,
     artists: sortArtistsDiversLast(artistsRaw),
     rangeLabel: formatPeriodRangeLabel(period),

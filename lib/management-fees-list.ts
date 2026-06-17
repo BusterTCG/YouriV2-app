@@ -72,6 +72,10 @@ export interface AssociateKpi {
   pending: number;
   /** Nombre de lignes en cours (badge alerte). */
   pendingCount: number;
+  /** Total "dispo pour paiement" : lignes non payées dont tout l'amont du
+   *  deal est OK (dealReadyToPay). = cash que Pangee peut verser dès maintenant
+   *  sans risque cash-flow (Stan 2026-06-17). */
+  dispo: number;
   /** Décomposition du payé par mois de paidAt (tri desc, max 6 derniers).
    *  Stan 2026-05-26 : "KPI montant touché mois par mois". */
   monthlyPaid: MonthlyPaidEntry[];
@@ -287,6 +291,7 @@ export async function getManagementFeesList(
         paid: 0,
         pending: 0,
         pendingCount: 0,
+        dispo: 0,
         monthlyPaid: [],
       };
       kpiMap.set(r.associateKey, kpi);
@@ -309,6 +314,8 @@ export async function getManagementFeesList(
     } else {
       kpi.pending += r.amount;
       kpi.pendingCount += 1;
+      // Dispo = en cours MAIS tout l'amont du deal est payé → versable maintenant.
+      if (r.dealReadyToPay) kpi.dispo += r.amount;
     }
   }
 
@@ -381,6 +388,7 @@ export async function getManagementFeesList(
         paid: 0,
         pending: 0,
         pendingCount: 0,
+        dispo: 0,
         monthlyPaid: [],
       };
       kpiMap.set(associateKey, kpi);

@@ -2,6 +2,7 @@ import "server-only";
 
 import { DealStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { DEFAULT_EMPLOYEE_CHARGES_RATE } from "@/lib/finance/cachet-payroll";
 import type { ArtistOverviewRow } from "./artist-overview-types";
 
 /**
@@ -48,14 +49,24 @@ export async function getArtistOverviewRows(
     orderBy: { deal: { date: "desc" } },
   });
 
-  return rows.map((r) => ({
-    dealArtisteId: r.id,
-    dealId: r.deal.id,
-    date: r.deal.date,
-    title: r.deal.title,
-    category: r.deal.category,
-    status: r.deal.status,
-    amount: r.cachetAmount != null ? Number(r.cachetAmount) : null,
-    paymentStatus: r.paymentStatus,
-  }));
+  return rows.map((r) => {
+    const raw = r.cachetAmount != null ? Number(r.cachetAmount) : null;
+    // CACHETS : on expose le NET estimé reçu par l'artiste (brut × (1 − charges
+    // salariales ~25 %)), pas le brut GUSO — c'est ce que l'artiste touche
+    // réellement, donc la donnée pertinente côté fiche artiste (Stan 2026-06-17).
+    const amount =
+      raw != null && r.deal.category === "CACHETS"
+        ? Math.round(raw * (1 - DEFAULT_EMPLOYEE_CHARGES_RATE / 100))
+        : raw;
+    return {
+      dealArtisteId: r.id,
+      dealId: r.deal.id,
+      date: r.deal.date,
+      title: r.deal.title,
+      category: r.deal.category,
+      status: r.deal.status,
+      amount,
+      paymentStatus: r.paymentStatus,
+    };
+  });
 }

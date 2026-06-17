@@ -41,18 +41,16 @@ export const CATEGORY_COLORS: Record<DealCategory, string> = {
   CACHETS: "#10b981",   // emerald
 };
 
-/** Une rangée du top artistes. */
-export type TopArtistRow = {
+/** Une rangée du top deals (Stan 2026-06-17 — remplace le top artistes :
+ *  classement des deals par marge nette générée sur la période). */
+export type TopDealRow = {
   id: string;
-  name: string;
-  slug: string;
-  color: string | null;
-  /** CA HT encaissé attribué à l'artiste (= Σ budgets des deals où il
-   *  apparaît, calculé au prorata sharePct si plusieurs artistes). */
-  caHt: number;
-  /** Nombre de deals encaissés sur la période. */
-  count: number;
-  /** Part en % du CA total Pangee de la période. */
+  title: string;
+  category: DealCategory;
+  /** Marge nette du deal sur la période (= marge brute − management fees ;
+   *  pour les deals BOOKING à échéancier, somme des tranches encaissées). */
+  margeNette: number;
+  /** Part en % de la marge nette totale Pangee de la période. */
   pct: number;
 };
 
@@ -100,8 +98,8 @@ export interface ReportingData {
   /** Chart mensuel (fenêtre alignée sur le préset période). */
   monthly: MonthlyBucket[];
 
-  /** Top 5 artistes par CA HT encaissé. */
-  topArtists: TopArtistRow[];
+  /** Top 10 deals par marge nette générée sur la période. */
+  topDeals: TopDealRow[];
 
   /** Répartition de la marge nette par catégorie. */
   byCategory: CategoryBreakdownSlice[];

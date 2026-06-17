@@ -28,6 +28,7 @@ import {
   DEAL_CATEGORY_LABELS,
   PAYMENT_STATUS_EMOJI,
   PAYMENT_STATUS_LABEL,
+  dealHref,
   dealStatusLabel,
   formatEur,
   paymentStatusClass,
@@ -325,7 +326,7 @@ export function OverviewSection({
               return (
                 <Link
                   key={d.dealArtisteId}
-                  href={`/deals/booking/${d.dealId}`}
+                  href={dealHref(d.category, d.dealId)}
                   className="flex items-center gap-3 px-3 py-2 hover:bg-accent/30 transition-colors text-sm"
                 >
                   <div className="w-20 shrink-0 tabular-nums text-xs text-muted-foreground">

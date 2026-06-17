@@ -151,26 +151,29 @@ export function DealManagementFeesSection({
         totalAccent="negative"
       />
       <div className="rounded-md border overflow-hidden divide-y">
-        {noMfReason ? (
-          <div className="px-3 py-4 text-sm text-amber-700 dark:text-amber-400 italic text-center bg-amber-50 dark:bg-amber-950/20">
-            ⚠ Pas de management fees — la marge Youri est nulle ou négative.
+        {/* Marge ≤ 0 : on n'empêche PLUS de définir les règles (Stan 2026-06-17).
+            On peut paramétrer associés + % dès la création, sans attendre le CA
+            (évite l'oubli). Les montants restent à 0 et se calculent dès que la
+            marge devient positive (recomputeMfForDeal). */}
+        {noMfReason && (
+          <div className="px-3 py-2 text-[11px] leading-snug text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20">
+            ⚠ Marge nulle ou négative — tu peux quand même définir les règles
+            (associés + %) maintenant : les montants se calculeront
+            automatiquement dès que la marge sera positive.
           </div>
-        ) : (
-          <>
-            <ManagementFeeBlock
-              dealId={dealId}
-              role="APPORT"
-              fees={apportFees}
-              margeYouri={margeYouri}
-            />
-            <ManagementFeeBlock
-              dealId={dealId}
-              role="WORK"
-              fees={workFees}
-              margeYouri={margeYouri}
-            />
-          </>
         )}
+        <ManagementFeeBlock
+          dealId={dealId}
+          role="APPORT"
+          fees={apportFees}
+          margeYouri={margeYouri}
+        />
+        <ManagementFeeBlock
+          dealId={dealId}
+          role="WORK"
+          fees={workFees}
+          margeYouri={margeYouri}
+        />
 
         {/* Footer "= Marge nette Youri" — même style visuel que "= Marge Youri" :
             text-2xl, vert si positif / rouge si négatif (Stan 2026-05-26). */}

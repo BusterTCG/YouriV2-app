@@ -6,7 +6,7 @@ import {
 import { ReportingFilters } from "@/components/reporting/reporting-filters";
 import { ReportingKpis } from "@/components/reporting/reporting-kpis";
 import { ReportingChart } from "@/components/reporting/reporting-chart";
-import { ReportingTopArtists } from "@/components/reporting/reporting-top-artists";
+import { ReportingTopDeals } from "@/components/reporting/reporting-top-deals";
 import { ReportingCategoryBreakdown } from "@/components/reporting/reporting-category-breakdown";
 import { PrivacyToggle } from "@/components/dashboard/privacy-toggle";
 
@@ -76,8 +76,8 @@ export default async function ReportingPage({ searchParams }: ReportingPageProps
       <ReportingChart data={data.monthly} rangeLabel={data.rangeLabel} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ReportingTopArtists
-          rows={data.topArtists}
+        <ReportingTopDeals
+          rows={data.topDeals}
           rangeLabel={data.rangeLabel}
         />
         <ReportingCategoryBreakdown

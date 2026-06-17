@@ -85,9 +85,11 @@ export async function recomputeBudgetFromInstallments(
  * proportionnellement au CA encaissé).
  */
 export interface InstallmentEncaissementUnit {
-  /** Deal d'origine — sert à dédupliquer le comptage des deals (top-artistes)
-   *  quand un même deal a plusieurs tranches dans la fenêtre. */
+  /** Deal d'origine — sert à dédupliquer le comptage des deals (top deals /
+   *  top-artistes) quand un même deal a plusieurs tranches dans la fenêtre. */
   dealId: string;
+  /** Titre du deal — pour le "top deals" du reporting. */
+  dealTitle: string;
   /** Mois réel d'encaissement (= mois de la date d'échéance de la tranche). */
   paidAt: Date;
   /** CA HT de la tranche (= son montant). */
@@ -141,6 +143,7 @@ export async function getBookingInstallmentUnits(
       paidAt: true,
       deal: {
         select: {
+          title: true,
           budgetAmount: true,
           dealArtistes: {
             where: { deletedAt: null },
@@ -192,6 +195,7 @@ export async function getBookingInstallmentUnits(
       namedArtists.length > 0 ? amount / namedArtists.length : 0;
     units.push({
       dealId: r.dealId,
+      dealTitle: r.deal.title,
       paidAt: r.paidAt,
       caHt: amount,
       totalArtistes: artistes * ratio,

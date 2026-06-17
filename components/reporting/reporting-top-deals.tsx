@@ -1,26 +1,31 @@
 import Link from "next/link";
 import { Award, ArrowRight } from "lucide-react";
-import { formatPct } from "@/components/deals/deal-helpers";
-import { artistInitials } from "@/lib/artists";
+import {
+  DEAL_CATEGORY_LABELS,
+  dealHref,
+  formatPct,
+} from "@/components/deals/deal-helpers";
 import { SensitiveAmount } from "@/components/dashboard/sensitive-amount";
-import type { TopArtistRow } from "@/lib/reporting-types";
+import { cn } from "@/lib/utils";
+import type { TopDealRow } from "@/lib/reporting-types";
 
 interface Props {
-  rows: TopArtistRow[];
+  rows: TopDealRow[];
   rangeLabel: string;
 }
 
 /**
- * Top 10 artistes par CA HT encaissé sur la période — copie fidèle KN
- * `reporting-top-artists.tsx` adapté Pangee (CA au lieu de commission).
+ * Top 10 deals par MARGE NETTE générée sur la période (Stan 2026-06-17 —
+ * remplace le top artistes ; raccord avec le chart mensuel + le breakdown
+ * par catégorie, tous en marge nette).
  */
-export function ReportingTopArtists({ rows, rangeLabel }: Props) {
+export function ReportingTopDeals({ rows, rangeLabel }: Props) {
   return (
     <section className="space-y-2">
       <div className="flex items-center gap-2">
         <Award className="h-4 w-4 text-amber-500" />
         <h2 className="text-sm font-semibold uppercase tracking-wider">
-          Top artistes
+          Top deals
         </h2>
         <span className="text-[11px] text-muted-foreground">
           · {rangeLabel}
@@ -36,29 +41,28 @@ export function ReportingTopArtists({ rows, rangeLabel }: Props) {
             {rows.map((r, i) => (
               <Link
                 key={r.id}
-                href={`/artistes/${r.slug}`}
+                href={dealHref(r.category, r.id)}
                 className="flex items-center gap-3 px-3 py-2 hover:bg-accent/30 transition-colors text-sm"
               >
                 <div className="shrink-0 w-5 text-center text-xs text-muted-foreground tabular-nums">
                   {i + 1}
                 </div>
-                <span
-                  className="inline-flex items-center justify-center h-7 w-7 rounded-full text-[10px] font-semibold text-white shrink-0"
-                  style={{ backgroundColor: r.color ?? "#2563eb" }}
-                >
-                  {artistInitials(r.name, r.slug).slice(0, 2)}
-                </span>
                 <div className="flex-1 min-w-0">
                   <div className="font-medium leading-tight truncate">
-                    {r.name}
+                    {r.title}
                   </div>
-                  <div className="text-[10px] text-muted-foreground">
-                    {r.count} deal{r.count > 1 ? "s" : ""} ·{" "}
-                    {formatPct(r.pct, { integer: true })} du CA
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                    {DEAL_CATEGORY_LABELS[r.category]} ·{" "}
+                    {formatPct(r.pct, { integer: true })} de la marge
                   </div>
                 </div>
-                <div className="text-sm font-semibold tabular-nums shrink-0">
-                  <SensitiveAmount value={r.caHt} />
+                <div
+                  className={cn(
+                    "text-sm font-semibold tabular-nums shrink-0",
+                    r.margeNette < 0 && "text-red-700 dark:text-red-400",
+                  )}
+                >
+                  <SensitiveAmount value={r.margeNette} />
                 </div>
                 <ArrowRight className="h-3 w-3 text-muted-foreground/40 shrink-0" />
               </Link>

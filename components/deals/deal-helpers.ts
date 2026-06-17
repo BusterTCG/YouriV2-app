@@ -8,6 +8,19 @@
 
 import type { DealCategory, DealStatus, PaymentStatus } from "@prisma/client";
 
+/** URL de la fiche détail d'un deal selon sa catégorie. */
+export function dealHref(category: DealCategory, id: string): string {
+  switch (category) {
+    case "PROD_EXE":
+      return `/deals/prod-executive/${id}`;
+    case "CACHETS":
+      return `/deals/cachets/${id}`;
+    case "BOOKING":
+    default:
+      return `/deals/booking/${id}`;
+  }
+}
+
 /** Format € français sans décimales par défaut. */
 export function formatEur(n: number | null | undefined, opts?: { decimals?: number }): string {
   if (n == null) return "—";
