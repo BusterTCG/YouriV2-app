@@ -147,7 +147,13 @@ export async function GET(req: Request) {
     !state.startsWith("/\\")
       ? state
       : "/dashboard";
-  return NextResponse.redirect(new URL(dest, req.url));
+  // Base = origine PUBLIQUE issue de GOOGLE_SIGNIN_REDIRECT_URI, surtout PAS
+  // `req.url` : derrière le reverse proxy Caddy, le `req.url` d'un route handler
+  // contient l'hôte INTERNE (localhost:3001) → la redirection post-login
+  // partait vers localhost (Stan 2026-06-17, bug récurrent). L'origine publique
+  // est déterministe quel que soit le comportement du proxy.
+  const publicOrigin = new URL(redirectUri).origin;
+  return NextResponse.redirect(new URL(dest, publicOrigin));
 }
 
 // ─────────── Helpers ───────────
