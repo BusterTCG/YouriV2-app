@@ -94,6 +94,28 @@ export function computeCachetBreakdownFromEnvelope(
 }
 
 /**
+ * Marge brute Pangee d'un deal CACHETS (Stan 2026-06-17, nouveau modèle).
+ *
+ *   marge brute = Σ prestations facturées − Σ cachets bruts artistes
+ *
+ * 0 si `linkedToOwnProd` (spectacle produit par Pangee : pas de tiers facturé,
+ * juste la trace paie GUSO). Peut être négative si le brut dépasse le facturé
+ * (affiché en rouge côté UI).
+ *
+ * "Brute" = AVANT charges patronales (~43 % GUSO) — choix explicite Stan
+ * 2026-06-17 (le % de gestion saisi à la main est supprimé, le % du CA devient
+ * une donnée dérivée = marge / CA).
+ */
+export function computeCachetsMargeBrute(
+  budget: number,
+  cachetBrut: number,
+  linkedToOwnProd: boolean,
+): number {
+  if (linkedToOwnProd) return 0;
+  return Math.round(budget - cachetBrut);
+}
+
+/**
  * Calcule le détail à partir du budget HT facturé et du % de marge Pangee.
  * Combine `enveloppe = budget × (100 − feesPct)/100` puis applique la formule.
  */

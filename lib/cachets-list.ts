@@ -3,6 +3,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { sortArtistsDiversLast } from "@/lib/artists";
+import { computeCachetsMargeBrute } from "@/lib/finance/cachet-payroll";
 import { getPeriodRange, type PeriodPreset } from "@/lib/period-presets";
 import {
   STATUS_OPTIONS,
@@ -271,13 +272,14 @@ export async function getCachetsDealsList(opts: {
       d.cachetsFeesPct != null ? Number(d.cachetsFeesPct) : 10;
     const linkedToOwnProd = d.linkedToOwnProd ?? false;
 
-    // Marge Brute = budget × cachetsFeesPct / 100 (Pangee garde X% du budget).
-    // Stan 2026-05-28 : si lié à un spectacle produit par Pangee → marge = 0
-    // (pas de tiers facturé, juste trace administrative paie GUSO).
-    const margeBrute =
-      !linkedToOwnProd && budgetAmount > 0
-        ? Math.round((budgetAmount * cachetsFeesPct) / 100)
-        : 0;
+    // Marge Brute = Σ prestations − Σ cachets bruts (Stan 2026-06-17). 0 si
+    // lié à un spectacle produit par Pangee (pas de tiers facturé, juste trace
+    // administrative paie GUSO).
+    const margeBrute = computeCachetsMargeBrute(
+      budgetAmount,
+      totalArtistes,
+      linkedToOwnProd,
+    );
 
     const totalMf = d.managementFees.reduce(
       (acc, mf) => acc + (mf.amount != null ? Number(mf.amount) : 0),

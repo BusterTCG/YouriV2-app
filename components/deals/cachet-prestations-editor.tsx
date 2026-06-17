@@ -40,14 +40,9 @@ export interface CachetPrestationRow {
 interface Props {
   dealId: string;
   prestations: CachetPrestationRow[];
-  cachetsFeesPct: number;
 }
 
-export function CachetPrestationsEditor({
-  dealId,
-  prestations,
-  cachetsFeesPct,
-}: Props) {
+export function CachetPrestationsEditor({ dealId, prestations }: Props) {
   const [adding, startAdd] = useTransition();
 
   const totalBudget = prestations.reduce(

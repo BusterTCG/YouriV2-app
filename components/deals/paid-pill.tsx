@@ -55,7 +55,7 @@ export function PaidPill({
       >
         {paid ? "✓" : ""}
       </span>
-      <span className="whitespace-nowrap">{paid ? label : "En cours"}</span>
+      <span className="whitespace-nowrap">{label}</span>
     </button>
   );
 }

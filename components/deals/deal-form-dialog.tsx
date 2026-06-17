@@ -186,9 +186,6 @@ export function DealFormDialog({
   const [budgetAmount, setBudgetAmount] = useState(
     deal?.budgetAmount != null ? String(deal.budgetAmount) : "",
   );
-  const [cachetsFeesPct, setCachetsFeesPct] = useState(
-    deal?.cachetsFeesPct != null ? String(deal.cachetsFeesPct) : "10",
-  );
   const [linkedToOwnProd, setLinkedToOwnProd] = useState(
     deal?.linkedToOwnProd ?? false,
   );
@@ -342,8 +339,6 @@ export function DealFormDialog({
         if (isCachets) {
           await updateCachetsDetails({
             id: deal.id,
-            cachetsFeesPct:
-              cachetsFeesPct === "" ? null : Number(cachetsFeesPct),
             linkedToOwnProd,
           });
           if (artistId !== (deal.artistId ?? null)) {
@@ -372,8 +367,6 @@ export function DealFormDialog({
                 // budgetAmount sera recalculé par batchCreateCachetPrestations
                 // depuis les prestations saisies. On laisse null à la création.
                 budgetAmount: null,
-                cachetsFeesPct:
-                  cachetsFeesPct === "" ? null : Number(cachetsFeesPct),
                 linkedToOwnProd,
               }
             : {}),
@@ -705,30 +698,6 @@ export function DealFormDialog({
 
                 {!linkedToOwnProd && (
                   <>
-                    {/* Frais Pangee % */}
-                    <div className="flex items-end gap-2">
-                      <div className="space-y-1.5 w-[120px]">
-                        <FieldLabel htmlFor="cachetsFeesPct">
-                          Frais Pangee %
-                        </FieldLabel>
-                        <Input
-                          id="cachetsFeesPct"
-                          type="number"
-                          value={cachetsFeesPct}
-                          onChange={(e) => setCachetsFeesPct(e.target.value)}
-                          min={0}
-                          max={100}
-                          className="h-9 text-sm text-right tabular-nums"
-                          disabled={pending}
-                        />
-                      </div>
-                      <p className="flex-1 text-[11px] text-muted-foreground leading-snug pb-2">
-                        Pangee conserve ce % du total des prestations (= Marge
-                        Brute). Le reste est versé à l&apos;artiste comme cachet
-                        brut sur le mois.
-                      </p>
-                    </div>
-
                     {/* Prestations — multi-entrées Stan 2026-05-28 v2 */}
                     {!isEdit && (
                       <div className="space-y-2 pt-2">
@@ -800,9 +769,6 @@ export function DealFormDialog({
                               Total facturé · {prestations.filter((p) => p.prestataire.trim()).length} prestation{prestations.filter((p) => p.prestataire.trim()).length > 1 ? "s" : ""}
                             </span>
                             <div className="flex items-center gap-3 tabular-nums">
-                              <span className="text-muted-foreground">
-                                Marge Pangee {Math.round((prestationsTotal * Number(cachetsFeesPct || 10)) / 100).toLocaleString("fr-FR")} €
-                              </span>
                               <span className="font-semibold">
                                 {prestationsTotal.toLocaleString("fr-FR")} €
                               </span>

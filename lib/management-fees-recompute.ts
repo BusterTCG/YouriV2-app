@@ -3,6 +3,7 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { computeProdExeBrute } from "@/lib/finance/show-financials";
+import { computeCachetsMargeBrute } from "@/lib/finance/cachet-payroll";
 
 /**
  * Recalcule les montants `amount` des Management Fees d'un deal en partant
@@ -73,19 +74,16 @@ export async function recomputeMfForDeal(dealId: string): Promise<void> {
     const pct = deal.prodExePct != null ? Number(deal.prodExePct) : 15;
     margeYouri = computeProdExeBrute(totalRevenue, pct);
   } else if (deal.category === "CACHETS") {
-    // Marge brute Pangee = budget × cachetsFeesPct% (Stan 2026-05-28 Sprint 5).
-    // Pangee facture le tiers pour le compte de l'artiste, garde X% de gestion.
+    // Marge brute Pangee = Σ prestations − Σ cachets bruts (Stan 2026-06-17).
+    // Pangee facture le tiers, paie le cachet brut à l'artiste, garde la diff.
     // Si `linkedToOwnProd` → cachet versé dans le cadre d'un spectacle produit
     // par Pangee elle-même, pas de marge à dégager (trace paie GUSO uniquement).
-    if (deal.linkedToOwnProd) {
-      margeYouri = 0;
-    } else {
-      const budget =
-        deal.budgetAmount != null ? Number(deal.budgetAmount) : 0;
-      const pct =
-        deal.cachetsFeesPct != null ? Number(deal.cachetsFeesPct) : 10;
-      margeYouri = budget > 0 ? Math.round((budget * pct) / 100) : 0;
-    }
+    const budget = deal.budgetAmount != null ? Number(deal.budgetAmount) : 0;
+    const cachetBrut = deal.dealArtistes.reduce(
+      (acc, a) => acc + (a.cachetAmount != null ? Number(a.cachetAmount) : 0),
+      0,
+    );
+    margeYouri = computeCachetsMargeBrute(budget, cachetBrut, deal.linkedToOwnProd);
   } else {
     // BOOKING : marge = budget − artistes − charges
     const budget = deal.budgetAmount != null ? Number(deal.budgetAmount) : 0;

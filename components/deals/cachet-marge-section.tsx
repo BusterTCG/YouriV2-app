@@ -6,31 +6,29 @@ import { formatPct } from "./deal-helpers";
 import { useEur } from "@/lib/privacy-context";
 
 /**
- * Section Marge Brute Pangee — variante CACHETS (Stan 2026-05-30).
+ * Section Marge Brute Pangee — variante CACHETS (Stan 2026-05-30, MAJ 2026-06-17).
  *
- * Calque visuel de `DealResultSection` (Booking) / "box gold" Prod Exé :
- *   - Card neutre avec accents doré (--yr-gold)
- *   - Bandeau bas "= Marge Brute" en gros, vert si positif, rouge si négatif
+ * Modèle (Stan 2026-06-17) :
+ *   Marge brute = Σ prestations facturées − Σ cachets bruts (GUSO).
+ *   % du CA = Marge / Prestation facturée (recalculé automatiquement).
  *
- * Calcul Cachets :
- *   CA total (Σ prestations) × cachetsFeesPct%  =  Marge Brute Pangee
- *
- * Affichée avant la section Management Fees pour cohérence Booking/Prod Exé.
+ * Affichage épuré (Stan 2026-06-17) : juste le montant de marge brute + le %
+ * du CA. Le détail (prestations / cachet brut) est déjà visible dans les
+ * sections au-dessus.
  */
 interface Props {
   totalBudget: number;
-  cachetsFeesPct: number;
+  cachetBrut: number;
   allPrestationsPaid: boolean;
 }
 
 export function CachetMargeSection({
   totalBudget,
-  cachetsFeesPct,
+  cachetBrut,
   allPrestationsPaid,
 }: Props) {
   const eur = useEur();
-  const margeBrute =
-    totalBudget > 0 ? Math.round((totalBudget * cachetsFeesPct) / 100) : 0;
+  const margeBrute = Math.round(totalBudget - cachetBrut);
   const margePct = totalBudget > 0 ? (margeBrute / totalBudget) * 100 : null;
 
   return (
@@ -38,41 +36,18 @@ export function CachetMargeSection({
       <div className="flex items-center gap-2 px-4 py-3 border-b">
         <Sparkles className="h-4 w-4 text-emerald-600 shrink-0" />
         <span className="text-xs uppercase tracking-wider font-semibold">
-          Répartition — Marge Brute
+          Marge brute
         </span>
       </div>
 
-      <div className="px-4 py-3 space-y-1 text-sm">
-        <div className="flex justify-between">
-          <span>CA total facturé</span>
-          <span className="tabular-nums">{eur(totalBudget)}</span>
-        </div>
-        <div className="flex justify-between text-muted-foreground">
-          <span>× Frais Pangee {cachetsFeesPct}%</span>
-          <span className="tabular-nums">
-            ↳ {eur(margeBrute)}
-          </span>
-        </div>
-      </div>
-
-      <div className="border-t px-4 py-3 flex justify-between items-baseline">
+      <div className="px-4 py-3 flex justify-between items-baseline">
         <div>
-          <div
-            className={cn(
-              "text-xs uppercase tracking-wider font-semibold",
-              margeBrute >= 0
-                ? "text-emerald-700 dark:text-emerald-400"
-                : "text-red-700 dark:text-red-400",
-            )}
-          >
-            = Marge Brute
-          </div>
           {allPrestationsPaid ? (
-            <div className="text-[11px] text-muted-foreground mt-0.5">
+            <div className="text-[11px] text-muted-foreground">
               ✓ Marge réalisée (toutes prestations encaissées)
             </div>
           ) : (
-            <div className="text-[11px] text-muted-foreground mt-0.5">
+            <div className="text-[11px] text-muted-foreground">
               ⏳ En attente (prestations non encaissées)
             </div>
           )}

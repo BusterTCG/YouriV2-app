@@ -4,6 +4,7 @@ import type { DealCategory, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { sortArtistsDiversLast } from "@/lib/artists";
 import { getBookingInstallmentUnits } from "@/lib/finance/deal-installments";
+import { computeCachetsMargeBrute } from "@/lib/finance/cachet-payroll";
 import {
   formatPeriodRangeLabel,
   getPeriodRange,
@@ -106,15 +107,14 @@ function computeMargeBrute(d: DealWithFinancials): number {
     return d.commissionAmount != null ? Number(d.commissionAmount) : 0;
   }
   const budget = d.budgetAmount != null ? Number(d.budgetAmount) : 0;
-  if (d.category === "CACHETS") {
-    if (d.linkedToOwnProd || budget <= 0) return 0;
-    const pct = d.cachetsFeesPct != null ? Number(d.cachetsFeesPct) : 10;
-    return Math.round((budget * pct) / 100);
-  }
   const artistes = d.dealArtistes.reduce(
     (acc, a) => acc + (a.cachetAmount != null ? Number(a.cachetAmount) : 0),
     0,
   );
+  if (d.category === "CACHETS") {
+    // Marge CACHETS = Σ prestations − Σ cachets bruts (Stan 2026-06-17).
+    return computeCachetsMargeBrute(budget, artistes, d.linkedToOwnProd);
+  }
   const charges = d.dealCharges.reduce(
     (acc, c) => acc + (c.amount != null ? Number(c.amount) : 0),
     0,

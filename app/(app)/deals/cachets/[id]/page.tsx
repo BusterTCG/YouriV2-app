@@ -12,6 +12,7 @@ import {
 import { DealStatusInline } from "@/components/deals/deal-status-inline";
 import { CachetArtisteSection } from "@/components/deals/cachet-artiste-section";
 import { CachetMargeSection } from "@/components/deals/cachet-marge-section";
+import { computeCachetsMargeBrute } from "@/lib/finance/cachet-payroll";
 import { DealPipelineBar } from "@/components/tasks/deal-pipeline-bar";
 import { getTasksForDeal } from "@/lib/queries/tasks";
 import {
@@ -96,10 +97,15 @@ export default async function CachetDetailPage({ params }: PageProps) {
     (acc, p) => acc + (p.amount ?? 0),
     0,
   );
-  // Marge Brute Pangee = totalBudget × cachetsFeesPct%. 0 si linkedToOwnProd.
-  const margeBrute = linkedToOwnProd
-    ? 0
-    : Math.round((totalBudget * cachetsFeesPct) / 100);
+  // Σ cachets bruts artistes
+  const cachetBrut = artistes.reduce((acc, a) => acc + (a.amount ?? 0), 0);
+  // Marge Brute Pangee = Σ prestations − Σ cachets bruts (Stan 2026-06-17).
+  // 0 si linkedToOwnProd.
+  const margeBrute = computeCachetsMargeBrute(
+    totalBudget,
+    cachetBrut,
+    linkedToOwnProd,
+  );
 
   // Statut prestations (allPrestationsPaid)
   const significantPrestations = prestations.filter((p) => (p.amount ?? 0) > 0);
@@ -200,11 +206,7 @@ export default async function CachetDetailPage({ params }: PageProps) {
 
       {/* Section Prestations — uniquement si pas linkedToOwnProd */}
       {!linkedToOwnProd && (
-        <CachetPrestationsEditor
-          dealId={deal.id}
-          prestations={prestations}
-          cachetsFeesPct={cachetsFeesPct}
-        />
+        <CachetPrestationsEditor dealId={deal.id} prestations={prestations} />
       )}
 
       {/* Section Artiste — cachet brut auto-calculé + net estimé + case Payé */}
@@ -220,7 +222,7 @@ export default async function CachetDetailPage({ params }: PageProps) {
       {!linkedToOwnProd && totalBudget > 0 && (
         <CachetMargeSection
           totalBudget={totalBudget}
-          cachetsFeesPct={cachetsFeesPct}
+          cachetBrut={cachetBrut}
           allPrestationsPaid={allPrestationsPaid}
         />
       )}

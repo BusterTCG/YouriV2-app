@@ -3,6 +3,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import type { Prisma, DealCategory } from "@prisma/client";
 import { sortArtistsDiversLast } from "@/lib/artists";
+import { computeCachetsMargeBrute } from "@/lib/finance/cachet-payroll";
 import { getPeriodRange, type PeriodPreset } from "@/lib/period-presets";
 import type {
   BookingDealRow,
@@ -330,13 +331,18 @@ export async function getDealsCategoryRecap(): Promise<
       entry.totalMarge +=
         d.commissionAmount != null ? Number(d.commissionAmount) : 0;
     } else if (d.category === "CACHETS") {
-      // Marge CACHETS = budget × cachetsFeesPct% (0 si lié à une prod Pangee).
-      // Aligné sur computeMargeBrute (lib/dashboard.ts) — audit 2026-06-15.
+      // Marge CACHETS = Σ prestations − Σ cachets bruts (Stan 2026-06-17).
+      // 0 si lié à une prod Pangee. Budget = Σ prestations (scalar recalculé).
       const budget = d.budgetAmount != null ? Number(d.budgetAmount) : 0;
-      if (!d.linkedToOwnProd && budget > 0) {
-        const pct = d.cachetsFeesPct != null ? Number(d.cachetsFeesPct) : 10;
-        entry.totalMarge += Math.round((budget * pct) / 100);
-      }
+      const cachetBrut = d.dealArtistes.reduce(
+        (acc, da) => acc + (da.cachetAmount != null ? Number(da.cachetAmount) : 0),
+        0,
+      );
+      entry.totalMarge += computeCachetsMargeBrute(
+        budget,
+        cachetBrut,
+        d.linkedToOwnProd,
+      );
     } else {
       // BOOKING : budget − artistes − charges.
       const budget = d.budgetAmount != null ? Number(d.budgetAmount) : 0;

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { DealCategory, DealStatus, PaymentStatus, Prisma, VenueDealKind } from "@prisma/client";
+import { DealCategory, DealStatus, PaymentStatus, Prisma, TaskStatus, VenueDealKind } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
 import { safeAction, type ActionResult } from "@/lib/errors";
@@ -12,6 +12,7 @@ import { listContacts, listVenues, type KnContact, type KnVenue } from "@/lib/kn
 import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
 import { recomputeShowFinancials } from "@/lib/finance/show-financials";
 import { revalidateAllDealRoutes } from "@/lib/revalidate-deals";
+import { revalidateAfterTaskMutation } from "@/lib/revalidate-helpers";
 import { autoCreateTasksForDeal } from "@/lib/tasks-autocreate";
 
 /**
@@ -740,7 +741,7 @@ export async function updateDealArtiste(
   input: z.infer<typeof UpdateDealArtisteSchema>,
 ): Promise<ActionResult> {
   return safeAction("updateDealArtiste", async () => {
-    await requireUser();
+    const user = await requireUser();
     const { id, cachetAmount, sharePct, paymentStatus, isPaye, paidAt, notes } =
       UpdateDealArtisteSchema.parse(input);
 
@@ -791,6 +792,37 @@ export async function updateDealArtiste(
       }
       await recomputeMfForDeal(da.dealId);
     }
+    // CACHETS : le toggle "Payé" du cachet artiste valide (ou dé-valide)
+    // l'étape de pipeline "Paiement du cachet" (Stan 2026-06-17). Matcher
+    // strict pour ne PAS toucher "Paiement Artiste de la facture".
+    const paymentStatusChanged =
+      paymentStatus !== undefined || isPaye !== undefined;
+    if (paymentStatusChanged && da.deal.category === "CACHETS") {
+      const isNowPaid = data.paymentStatus === PaymentStatus.PAID;
+      const targetStatus = isNowPaid ? TaskStatus.DONE : TaskStatus.TODO;
+      const tasks = await prisma.task.findMany({
+        where: {
+          dealId: da.dealId,
+          deletedAt: null,
+          status: { not: TaskStatus.SKIPPED },
+        },
+        select: { id: true, label: true, status: true },
+      });
+      const matching = tasks.filter(
+        (t) =>
+          /paiement\s+du\s+cachet/i.test(t.label) && t.status !== targetStatus,
+      );
+      if (matching.length > 0) {
+        await prisma.task.updateMany({
+          where: { id: { in: matching.map((t) => t.id) } },
+          data: isNowPaid
+            ? { status: TaskStatus.DONE, doneAt: new Date(), doneByUserId: user.id }
+            : { status: TaskStatus.TODO, doneAt: null, doneByUserId: null },
+        });
+        revalidateAfterTaskMutation(da.dealId);
+      }
+    }
+
     // Audit Stan 2026-05-27 : revalider TOUS les chemins concernés (l'éditeur
     // de cachets est utilisé depuis booking ET prod-executive ; un changement
     // de statut/cachet impacte aussi la règle "dispo paiement" MF).

@@ -11,40 +11,34 @@ import { DealSectionHeader } from "./deal-section-header";
 import { SectionStatusBadge } from "./section-status-badge";
 import { PaidPill } from "./paid-pill";
 import { updateDealArtiste } from "@/lib/actions/deals";
-import { computeCachetBreakdownFromBudget } from "@/lib/finance/cachet-payroll";
+import { DEFAULT_EMPLOYEE_CHARGES_RATE } from "@/lib/finance/cachet-payroll";
 import type { BookingDealArtistRow } from "@/lib/deals-list-types";
 
 /**
- * Section Artiste — variante CACHETS (Stan 2026-05-30).
+ * Section Artiste — variante CACHETS (Stan 2026-05-30, MAJ 2026-06-17).
  *
- * Affiche directement les montants calculés à partir du CA (Σ prestations) +
- * du % de marge Pangee :
- *   - Cachet brut (= ce qui apparaît sur la fiche de paie GUSO/CDDU)
- *   - Cachet net estimé (= ce que l'artiste touche après cotisations)
+ *   - Cachet brut (GUSO/CDDU) : saisi À LA MAIN (Stan 2026-06-17) — c'est le
+ *     montant déclaré sur la fiche de paie, négocié, pas une dérivée du CA.
+ *   - Cachet net estimé : calculé depuis le brut (≈ brut × 0,75, charges
+ *     salariales annexe 10 ~25 %).
  *
- * Case à cocher "Payé" : toggle `DealArtiste.paymentStatus` PAID/TO_INVOICE.
- *
- * Mode `linkedToOwnProd` : pas de prestation → l'utilisateur saisit le brut
- * directement (input), le net est calculé à la volée. Le toggle Payé reste.
+ * Statut : toggle binaire `PaidPill` "Payé" (Stan 2026-06-17) — neutre par
+ * défaut, vert au clic. Le passage à "Payé" fixe la date de paiement (géré par
+ * updateDealArtiste) → le MonthPicker mois de paiement apparaît.
  */
 interface Props {
   dealId: string;
   artiste: BookingDealArtistRow | null;
-  /** CA total facturé aux prestataires (Σ prestations actives). */
+  /** CA total facturé aux prestataires (Σ prestations) — conservé pour compat. */
   totalBudget: number;
   cachetsFeesPct: number;
   linkedToOwnProd: boolean;
 }
 
-export function CachetArtisteSection({
-  artiste,
-  totalBudget,
-  cachetsFeesPct,
-  linkedToOwnProd,
-}: Props) {
+export function CachetArtisteSection({ artiste }: Props) {
   const [pending, startTransition] = useTransition();
   const [manualBrut, setManualBrut] = useState<string>(
-    linkedToOwnProd && artiste?.amount != null ? String(artiste.amount) : "",
+    artiste?.amount != null ? String(artiste.amount) : "",
   );
 
   if (!artiste) {
@@ -55,21 +49,10 @@ export function CachetArtisteSection({
     );
   }
 
-  // Calcul des montants
-  let brut: number;
-  let net: number;
-  if (linkedToOwnProd) {
-    // Mode interne : brut saisi manuellement, net calculé
-    brut = artiste.amount != null ? Number(artiste.amount) : 0;
-    const breakdown = computeCachetBreakdownFromBudget(brut, 0); // pct=0 → enveloppe=brut
-    // Recalcule juste le net
-    net = breakdown.net > 0 ? Math.round(brut * (1 - 25 / 100)) : 0;
-  } else {
-    // Mode standard : breakdown depuis CA
-    const breakdown = computeCachetBreakdownFromBudget(totalBudget, cachetsFeesPct);
-    brut = breakdown.brut;
-    net = breakdown.net;
-  }
+  // Brut saisi à la main → net estimé dérivé (charges salariales ~25 %).
+  const brut = artiste.amount != null ? Number(artiste.amount) : 0;
+  const net =
+    brut > 0 ? Math.round(brut * (1 - DEFAULT_EMPLOYEE_CHARGES_RATE / 100)) : 0;
 
   const isPaid = artiste.paymentStatus === "PAID";
   const initials = artiste.artist.name
@@ -78,15 +61,6 @@ export function CachetArtisteSection({
     .slice(0, 2)
     .join("")
     .toUpperCase();
-
-  function togglePaid() {
-    startTransition(async () => {
-      await updateDealArtiste({
-        id: artiste!.id,
-        isPaye: !isPaid,
-      });
-    });
-  }
 
   function persistManualBrut() {
     const next = manualBrut === "" ? null : Number(manualBrut);
@@ -98,6 +72,12 @@ export function CachetArtisteSection({
         });
       });
     }
+  }
+
+  function togglePaid() {
+    startTransition(async () => {
+      await updateDealArtiste({ id: artiste!.id, isPaye: !isPaid });
+    });
   }
 
   return (
@@ -143,32 +123,26 @@ export function CachetArtisteSection({
           </div>
         </div>
 
-        {/* Cachet brut */}
+        {/* Cachet brut — saisie manuelle */}
         <div className="space-y-0.5 sm:w-[150px]">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
             Cachet brut (GUSO)
           </div>
-          {linkedToOwnProd ? (
-            <div className="relative">
-              <Input
-                type="number"
-                value={manualBrut}
-                onChange={(e) => setManualBrut(e.target.value)}
-                onBlur={persistManualBrut}
-                placeholder="0"
-                min={0}
-                step="0.01"
-                className="h-8 text-sm text-right tabular-nums pr-6"
-              />
-              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                €
-              </span>
-            </div>
-          ) : (
-            <div className="text-sm font-semibold tabular-nums">
-              {brut.toLocaleString("fr-FR")} €
-            </div>
-          )}
+          <div className="relative">
+            <Input
+              type="number"
+              value={manualBrut}
+              onChange={(e) => setManualBrut(e.target.value)}
+              onBlur={persistManualBrut}
+              placeholder="0"
+              min={0}
+              step="0.01"
+              className="h-8 text-sm text-right tabular-nums pr-6"
+            />
+            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+              €
+            </span>
+          </div>
         </div>
 
         {/* Cachet net estimé */}
@@ -181,7 +155,7 @@ export function CachetArtisteSection({
           </div>
         </div>
 
-        {/* PaidPill standardisé (pattern app) */}
+        {/* Statut — toggle binaire "Payé" (vert au clic) */}
         <div className="w-24 shrink-0">
           <PaidPill
             paid={isPaid}
@@ -211,10 +185,10 @@ export function CachetArtisteSection({
       </div>
 
       {/* Footer explicatif court */}
-      {brut > 0 && !linkedToOwnProd && (
+      {brut > 0 && (
         <p className="text-[10px] text-muted-foreground italic px-1">
-          Brut GUSO calculé depuis le CA : ({100 - cachetsFeesPct}% du CA) ÷ 1,43.
-          Net ≈ brut × 0,75 (annexe 10 intermittents, 2026).
+          Net estimé ≈ brut × 0,75 (charges salariales ~25 %, annexe 10
+          intermittents).
           {isPaid && artiste.paidAt && (
             <>
               {" "}· Payé le {format(artiste.paidAt, "MMM yyyy", { locale: fr })}.
