@@ -124,8 +124,12 @@ set -euo pipefail
 echo '[VPS] Stop youri.service'
 sudo systemctl stop youri
 
-echo '[VPS] Extract code (preserve .env, prod.db, uploads)'
-tar -xzf $VPS_TMP -C $VPS_APP_DIR
+echo '[VPS] Extract + sync code (rsync --delete : retire les fichiers obsoletes/renommes)'
+rm -rf /tmp/youri-new
+mkdir -p /tmp/youri-new
+tar -xzf $VPS_TMP -C /tmp/youri-new
+rsync -a --delete --exclude='node_modules' --exclude='.next' --exclude='.env' --exclude='.env.local' --exclude='.env.production' --exclude='prisma/dev.db*' --exclude='prisma/prod.db*' --exclude='public/uploads' --exclude='.git' --exclude='tsconfig.tsbuildinfo' --exclude='backups' /tmp/youri-new/ $VPS_APP_DIR/
+rm -rf /tmp/youri-new
 
 echo '[VPS] npm ci (skip puppeteer download)'
 cd $VPS_APP_DIR
