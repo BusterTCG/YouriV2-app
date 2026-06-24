@@ -27,6 +27,15 @@ import { Button } from "@/components/ui/button";
 import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { DatePickerField } from "@/components/tasks/date-picker-field";
 import { upsertArtistProfile } from "@/lib/actions/artist-profile";
+import { formatPhone, phoneHref } from "@/lib/format-phone";
+import {
+  formatNir,
+  formatSiret,
+  formatSiren,
+  formatIban,
+  normalizeDigits,
+  normalizeIban,
+} from "@/lib/id-format";
 
 /**
  * Form modal pour éditer la fiche ArtistProfile — copie fidèle de
@@ -104,8 +113,18 @@ export function ArtistInfoForm({
 
   function onSubmit(values: FormValues) {
     setServerError(null);
+    // Stockage normalisé (chiffres seuls / IBAN sans espaces) — l'affichage et
+    // la saisie reformatent à la volée. Cf. lib/id-format & lib/format-phone.
+    const normalized: FormValues = {
+      ...values,
+      socialSecurityNumber: normalizeDigits(values.socialSecurityNumber),
+      personalPhone: phoneHref(values.personalPhone),
+      companySiret: normalizeDigits(values.companySiret),
+      companySiren: normalizeDigits(values.companySiren),
+      bankIban: normalizeIban(values.bankIban),
+    };
     startTransition(async () => {
-      const res = await upsertArtistProfile(artistId, values);
+      const res = await upsertArtistProfile(artistId, normalized);
       if (!res.ok) {
         setServerError(res.error);
         return;
@@ -145,14 +164,14 @@ export function ArtistInfoForm({
                 )}
               />
               <T name="birthPlace" label="Lieu de naissance" form={form} />
-              <T name="socialSecurityNumber" label="N° Sécurité sociale" form={form} />
+              <T name="socialSecurityNumber" label="N° Sécurité sociale" form={form} format={formatNir} />
               {/* Coordonnées personnelles fusionnées dans Identité civile
                   (Stan 2026-06-24) : insérées entre N° Sécurité sociale et N°
                   Congés Spectacles. `name="personalEmail"` INCHANGÉ → les liens
                   qui lisent ArtistProfile.personalEmail (FDR, invitation Google)
                   ne sont pas impactés (lecture par clé en base, pas par position). */}
               <T name="personalEmail" label="Email perso" form={form} />
-              <T name="personalPhone" label="Téléphone" form={form} />
+              <T name="personalPhone" label="Téléphone" form={form} format={formatPhone} />
               <FormField
                 control={form.control}
                 name="homeAddress"
@@ -181,8 +200,8 @@ export function ArtistInfoForm({
             <div className="grid grid-cols-2 gap-3">
               <T name="companyName" label="Raison sociale" form={form} />
               <T name="companyLegalForm" label="Forme juridique" form={form} placeholder="SAS / SASU / SARL / EI…" />
-              <T name="companySiret" label="SIRET" form={form} />
-              <T name="companySiren" label="SIREN" form={form} />
+              <T name="companySiret" label="SIRET" form={form} format={formatSiret} />
+              <T name="companySiren" label="SIREN" form={form} format={formatSiren} />
               <T name="companyVatNumber" label="N° TVA intra" form={form} />
               <T name="companyApeCode" label="Code APE / NAF" form={form} />
               <FormField
@@ -208,7 +227,7 @@ export function ArtistInfoForm({
             {/* 4 — RIB */}
             <SectionTitle>Coordonnées bancaires</SectionTitle>
             <div className="grid grid-cols-2 gap-3">
-              <T name="bankIban" label="IBAN" form={form} className="col-span-2" />
+              <T name="bankIban" label="IBAN" form={form} className="col-span-2" format={formatIban} />
               <T name="bankBic" label="BIC" form={form} />
               <T name="bankName" label="Banque" form={form} />
               <T name="bankHolder" label="Titulaire" form={form} className="col-span-2" />
@@ -279,30 +298,44 @@ function T({
   form,
   placeholder,
   className,
+  format,
 }: {
   name: keyof FormValues;
   label: string;
   form: ReturnType<typeof useForm<FormValues>>;
   placeholder?: string;
   className?: string;
+  /**
+   * Règle d'édition optionnelle : reformate la valeur à chaque frappe (et à
+   * l'affichage) — ex. groupes de chiffres pour Sécu/SIRET/IBAN. Idempotente.
+   */
+  format?: (raw: string) => string;
 }) {
   return (
     <FormField
       control={form.control}
       name={name as never}
-      render={({ field }) => (
-        <FormItem className={className}>
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Input
-              placeholder={placeholder}
-              {...field}
-              value={typeof field.value === "string" ? field.value : ""}
-            />
-          </FormControl>
-          <FormMessage />
-        </FormItem>
-      )}
+      render={({ field }) => {
+        const str = typeof field.value === "string" ? field.value : "";
+        return (
+          <FormItem className={className}>
+            <FormLabel>{label}</FormLabel>
+            <FormControl>
+              <Input
+                placeholder={placeholder}
+                {...field}
+                value={format ? format(str) : str}
+                onChange={
+                  format
+                    ? (e) => field.onChange(format(e.target.value))
+                    : field.onChange
+                }
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        );
+      }}
     />
   );
 }

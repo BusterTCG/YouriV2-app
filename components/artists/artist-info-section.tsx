@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { InfoField } from "./info-field";
 import { formatPhone } from "@/lib/format-phone";
+import { formatNir, formatSiret, formatSiren, formatIban } from "@/lib/id-format";
 import { ArtistInfoForm, type ArtistInfoFormDefaults } from "./artist-info-form";
 import { ArtistInfoExport } from "./artist-info-export";
 
@@ -66,13 +67,10 @@ export function ArtistInfoSection({ artistId, artistName, profile }: ArtistInfoS
                 display={(d) => format(new Date(d), "d MMMM yyyy", { locale: fr })}
               />
               <InfoField label="Lieu de naissance" value={profile?.birthPlace} />
-              <InfoField label="N° Sécurité sociale" value={profile?.socialSecurityNumber} sensitive />
+              <InfoField label="N° Sécurité sociale" value={profile?.socialSecurityNumber} sensitive display={formatNir} />
               {/* Coordonnées personnelles fusionnées dans Identité civile. */}
               <InfoField label="Email perso" value={profile?.personalEmail} />
-              <InfoField
-                label="Téléphone"
-                value={formatPhone(profile?.personalPhone)}
-              />
+              <InfoField label="Téléphone" value={profile?.personalPhone} display={formatPhone} />
               <InfoField label="Adresse résidence" value={profile?.homeAddress} />
               <InfoField label="N° Congés Spectacles" value={profile?.intermittentNumber} />
               <InfoField label="N° SACD" value={profile?.sacdNumber} />
@@ -85,8 +83,8 @@ export function ArtistInfoSection({ artistId, artistName, profile }: ArtistInfoS
             <Grid>
               <InfoField label="Raison sociale" value={profile?.companyName} />
               <InfoField label="Forme juridique" value={profile?.companyLegalForm} />
-              <InfoField label="SIRET" value={profile?.companySiret} />
-              <InfoField label="SIREN" value={profile?.companySiren} />
+              <InfoField label="SIRET" value={profile?.companySiret} display={formatSiret} />
+              <InfoField label="SIREN" value={profile?.companySiren} display={formatSiren} />
               <InfoField label="N° TVA intra" value={profile?.companyVatNumber} />
               <InfoField label="Code APE / NAF" value={profile?.companyApeCode} />
               <InfoField label="Adresse siège" value={profile?.companyAddress} />
@@ -96,7 +94,7 @@ export function ArtistInfoSection({ artistId, artistName, profile }: ArtistInfoS
 
           <Section title="Coordonnées bancaires">
             <Grid>
-              <InfoField label="IBAN" value={profile?.bankIban} sensitive />
+              <InfoField label="IBAN" value={profile?.bankIban} sensitive display={formatIban} />
               <InfoField label="BIC" value={profile?.bankBic} />
               <InfoField label="Banque" value={profile?.bankName} />
               <InfoField label="Titulaire" value={profile?.bankHolder} />
