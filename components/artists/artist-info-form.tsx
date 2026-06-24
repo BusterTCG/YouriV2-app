@@ -64,7 +64,6 @@ const FormSchema = z.object({
   companyApeCode: z.string().optional().or(z.literal("")),
   companyAddress: z.string().optional().or(z.literal("")),
   spectacleLicense: z.string().optional().or(z.literal("")),
-  vatRegime: z.string().optional().or(z.literal("")),
   bankIban: z.string().optional().or(z.literal("")),
   bankBic: z.string().optional().or(z.literal("")),
   bankName: z.string().optional().or(z.literal("")),
@@ -202,7 +201,6 @@ export function ArtistInfoForm({
                 )}
               />
               <T name="spectacleLicense" label="N° Licence spectacles" form={form} placeholder="2-XXXXXX, 3-XXXXXX…" />
-              <T name="vatRegime" label="Régime TVA" form={form} placeholder="Assujetti / Franchise…" />
             </div>
 
             {/* 4 — RIB */}
@@ -314,7 +312,7 @@ function emptyValues(): FormValues {
     socialSecurityNumber: "", intermittentNumber: "", sacdNumber: "", sncfCardNumber: "",
     personalEmail: "", personalPhone: "", homeAddress: "",
     companyName: "", companyLegalForm: "", companySiret: "", companySiren: "",
-    companyVatNumber: "", companyApeCode: "", companyAddress: "", spectacleLicense: "", vatRegime: "",
+    companyVatNumber: "", companyApeCode: "", companyAddress: "", spectacleLicense: "",
     bankIban: "", bankBic: "", bankName: "", bankHolder: "",
     bioShort: "", bioLong: "", pressPhotoUrl: "", websiteUrl: "",
     instagramHandle: "", youtubeHandle: "", tiktokHandle: "",

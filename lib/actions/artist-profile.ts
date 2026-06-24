@@ -40,7 +40,6 @@ const ProfileInputSchema = z.object({
   companyApeCode: z.string().max(10).optional().nullable(),
   companyAddress: z.string().max(300).optional().nullable(),
   spectacleLicense: z.string().max(80).optional().nullable(),
-  vatRegime: z.string().max(40).optional().nullable(),
 
   // 4 — RIB
   bankIban: z.string().max(40).optional().nullable(),

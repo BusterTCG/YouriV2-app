@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Pencil, FileDown, ChevronDown, ChevronRight } from "lucide-react";
 import type { ArtistProfile } from "@prisma/client";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { InfoField } from "./info-field";
@@ -44,9 +44,6 @@ export function ArtistInfoSection({ artistId, artistName, profile }: ArtistInfoS
         <CardHeader className="flex flex-row items-start justify-between gap-3">
           <div className="space-y-1">
             <CardTitle className="text-base">Fiche infos artiste</CardTitle>
-            <CardDescription>
-              Données à transmettre aux partenaires (orga, prod, fournisseur).
-            </CardDescription>
           </div>
           <div className="flex gap-2 shrink-0">
             <Button variant="outline" size="sm" onClick={() => setExporting(true)}>
@@ -97,7 +94,6 @@ export function ArtistInfoSection({ artistId, artistName, profile }: ArtistInfoS
               <InfoField label="Code APE / NAF" value={profile?.companyApeCode} />
               <InfoField label="Adresse siège" value={profile?.companyAddress} />
               <InfoField label="N° Licence spectacles" value={profile?.spectacleLicense} />
-              <InfoField label="Régime TVA" value={profile?.vatRegime} />
             </Grid>
           </Section>
 
@@ -203,7 +199,6 @@ function profileToDefaults(
     companyApeCode: p.companyApeCode ?? "",
     companyAddress: p.companyAddress ?? "",
     spectacleLicense: p.spectacleLicense ?? "",
-    vatRegime: p.vatRegime ?? "",
     bankIban: p.bankIban ?? "",
     bankBic: p.bankBic ?? "",
     bankName: p.bankName ?? "",

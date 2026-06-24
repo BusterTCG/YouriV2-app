@@ -39,7 +39,7 @@ type FieldKey =
   | "personalEmail" | "personalPhone" | "homeAddress"
   | "companyName" | "companyLegalForm" | "companySiret" | "companySiren"
   | "companyVatNumber" | "companyApeCode" | "companyAddress"
-  | "spectacleLicense" | "vatRegime"
+  | "spectacleLicense"
   | "bankIban" | "bankBic" | "bankName" | "bankHolder"
   | "bioShort" | "bioLong" | "pressPhotoUrl" | "websiteUrl"
   | "instagramHandle" | "youtubeHandle" | "tiktokHandle";
@@ -83,7 +83,6 @@ const SECTIONS: Section[] = [
       { key: "companyApeCode", label: "Code APE / NAF" },
       { key: "companyAddress", label: "Adresse siège" },
       { key: "spectacleLicense", label: "N° Licence spectacles" },
-      { key: "vatRegime", label: "Régime TVA" },
     ],
   },
   {
