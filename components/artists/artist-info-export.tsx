@@ -15,6 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { ArtistProfile } from "@prisma/client";
+import { formatPhone } from "@/lib/format-phone";
+import { formatNir, formatSiret, formatSiren, formatIban } from "@/lib/id-format";
 
 /**
  * Export de la fiche ArtistProfile en PDF (via window.print) — copie fidèle
@@ -267,7 +269,16 @@ function formatField(key: FieldKey, raw: unknown): string {
   if (key === "birthDate" && typeof raw === "string") {
     return format(new Date(raw), "d MMMM yyyy", { locale: fr });
   }
-  return String(raw);
+  const s = String(raw);
+  // Mêmes règles de mise en forme que la fiche (cf. lib/id-format & format-phone).
+  switch (key) {
+    case "socialSecurityNumber": return formatNir(s);
+    case "personalPhone":        return formatPhone(s);
+    case "companySiret":         return formatSiret(s);
+    case "companySiren":         return formatSiren(s);
+    case "bankIban":             return formatIban(s);
+    default:                     return s;
+  }
 }
 
 function escapeHtml(s: string): string {
