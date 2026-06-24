@@ -24,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { DatePickerField } from "@/components/tasks/date-picker-field";
 import { upsertArtistProfile } from "@/lib/actions/artist-profile";
 
@@ -48,10 +49,10 @@ const FormSchema = z.object({
   stageName: z.string().optional().or(z.literal("")),
   birthDate: z.date().nullable().optional(),
   birthPlace: z.string().optional().or(z.literal("")),
-  nationality: z.string().optional().or(z.literal("")),
   socialSecurityNumber: z.string().optional().or(z.literal("")),
   intermittentNumber: z.string().optional().or(z.literal("")),
   sacdNumber: z.string().optional().or(z.literal("")),
+  sncfCardNumber: z.string().optional().or(z.literal("")),
   personalEmail: z.string().optional().or(z.literal("")),
   personalPhone: z.string().optional().or(z.literal("")),
   homeAddress: z.string().optional().or(z.literal("")),
@@ -144,10 +145,10 @@ export function ArtistInfoForm({
                 )}
               />
               <T name="birthPlace" label="Lieu de naissance" form={form} />
-              <T name="nationality" label="Nationalité" form={form} />
               <T name="socialSecurityNumber" label="N° Sécurité sociale" form={form} />
               <T name="intermittentNumber" label="N° Intermittent" form={form} />
               <T name="sacdNumber" label="N° SACD" form={form} />
+              <T name="sncfCardNumber" label="N° Carte SNCF" form={form} />
             </div>
 
             {/* 2 — Coordonnées personnelles */}
@@ -155,7 +156,23 @@ export function ArtistInfoForm({
             <div className="grid grid-cols-2 gap-3">
               <T name="personalEmail" label="Email perso" form={form} />
               <T name="personalPhone" label="Téléphone" form={form} />
-              <T name="homeAddress" label="Adresse résidence" form={form} className="col-span-2" />
+              <FormField
+                control={form.control}
+                name="homeAddress"
+                render={({ field }) => (
+                  <FormItem className="col-span-2">
+                    <FormLabel>Adresse résidence</FormLabel>
+                    <FormControl>
+                      <AddressAutocomplete
+                        value={typeof field.value === "string" ? field.value : ""}
+                        onChange={field.onChange}
+                        placeholder="Commence à taper l'adresse réelle…"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             {/* 3 — Structure */}
@@ -167,7 +184,23 @@ export function ArtistInfoForm({
               <T name="companySiren" label="SIREN" form={form} />
               <T name="companyVatNumber" label="N° TVA intra" form={form} />
               <T name="companyApeCode" label="Code APE / NAF" form={form} />
-              <T name="companyAddress" label="Adresse siège" form={form} className="col-span-2" />
+              <FormField
+                control={form.control}
+                name="companyAddress"
+                render={({ field }) => (
+                  <FormItem className="col-span-2">
+                    <FormLabel>Adresse siège</FormLabel>
+                    <FormControl>
+                      <AddressAutocomplete
+                        value={typeof field.value === "string" ? field.value : ""}
+                        onChange={field.onChange}
+                        placeholder="Commence à taper l'adresse réelle…"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <T name="spectacleLicense" label="N° Licence spectacles" form={form} placeholder="2-XXXXXX, 3-XXXXXX…" />
               <T name="vatRegime" label="Régime TVA" form={form} placeholder="Assujetti / Franchise…" />
             </div>
@@ -277,8 +310,8 @@ function T({
 function emptyValues(): FormValues {
   return {
     firstName: "", lastName: "", stageName: "",
-    birthDate: null, birthPlace: "", nationality: "",
-    socialSecurityNumber: "", intermittentNumber: "", sacdNumber: "",
+    birthDate: null, birthPlace: "",
+    socialSecurityNumber: "", intermittentNumber: "", sacdNumber: "", sncfCardNumber: "",
     personalEmail: "", personalPhone: "", homeAddress: "",
     companyName: "", companyLegalForm: "", companySiret: "", companySiren: "",
     companyVatNumber: "", companyApeCode: "", companyAddress: "", spectacleLicense: "", vatRegime: "",

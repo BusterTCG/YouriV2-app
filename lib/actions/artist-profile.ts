@@ -21,10 +21,10 @@ const ProfileInputSchema = z.object({
   stageName: z.string().max(80).optional().nullable(),
   birthDate: z.coerce.date().optional().nullable(),
   birthPlace: z.string().max(120).optional().nullable(),
-  nationality: z.string().max(80).optional().nullable(),
   socialSecurityNumber: z.string().max(40).optional().nullable(),
   intermittentNumber: z.string().max(40).optional().nullable(),
   sacdNumber: z.string().max(40).optional().nullable(),
+  sncfCardNumber: z.string().max(40).optional().nullable(),
 
   // 2 — Coordonnées personnelles
   personalEmail: z.string().email().optional().or(z.literal("")).nullable(),

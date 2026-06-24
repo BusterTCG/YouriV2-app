@@ -318,6 +318,9 @@ model ArtistProfile {
   socialSecurityNumber String?
   intermittentNumber   String?
   sacdNumber           String?
+  sncfCardNumber       String?
+  // NB : `nationality` retiré de l'UI (form + fiche) — colonne conservée pour
+  // ne pas perdre l'historique. Plus lue ni écrite par l'app.
 
   // 2 — Coordonnées personnelles
   personalEmail String?

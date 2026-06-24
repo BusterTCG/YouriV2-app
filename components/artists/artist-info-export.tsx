@@ -35,7 +35,7 @@ interface ArtistInfoExportProps {
 
 type FieldKey =
   | "firstName" | "lastName" | "stageName" | "birthDate" | "birthPlace"
-  | "nationality" | "socialSecurityNumber" | "intermittentNumber" | "sacdNumber"
+  | "socialSecurityNumber" | "intermittentNumber" | "sacdNumber" | "sncfCardNumber"
   | "personalEmail" | "personalPhone" | "homeAddress"
   | "companyName" | "companyLegalForm" | "companySiret" | "companySiren"
   | "companyVatNumber" | "companyApeCode" | "companyAddress"
@@ -58,10 +58,10 @@ const SECTIONS: Section[] = [
       { key: "stageName", label: "Nom de scène" },
       { key: "birthDate", label: "Date de naissance" },
       { key: "birthPlace", label: "Lieu de naissance" },
-      { key: "nationality", label: "Nationalité" },
       { key: "socialSecurityNumber", label: "N° Sécurité sociale" },
       { key: "intermittentNumber", label: "N° Intermittent" },
       { key: "sacdNumber", label: "N° SACD" },
+      { key: "sncfCardNumber", label: "N° Carte SNCF" },
     ],
   },
   {

@@ -69,10 +69,10 @@ export function ArtistInfoSection({ artistId, artistName, profile }: ArtistInfoS
                 display={(d) => format(new Date(d), "d MMMM yyyy", { locale: fr })}
               />
               <InfoField label="Lieu de naissance" value={profile?.birthPlace} />
-              <InfoField label="Nationalité" value={profile?.nationality} />
               <InfoField label="N° Sécurité sociale" value={profile?.socialSecurityNumber} sensitive />
               <InfoField label="N° Intermittent" value={profile?.intermittentNumber} />
               <InfoField label="N° SACD" value={profile?.sacdNumber} />
+              <InfoField label="N° Carte SNCF" value={profile?.sncfCardNumber} />
             </Grid>
           </Section>
 
@@ -188,10 +188,10 @@ function profileToDefaults(
     stageName: p.stageName ?? "",
     birthDate: p.birthDate,
     birthPlace: p.birthPlace ?? "",
-    nationality: p.nationality ?? "",
     socialSecurityNumber: p.socialSecurityNumber ?? "",
     intermittentNumber: p.intermittentNumber ?? "",
     sacdNumber: p.sacdNumber ?? "",
+    sncfCardNumber: p.sncfCardNumber ?? "",
     personalEmail: p.personalEmail ?? "",
     personalPhone: p.personalPhone ?? "",
     homeAddress: p.homeAddress ?? "",
