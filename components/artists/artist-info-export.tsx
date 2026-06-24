@@ -35,7 +35,7 @@ interface ArtistInfoExportProps {
 
 type FieldKey =
   | "firstName" | "lastName" | "stageName" | "birthDate" | "birthPlace"
-  | "socialSecurityNumber" | "intermittentNumber" | "sacdNumber" | "sncfCardNumber"
+  | "socialSecurityNumber" | "intermittentNumber" | "sacdNumber" | "sncfCardNumber" | "dietaryRequirements"
   | "personalEmail" | "personalPhone" | "homeAddress"
   | "companyName" | "companyLegalForm" | "companySiret" | "companySiren"
   | "companyVatNumber" | "companyApeCode" | "companyAddress"
@@ -59,17 +59,13 @@ const SECTIONS: Section[] = [
       { key: "birthDate", label: "Date de naissance" },
       { key: "birthPlace", label: "Lieu de naissance" },
       { key: "socialSecurityNumber", label: "N° Sécurité sociale" },
-      { key: "intermittentNumber", label: "N° Intermittent" },
-      { key: "sacdNumber", label: "N° SACD" },
-      { key: "sncfCardNumber", label: "N° Carte SNCF" },
-    ],
-  },
-  {
-    title: "Coordonnées personnelles",
-    fields: [
       { key: "personalEmail", label: "Email perso" },
       { key: "personalPhone", label: "Téléphone" },
       { key: "homeAddress", label: "Adresse résidence" },
+      { key: "intermittentNumber", label: "N° Congés Spectacles" },
+      { key: "sacdNumber", label: "N° SACD" },
+      { key: "sncfCardNumber", label: "N° Carte SNCF" },
+      { key: "dietaryRequirements", label: "Régime Alimentaire" },
     ],
   },
   {

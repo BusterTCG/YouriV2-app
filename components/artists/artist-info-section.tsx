@@ -18,11 +18,11 @@ import { ArtistInfoExport } from "./artist-info-export";
  * fidèle de KuroNeko-App `components/artists/artist-info-section.tsx`.
  *
  * Sections (Identité civile dépliée par défaut, les autres repliées) :
- *   1. Identité civile (firstName, lastName, stageName, birthDate, etc.)
- *   2. Coordonnées personnelles (email, phone, address)
- *   3. Structure de facturation (raison sociale, SIRET, TVA, etc.)
- *   4. Coordonnées bancaires (IBAN sensible, BIC, banque, titulaire)
- *   5. Communication (bios, photo presse, social)
+ *   1. Identité civile (état civil + coordonnées perso email/tél/adresse +
+ *      régime alimentaire — le bloc "Coordonnées personnelles" y est fusionné)
+ *   2. Structure de facturation (raison sociale, SIRET, TVA, etc.)
+ *   3. Coordonnées bancaires (IBAN sensible, BIC, banque, titulaire)
+ *   4. Communication (bios, photo presse, social)
  *
  * Boutons "Exporter" (PDF via print) + "Modifier" (ouvre ArtistInfoForm).
  */
@@ -67,20 +67,17 @@ export function ArtistInfoSection({ artistId, artistName, profile }: ArtistInfoS
               />
               <InfoField label="Lieu de naissance" value={profile?.birthPlace} />
               <InfoField label="N° Sécurité sociale" value={profile?.socialSecurityNumber} sensitive />
-              <InfoField label="N° Intermittent" value={profile?.intermittentNumber} />
-              <InfoField label="N° SACD" value={profile?.sacdNumber} />
-              <InfoField label="N° Carte SNCF" value={profile?.sncfCardNumber} />
-            </Grid>
-          </Section>
-
-          <Section title="Coordonnées personnelles">
-            <Grid>
+              {/* Coordonnées personnelles fusionnées dans Identité civile. */}
               <InfoField label="Email perso" value={profile?.personalEmail} />
               <InfoField
                 label="Téléphone"
                 value={formatPhone(profile?.personalPhone)}
               />
               <InfoField label="Adresse résidence" value={profile?.homeAddress} />
+              <InfoField label="N° Congés Spectacles" value={profile?.intermittentNumber} />
+              <InfoField label="N° SACD" value={profile?.sacdNumber} />
+              <InfoField label="N° Carte SNCF" value={profile?.sncfCardNumber} />
+              <InfoField label="Régime Alimentaire" value={profile?.dietaryRequirements} />
             </Grid>
           </Section>
 
@@ -188,6 +185,7 @@ function profileToDefaults(
     intermittentNumber: p.intermittentNumber ?? "",
     sacdNumber: p.sacdNumber ?? "",
     sncfCardNumber: p.sncfCardNumber ?? "",
+    dietaryRequirements: p.dietaryRequirements ?? "",
     personalEmail: p.personalEmail ?? "",
     personalPhone: p.personalPhone ?? "",
     homeAddress: p.homeAddress ?? "",

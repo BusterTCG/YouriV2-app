@@ -25,6 +25,7 @@ const ProfileInputSchema = z.object({
   intermittentNumber: z.string().max(40).optional().nullable(),
   sacdNumber: z.string().max(40).optional().nullable(),
   sncfCardNumber: z.string().max(40).optional().nullable(),
+  dietaryRequirements: z.string().max(200).optional().nullable(),
 
   // 2 — Coordonnées personnelles
   personalEmail: z.string().email().optional().or(z.literal("")).nullable(),

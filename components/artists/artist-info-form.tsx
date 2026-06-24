@@ -53,6 +53,7 @@ const FormSchema = z.object({
   intermittentNumber: z.string().optional().or(z.literal("")),
   sacdNumber: z.string().optional().or(z.literal("")),
   sncfCardNumber: z.string().optional().or(z.literal("")),
+  dietaryRequirements: z.string().optional().or(z.literal("")),
   personalEmail: z.string().optional().or(z.literal("")),
   personalPhone: z.string().optional().or(z.literal("")),
   homeAddress: z.string().optional().or(z.literal("")),
@@ -145,14 +146,11 @@ export function ArtistInfoForm({
               />
               <T name="birthPlace" label="Lieu de naissance" form={form} />
               <T name="socialSecurityNumber" label="N° Sécurité sociale" form={form} />
-              <T name="intermittentNumber" label="N° Intermittent" form={form} />
-              <T name="sacdNumber" label="N° SACD" form={form} />
-              <T name="sncfCardNumber" label="N° Carte SNCF" form={form} />
-            </div>
-
-            {/* 2 — Coordonnées personnelles */}
-            <SectionTitle>Coordonnées personnelles</SectionTitle>
-            <div className="grid grid-cols-2 gap-3">
+              {/* Coordonnées personnelles fusionnées dans Identité civile
+                  (Stan 2026-06-24) : insérées entre N° Sécurité sociale et N°
+                  Congés Spectacles. `name="personalEmail"` INCHANGÉ → les liens
+                  qui lisent ArtistProfile.personalEmail (FDR, invitation Google)
+                  ne sont pas impactés (lecture par clé en base, pas par position). */}
               <T name="personalEmail" label="Email perso" form={form} />
               <T name="personalPhone" label="Téléphone" form={form} />
               <FormField
@@ -172,6 +170,10 @@ export function ArtistInfoForm({
                   </FormItem>
                 )}
               />
+              <T name="intermittentNumber" label="N° Congés Spectacles" form={form} />
+              <T name="sacdNumber" label="N° SACD" form={form} />
+              <T name="sncfCardNumber" label="N° Carte SNCF" form={form} />
+              <T name="dietaryRequirements" label="Régime Alimentaire" form={form} className="col-span-2" />
             </div>
 
             {/* 3 — Structure */}
@@ -309,7 +311,7 @@ function emptyValues(): FormValues {
   return {
     firstName: "", lastName: "", stageName: "",
     birthDate: null, birthPlace: "",
-    socialSecurityNumber: "", intermittentNumber: "", sacdNumber: "", sncfCardNumber: "",
+    socialSecurityNumber: "", intermittentNumber: "", sacdNumber: "", sncfCardNumber: "", dietaryRequirements: "",
     personalEmail: "", personalPhone: "", homeAddress: "",
     companyName: "", companyLegalForm: "", companySiret: "", companySiren: "",
     companyVatNumber: "", companyApeCode: "", companyAddress: "", spectacleLicense: "",
