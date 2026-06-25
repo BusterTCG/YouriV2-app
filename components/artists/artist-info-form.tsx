@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -26,7 +26,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
-import { DatePickerField } from "@/components/tasks/date-picker-field";
 import {
   upsertArtistProfile,
   createContactForArtist,
@@ -50,6 +49,39 @@ import {
  * RIB, Communication). 30 champs tous optionnels. Validation Zod côté
  * client + côté serveur dans upsertArtistProfile.
  */
+
+/** Date (UTC midi) → "jj/mm/aaaa" pour l'affichage dans l'input. */
+function birthDateToText(d: Date | null | undefined): string {
+  if (!d) return "";
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  return `${day}/${month}/${d.getUTCFullYear()}`;
+}
+
+/**
+ * "jj/mm/aaaa" → Date (UTC midi) | null (vide) | undefined (invalide).
+ * Aucune borne d'année (≠ calendrier) → toute date de naissance OK. Rejette
+ * les dates incohérentes (ex. 31/02). Copie fidèle KN (Stan 2026-06-25).
+ */
+function textToBirthDate(s: string): Date | null | undefined {
+  const t = s.trim();
+  if (!t) return null;
+  const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return undefined;
+  const day = parseInt(m[1], 10);
+  const month = parseInt(m[2], 10);
+  const year = parseInt(m[3], 10);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
+  const dt = new Date(Date.UTC(year, month - 1, day, 12));
+  if (
+    dt.getUTCDate() !== day ||
+    dt.getUTCMonth() !== month - 1 ||
+    dt.getUTCFullYear() !== year
+  ) {
+    return undefined; // jour inexistant (date "roulée")
+  }
+  return dt;
+}
 
 const SectionTitle = ({ children }: { children: React.ReactNode }) => (
   <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold border-b pb-1.5 pt-2">
@@ -126,6 +158,18 @@ export function ArtistInfoForm({
     values: { ...emptyValues(), ...(defaults ?? {}) },
   });
 
+  // Date de naissance : saisie texte jj/mm/aaaa (pas de calendrier borné).
+  // State texte local synchronisé sur les defaults ; la Date parsée est
+  // poussée dans le form (Stan 2026-06-25, copie fidèle KN).
+  const [birthText, setBirthText] = useState<string>(
+    birthDateToText(defaults?.birthDate ?? null),
+  );
+  const [birthError, setBirthError] = useState<string | null>(null);
+  useEffect(() => {
+    setBirthText(birthDateToText(defaults?.birthDate ?? null));
+    setBirthError(null);
+  }, [defaults?.birthDate]);
+
   function close(next: boolean) {
     if (!next) setStep("form");
     onOpenChange(next);
@@ -133,6 +177,10 @@ export function ArtistInfoForm({
 
   function onSubmit(values: FormValues) {
     setServerError(null);
+    if (birthText.trim() && textToBirthDate(birthText) === undefined) {
+      setBirthError("Date de naissance invalide — format attendu jj/mm/aaaa.");
+      return;
+    }
     // Stockage normalisé (chiffres seuls / IBAN sans espaces) — l'affichage et
     // la saisie reformatent à la volée. Cf. lib/id-format & lib/format-phone.
     const normalized: FormValues = {
@@ -248,7 +296,27 @@ export function ArtistInfoForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Date de naissance</FormLabel>
-                    <DatePickerField value={field.value ?? null} onChange={field.onChange} placeholder="Choisir" />
+                    <FormControl>
+                      <Input
+                        inputMode="numeric"
+                        placeholder="jj/mm/aaaa"
+                        value={birthText}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setBirthText(v);
+                          const parsed = textToBirthDate(v);
+                          if (parsed === undefined) {
+                            setBirthError("Format attendu : jj/mm/aaaa");
+                          } else {
+                            setBirthError(null);
+                            field.onChange(parsed);
+                          }
+                        }}
+                      />
+                    </FormControl>
+                    {birthError && (
+                      <p className="text-xs text-destructive">{birthError}</p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
