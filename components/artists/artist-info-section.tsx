@@ -13,6 +13,7 @@ import { formatPhone } from "@/lib/format-phone";
 import { formatNir, formatSiret, formatSiren, formatIban } from "@/lib/id-format";
 import { ArtistInfoForm, type ArtistInfoFormDefaults } from "./artist-info-form";
 import { ArtistInfoExport } from "./artist-info-export";
+import { ArtistContactLink } from "./artist-contact-link";
 
 /**
  * Affichage de la fiche ArtistProfile en 5 sections collapsibles — copie
@@ -45,6 +46,10 @@ export function ArtistInfoSection({ artistId, artistName, profile }: ArtistInfoS
         <CardHeader className="flex flex-row items-start justify-between gap-3">
           <div className="space-y-1">
             <CardTitle className="text-base">Fiche infos artiste</CardTitle>
+            <ArtistContactLink
+              artistId={artistId}
+              hasContact={profile?.contactId != null}
+            />
           </div>
           <div className="flex gap-2 shrink-0">
             <Button variant="outline" size="sm" onClick={() => setExporting(true)}>
@@ -119,6 +124,8 @@ export function ArtistInfoSection({ artistId, artistName, profile }: ArtistInfoS
         open={editing}
         onOpenChange={setEditing}
         artistId={artistId}
+        artistName={artistName}
+        hasLinkedContact={profile?.contactId != null}
         defaults={defaults}
       />
 

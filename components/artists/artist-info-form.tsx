@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2 } from "lucide-react";
+import { Loader2, UserPlus } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -26,7 +27,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { DatePickerField } from "@/components/tasks/date-picker-field";
-import { upsertArtistProfile } from "@/lib/actions/artist-profile";
+import {
+  upsertArtistProfile,
+  createContactForArtist,
+} from "@/lib/actions/artist-profile";
+import { splitArtistName } from "@/lib/artists";
 import { formatPhone, phoneHref } from "@/lib/format-phone";
 import {
   formatNir,
@@ -94,6 +99,10 @@ interface ArtistInfoFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   artistId: string;
+  /** Nom d'artiste (= Artist.name) — sert au prompt de création de contact. */
+  artistName: string;
+  /** true si une fiche contact est déjà liée → pas de prompt de création. */
+  hasLinkedContact: boolean;
   defaults?: ArtistInfoFormDefaults;
 }
 
@@ -101,15 +110,26 @@ export function ArtistInfoForm({
   open,
   onOpenChange,
   artistId,
+  artistName,
+  hasLinkedContact,
   defaults,
 }: ArtistInfoFormProps) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
+  // Étape "contact" : proposée après une sauvegarde réussie quand un tél ou un
+  // mail est renseigné et qu'aucun contact n'est encore lié (Stan 2026-06-25).
+  const [step, setStep] = useState<"form" | "contact">("form");
 
   const form = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
     values: { ...emptyValues(), ...(defaults ?? {}) },
   });
+
+  function close(next: boolean) {
+    if (!next) setStep("form");
+    onOpenChange(next);
+  }
 
   function onSubmit(values: FormValues) {
     setServerError(null);
@@ -129,12 +149,82 @@ export function ArtistInfoForm({
         setServerError(res.error);
         return;
       }
-      onOpenChange(false);
+      router.refresh();
+      // Propose la création d'une fiche contact si on a de quoi (tél/mail) et
+      // qu'aucun contact n'est déjà lié.
+      const hasReach = Boolean(normalized.personalPhone || normalized.personalEmail);
+      if (!hasLinkedContact && hasReach) {
+        setStep("contact");
+      } else {
+        close(false);
+      }
     });
   }
 
+  function handleCreateContact() {
+    setServerError(null);
+    startTransition(async () => {
+      const res = await createContactForArtist(artistId);
+      if (!res.ok) {
+        setServerError(res.error);
+        return;
+      }
+      router.refresh();
+      close(false);
+    });
+  }
+
+  // ── Étape 2 : proposition de création de fiche contact ──────────────────
+  if (step === "contact") {
+    const { firstName, lastName } = splitArtistName(artistName);
+    return (
+      <Dialog open={open} onOpenChange={close}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Créer une fiche contact ?</DialogTitle>
+            <DialogDescription>
+              Fiche infos enregistrée. Tu as renseigné un téléphone et/ou un
+              email — créer la fiche contact correspondante dans l&apos;annuaire ?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border bg-muted/20 px-3 py-2.5 text-sm space-y-1">
+            <div className="flex justify-between gap-2">
+              <span className="text-muted-foreground">Type</span>
+              <span className="font-medium">🌟 Artiste</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-muted-foreground">Prénom / Nom</span>
+              <span className="font-medium">
+                {firstName}
+                {lastName ? ` ${lastName}` : ""}
+              </span>
+            </div>
+            <div className="text-[11px] text-muted-foreground pt-1">
+              Téléphone + email repris de la fiche. Toute modification du tél/mail
+              ici sera répercutée sur ce contact.
+            </div>
+          </div>
+          {serverError && (
+            <p className="text-sm text-destructive border border-destructive/30 bg-destructive/5 rounded-md p-2">
+              {serverError}
+            </p>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => close(false)} disabled={pending}>
+              Non merci
+            </Button>
+            <Button type="button" onClick={handleCreateContact} disabled={pending} className="gap-1.5">
+              {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+              Créer la fiche contact
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={close}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Modifier la fiche infos</DialogTitle>
@@ -276,7 +366,7 @@ export function ArtistInfoForm({
             )}
 
             <DialogFooter className="border-t pt-4">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+              <Button type="button" variant="outline" onClick={() => close(false)} disabled={pending}>
                 Annuler
               </Button>
               <Button type="submit" disabled={pending}>

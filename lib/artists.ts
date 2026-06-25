@@ -39,3 +39,20 @@ export function artistInitials(name: string, slug: string): string {
     .toUpperCase()
     .slice(0, 3);
 }
+
+/**
+ * Découpe un nom d'artiste en prénom / nom pour créer une fiche contact
+ * (Stan 2026-06-25) : 1er mot = prénom, le reste = nom.
+ *   - "Charly Nyobé"        → { firstName: "Charly", lastName: "Nyobé" }
+ *   - "Jean Michel Dupont"  → { firstName: "Jean", lastName: "Michel Dupont" }
+ *   - "Mackouba"            → { firstName: "Mackouba", lastName: null }
+ */
+export function splitArtistName(name: string): {
+  firstName: string;
+  lastName: string | null;
+} {
+  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: "", lastName: null };
+  if (parts.length === 1) return { firstName: parts[0], lastName: null };
+  return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
+}

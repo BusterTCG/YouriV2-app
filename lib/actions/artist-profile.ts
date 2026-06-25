@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
+import { createContact, updateContact } from "@/lib/kn-client";
+import { splitArtistName } from "@/lib/artists";
 
 /**
  * Upsert ArtistProfile — copie fidèle de KuroNeko-App `lib/actions/artist-profile.ts`.
@@ -100,6 +102,19 @@ export async function upsertArtistProfile(
       update: data,
       create: { ...(data as Prisma.ArtistProfileUncheckedCreateInput), artistId },
     });
+    // Synchro fiche contact liée (tél + mail uniquement) — sens artiste →
+    // contact (Stan 2026-06-25). Non bloquant : si KN est indispo, la fiche
+    // artiste est quand même sauvegardée.
+    if (profile.contactId) {
+      try {
+        await updateContact(profile.contactId, {
+          phone: profile.personalPhone,
+          email: profile.personalEmail,
+        });
+      } catch (e) {
+        console.error("[upsertArtistProfile] sync contact KN échouée", e);
+      }
+    }
     const artist = await prisma.artist.findUnique({
       where: { id: artistId },
       select: { slug: true },
@@ -112,6 +127,127 @@ export async function upsertArtistProfile(
     if (e instanceof Prisma.PrismaClientKnownRequestError) {
       return { ok: false, error: `Erreur base de données (${e.code})` };
     }
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur inconnue" };
+  }
+}
+
+/**
+ * Crée une fiche contact KN (type ARTIST) à partir d'une fiche artiste
+ * (Stan 2026-06-25). Prénom/nom dérivés du nom d'artiste (1er mot = prénom,
+ * reste = nom), tél + mail repris du profil. Stocke l'id du contact sur le
+ * profil (`contactId`) pour le lien + la synchro ultérieure.
+ *
+ * No-op si un contact est déjà lié.
+ */
+export async function createContactForArtist(
+  artistId: string,
+): Promise<ActionResult<{ contactId: string }>> {
+  try {
+    await requireUser();
+  } catch {
+    return { ok: false, error: "Non authentifié" };
+  }
+  if (!artistId) return { ok: false, error: "artistId manquant" };
+
+  const artist = await prisma.artist.findUnique({
+    where: { id: artistId },
+    select: {
+      name: true,
+      slug: true,
+      profile: {
+        select: { contactId: true, personalEmail: true, personalPhone: true },
+      },
+    },
+  });
+  if (!artist) return { ok: false, error: "Artiste introuvable" };
+  if (artist.profile?.contactId) {
+    return { ok: true, data: { contactId: artist.profile.contactId } };
+  }
+
+  const { firstName, lastName } = splitArtistName(artist.name);
+
+  try {
+    const contact = await createContact({
+      firstName: firstName || artist.name,
+      lastName,
+      type: "ARTIST",
+      phone: artist.profile?.personalPhone ?? null,
+      email: artist.profile?.personalEmail ?? null,
+    });
+    await prisma.artistProfile.upsert({
+      where: { artistId },
+      update: { contactId: contact.id },
+      create: { artistId, contactId: contact.id, stageName: artist.name },
+    });
+    revalidatePath(`/artistes/${artist.slug}`);
+    revalidatePath("/contacts");
+    return { ok: true, data: { contactId: contact.id } };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Création du contact échouée",
+    };
+  }
+}
+
+/**
+ * Lie une fiche artiste à un contact KN EXISTANT (Stan 2026-06-25) — sert au
+ * rattachement des fiches déjà créées + évite les doublons quand un contact
+ * existe déjà. On ne touche pas aux données du contact (juste le lien) ; les
+ * éditions ultérieures du tél/mail de l'artiste seront synchronisées.
+ */
+export async function linkArtistToContact(
+  artistId: string,
+  contactId: string,
+): Promise<ActionResult> {
+  try {
+    await requireUser();
+  } catch {
+    return { ok: false, error: "Non authentifié" };
+  }
+  if (!artistId || !contactId) return { ok: false, error: "Paramètres manquants" };
+  try {
+    await prisma.artistProfile.upsert({
+      where: { artistId },
+      update: { contactId },
+      create: { artistId, contactId },
+    });
+    const artist = await prisma.artist.findUnique({
+      where: { id: artistId },
+      select: { slug: true },
+    });
+    if (artist?.slug) revalidatePath(`/artistes/${artist.slug}`);
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      return { ok: false, error: `Erreur base de données (${e.code})` };
+    }
+    return { ok: false, error: e instanceof Error ? e.message : "Erreur inconnue" };
+  }
+}
+
+/** Détache le contact lié d'une fiche artiste (ne supprime pas le contact KN). */
+export async function unlinkArtistContact(
+  artistId: string,
+): Promise<ActionResult> {
+  try {
+    await requireUser();
+  } catch {
+    return { ok: false, error: "Non authentifié" };
+  }
+  if (!artistId) return { ok: false, error: "artistId manquant" };
+  try {
+    await prisma.artistProfile.updateMany({
+      where: { artistId },
+      data: { contactId: null },
+    });
+    const artist = await prisma.artist.findUnique({
+      where: { id: artistId },
+      select: { slug: true },
+    });
+    if (artist?.slug) revalidatePath(`/artistes/${artist.slug}`);
+    return { ok: true };
+  } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Erreur inconnue" };
   }
 }

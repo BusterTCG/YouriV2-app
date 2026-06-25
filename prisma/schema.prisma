@@ -328,6 +328,11 @@ model ArtistProfile {
   personalPhone String?
   homeAddress   String?
 
+  // Lien vers la fiche contact KN créée depuis la fiche artiste (Stan
+  // 2026-06-25) : id du Contact côté KuroNeko. Sert à éviter de re-proposer la
+  // création + à synchroniser tél/mail (artiste → contact).
+  contactId String?
+
   // 3 — Structure de facturation
   companyName      String?
   companyLegalForm String?
