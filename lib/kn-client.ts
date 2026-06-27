@@ -23,6 +23,7 @@ import "server-only";
 
 export type ContactType =
   | "ORGANIZER"
+  | "LOCAL_PROMO"
   | "AGENCY"
   | "ARTIST"
   | "PRODUCTION"
@@ -53,6 +54,7 @@ export interface KnContact {
 export interface KnContactsCounts {
   all: number;
   ORGANIZER: number;
+  LOCAL_PROMO: number;
   AGENCY: number;
   ARTIST: number;
   PRODUCTION: number;

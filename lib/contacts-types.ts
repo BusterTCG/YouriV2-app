@@ -28,6 +28,7 @@ export const CONTACT_TYPE_OPTIONS: Array<{
   { value: "ORGANIZER",  label: "Organisateur", emoji: "🎫",  hint: "Plateaux, festivals, programmateurs de salles" },
   { value: "PRESS",      label: "Presse",       emoji: "📰",  hint: "Journaliste, attaché de presse, média" },
   { value: "PRODUCTION", label: "Production",   emoji: "🎬",  hint: "Boîte de production (société tierce)" },
+  { value: "LOCAL_PROMO", label: "Promo Local", emoji: "📣",  hint: "Promoteur local (achète / organise la date sur son territoire)" },
   { value: "TECHNICAL",  label: "Technique",    emoji: "🔧",  hint: "Régie, technique, captation, VTC, photographe" },
   { value: "OTHER",      label: "Autre",        emoji: "•",   hint: "Avocat, comptable, divers" },
 ];

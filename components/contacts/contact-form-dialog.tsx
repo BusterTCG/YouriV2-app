@@ -75,6 +75,7 @@ const FormSchema = z.object({
     "ARTIST",
     "BRAND",
     "ORGANIZER",
+    "LOCAL_PROMO",
     "PRESS",
     "PRODUCTION",
     "TECHNICAL",

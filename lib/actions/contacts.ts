@@ -34,6 +34,7 @@ export type { ActionResult } from "@/lib/errors";
 
 const CONTACT_TYPES = [
   "ORGANIZER",
+  "LOCAL_PROMO",
   "AGENCY",
   "ARTIST",
   "PRODUCTION",
