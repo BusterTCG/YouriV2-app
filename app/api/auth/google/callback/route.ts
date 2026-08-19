@@ -36,19 +36,31 @@ export async function GET(req: Request) {
   const state = url.searchParams.get("state") ?? "/dashboard";
   const error = url.searchParams.get("error");
 
-  if (error) {
-    return loginError(`OAuth refusé : ${error}`);
-  }
-  if (!code) {
-    return loginError("Code OAuth manquant");
-  }
-
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const redirectUri = process.env.GOOGLE_SIGNIN_REDIRECT_URI;
 
-  if (!clientId || !clientSecret || !redirectUri) {
-    return loginError("Google OAuth non configuré côté serveur");
+  // Origine PUBLIQUE issue de GOOGLE_SIGNIN_REDIRECT_URI, surtout PAS `req.url` :
+  // derrière le reverse proxy Caddy, le `req.url` d'un route handler contient
+  // l'hôte INTERNE (localhost:3001) → les redirections partiraient vers
+  // localhost (Stan 2026-06-17, bug récurrent). Elle est calculée AVANT le
+  // premier retour d'erreur : `loginError` en a besoin pour construire une URL
+  // absolue, seule forme acceptée par `NextResponse.redirect`.
+  const publicOrigin = redirectUri ? originOf(redirectUri) : null;
+  // Repli sur l'origine de la requête quand la configuration manque ou qu'elle
+  // est illisible : elle vaut l'hôte interne derrière le proxy, mais c'est le
+  // seul cas où on n'a rien de mieux, et un écran de connexion mal adressé
+  // reste préférable à un 500.
+  const base = publicOrigin ?? url.origin;
+
+  if (!clientId || !clientSecret || !redirectUri || !publicOrigin) {
+    return loginError(base, "Google OAuth non configuré côté serveur");
+  }
+  if (error) {
+    return loginError(base, `OAuth refusé : ${error}`);
+  }
+  if (!code) {
+    return loginError(publicOrigin, "Code OAuth manquant");
   }
 
   // 1. Échange code → token Google
@@ -68,12 +80,12 @@ export async function GET(req: Request) {
     if (!res.ok) {
       const txt = await res.text();
       console.error("[google/callback] token exchange failed", res.status, txt);
-      return loginError("Échange OAuth échoué");
+      return loginError(publicOrigin, "Échange OAuth échoué");
     }
     token = (await res.json()) as GoogleTokenResponse;
   } catch (e) {
     console.error("[google/callback] fetch failed", e);
-    return loginError("Erreur réseau OAuth");
+    return loginError(publicOrigin, "Erreur réseau OAuth");
   }
 
   // 2. Parse l'id_token (JWT — partie payload base64url décodée)
@@ -81,10 +93,10 @@ export async function GET(req: Request) {
   // avec Google + on utilise nos client_secret/code → confiance suffisante.
   const idTokenPayload = decodeJwtPayload<GoogleIdTokenPayload>(token.id_token);
   if (!idTokenPayload || !idTokenPayload.email) {
-    return loginError("id_token Google invalide");
+    return loginError(publicOrigin, "id_token Google invalide");
   }
   if (!idTokenPayload.email_verified) {
-    return loginError("Email Google non vérifié");
+    return loginError(publicOrigin, "Email Google non vérifié");
   }
 
   const email = idTokenPayload.email.toLowerCase();
@@ -96,10 +108,10 @@ export async function GET(req: Request) {
     .filter(Boolean);
 
   if (allowedEmails.length === 0) {
-    return loginError("AUTH_ALLOWED_EMAILS non configuré côté serveur");
+    return loginError(publicOrigin, "AUTH_ALLOWED_EMAILS non configuré côté serveur");
   }
   if (!allowedEmails.includes(email)) {
-    return loginError("Email non autorisé");
+    return loginError(publicOrigin, "Email non autorisé");
   }
 
   // 4. Cherche le user en BDD (créé via seed). On le crée pas à la volée —
@@ -117,10 +129,10 @@ export async function GET(req: Request) {
 
   if (!user) {
     console.error(`[google/callback] email whitelist mais pas en BDD : ${email}`);
-    return loginError("Compte non provisionné — contacte l'administrateur");
+    return loginError(publicOrigin, "Compte non provisionné — contacte l'administrateur");
   }
   if (!user.active) {
-    return loginError("Compte désactivé");
+    return loginError(publicOrigin, "Compte désactivé");
   }
 
   // 5. Crée la session
@@ -147,23 +159,34 @@ export async function GET(req: Request) {
     !state.startsWith("/\\")
       ? state
       : "/dashboard";
-  // Base = origine PUBLIQUE issue de GOOGLE_SIGNIN_REDIRECT_URI, surtout PAS
-  // `req.url` : derrière le reverse proxy Caddy, le `req.url` d'un route handler
-  // contient l'hôte INTERNE (localhost:3001) → la redirection post-login
-  // partait vers localhost (Stan 2026-06-17, bug récurrent). L'origine publique
-  // est déterministe quel que soit le comportement du proxy.
-  const publicOrigin = new URL(redirectUri).origin;
   return NextResponse.redirect(new URL(dest, publicOrigin));
 }
 
 // ─────────── Helpers ───────────
 
-function loginError(message: string): NextResponse {
-  // Redirect /login?error=... pour afficher l'erreur dans l'UI au lieu de
-  // crasher en JSON brut.
-  const url = new URL("/login", "http://x");
-  url.searchParams.set("error", message);
-  return NextResponse.redirect(url.pathname + url.search, { status: 307 });
+/**
+ * Renvoie sur /login?error=... pour afficher le motif dans l'UI au lieu de
+ * crasher en JSON brut.
+ *
+ * `NextResponse.redirect` exige une URL ABSOLUE — lui passer « /login?error=… »
+ * lève une TypeError et transforme chaque échec explicable (email non
+ * whitelisté, compte désactivé, échange de code refusé) en 500 sur lequel
+ * l'utilisateur ne peut rien lire. Constaté et corrigé le 2026-08-19, même
+ * défaut que sur PangeeLeads.
+ */
+function loginError(origin: string, message: string): NextResponse {
+  const target = new URL("/login", origin);
+  target.searchParams.set("error", message);
+  return NextResponse.redirect(target, { status: 307 });
+}
+
+/** Origine d'une URL de configuration, `null` si elle est illisible. */
+function originOf(raw: string): string | null {
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return null;
+  }
 }
 
 function decodeJwtPayload<T>(jwt: string): T | null {
