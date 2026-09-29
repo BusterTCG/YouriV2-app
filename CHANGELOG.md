@@ -6,6 +6,17 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [Production — étape 5 : bilan d'exploitation et compte de production] — 2026-09-29
+
+### Added
+
+- Bilan d'exploitation d'une production (onglet Résultats → « Bilan PDF » / « Bilan Excel ») : KPI, synthèse public + compte d'exploitation (Réalisé / Estimé), détail par date (chaque poste en colonne), compte artiste, frais généraux, notes de méthode.
+- Compte de production d'une date (onglet Comptes → « Compte Excel » / « Compte PDF ») : synthèse, compte d'exploitation, détail des postes (cachets artistes, frais généraux inclus).
+- Charte commune bleu nuit + or (`lib/finance/report-excel-kit.ts`, `components/shows/report-print-kit.tsx`) ; PDF A4 paysage rendus par Chromium depuis `/print/production/[id]` et `/print/compte/[showId]`.
+- Aucune management fee dans ces documents : garde statique étendue + test du contenu Excel.
+
+---
+
 ## [Production — étape 4 : compte artiste, KPI, fiches en onglets] — 2026-09-29
 
 ### Added

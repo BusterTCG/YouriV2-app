@@ -8,6 +8,8 @@ import {
   CalendarRange,
   ChevronLeft,
   ChevronRight,
+  FileSpreadsheet,
+  FileText,
   HandCoins,
   Landmark,
   MapPin,
@@ -55,7 +57,6 @@ const TAB_KEYS: TabKey[] = ["suivi", "dates", "resultats", "artiste", "frais", "
  *   Artiste        : le compte artiste (settlement)
  *   Frais généraux : les charges communes
  *   Contrat        : prod-exé % / co-prod %, notes, renommer, clôturer
- * (Bilan PDF / Excel : étape 5.)
  *
  * ⚠️ Management fees : jamais affichées ici (écrans internes uniquement).
  */
@@ -364,6 +365,20 @@ export default async function ProductionPage({ params, searchParams }: Props) {
       {view === "resultats" && (
         <>
           <div className="flex items-center gap-2 flex-wrap">
+            <a
+              href={`/api/production-report/${prod.id}?format=pdf`}
+              className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-sm font-medium hover:bg-accent/40 transition-colors"
+            >
+              <FileText className="h-4 w-4" />
+              Bilan PDF
+            </a>
+            <a
+              href={`/api/production-report/${prod.id}?format=xlsx`}
+              className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-sm font-medium hover:bg-accent/40 transition-colors"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              Bilan Excel
+            </a>
             <span className="text-[11px] text-muted-foreground ml-auto">
               Réalisé = dates jouées · Estimé = toute l&apos;exploitation (sur la base de ce qui est saisi)
             </span>

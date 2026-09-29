@@ -9,6 +9,7 @@ import {
   Clock,
   MapPin,
   FileText,
+  FileSpreadsheet,
   StickyNote,
 } from "lucide-react";
 import { prisma } from "@/lib/db";
@@ -453,6 +454,25 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
 
       {view === "comptes" && (
         <>
+      {/* Compte de production de la date — même design que le bilan
+          d'exploitation (Excel + PDF). Liens <a> simples : pas de prefetch
+          Next qui déclencherait la génération. Sans management fees. */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <a
+          href={`/api/financial-export/${deal.id}?format=xlsx`}
+          className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-sm font-medium hover:bg-accent/40 transition-colors"
+        >
+          <FileSpreadsheet className="h-4 w-4" />
+          Compte Excel
+        </a>
+        <a
+          href={`/api/financial-export/${deal.id}?format=pdf`}
+          className="inline-flex items-center gap-1.5 rounded-md border bg-card px-3 py-1.5 text-sm font-medium hover:bg-accent/40 transition-colors"
+        >
+          <FileText className="h-4 w-4" />
+          Compte PDF
+        </a>
+      </div>
       {/* Tableau de production — recettes + charges + Cachet Art. inline */}
       <ProductionLinesEditor
         dealId={deal.id}

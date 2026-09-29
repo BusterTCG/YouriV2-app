@@ -30,6 +30,16 @@ const REPORT_SOURCES = [
   "lib/finance/artist-account.ts",
   "lib/finance/artist-account-server.ts",
   "lib/actions/artist-movements.ts",
+  "lib/production-report-server.ts",
+  "lib/deal-report.ts",
+  "lib/finance/report-excel-kit.ts",
+  "lib/finance/production-report-excel.ts",
+  "lib/finance/deal-report-excel.ts",
+  "lib/pdf/report-response.ts",
+  "app/print/production",
+  "app/print/compte",
+  "app/api/production-report",
+  "app/api/financial-export",
 ];
 
 const FORBIDDEN = /managementFee|DealManagementFee|management-fees|ManagementFee|margeNette|totalMf/i;
