@@ -11,7 +11,7 @@ import { SidebarNav } from "@/components/layout/sidebar-nav";
  * Hamburger menu visible md:hidden uniquement. Ouvre un Sheet à gauche
  * contenant la même navigation que la sidebar desktop.
  */
-export function MobileNav({ isAdmin }: { isAdmin: boolean }) {
+export function MobileNav({ isAdmin, role }: { isAdmin: boolean; role?: string }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -25,7 +25,7 @@ export function MobileNav({ isAdmin }: { isAdmin: boolean }) {
         <div className="border-b px-4 py-3">
           <Logo />
         </div>
-        <SidebarNav isAdmin={isAdmin} onItemClick={() => setOpen(false)} />
+        <SidebarNav isAdmin={isAdmin} role={role} onItemClick={() => setOpen(false)} />
       </SheetContent>
     </Sheet>
   );

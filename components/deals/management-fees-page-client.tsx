@@ -1,5 +1,6 @@
 "use client";
 
+import { createContext, useContext } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
@@ -55,12 +56,18 @@ interface Props {
   data: ManagementFeesListData;
   currentUserPangeeKey: string | null;
   scope: "mine" | "all";
+  /** Profil « Production » (Nour) : ses MF uniquement, sans bascule
+   *  « Associés » ni clic sur « Encaissé » (paiements faits par les associés). */
+  readOnly?: boolean;
 }
+
+const ReadOnlyContext = createContext(false);
 
 export function ManagementFeesPageClient({
   data,
   currentUserPangeeKey,
   scope,
+  readOnly = false,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -90,6 +97,7 @@ export function ManagementFeesPageClient({
   const myMember = PANGEE_TEAM.find((m) => m.key === currentUserPangeeKey);
 
   return (
+    <ReadOnlyContext.Provider value={readOnly}>
     <div className="space-y-5">
       {/* Ligne 1 : Switcher Mes MF / Tous + PrivacyToggle aligné à droite
           (Stan 2026-06-02 : eye à côté de Stan/Associés). */}
@@ -110,7 +118,7 @@ export function ManagementFeesPageClient({
                 <User className="h-3.5 w-3.5" />
                 {myMember?.firstName ?? "Mes MF"}
               </button>
-              <button
+              {!readOnly && <button
                 type="button"
                 onClick={() => setScope("all")}
                 className={cn(
@@ -122,7 +130,7 @@ export function ManagementFeesPageClient({
               >
                 <Users2 className="h-3.5 w-3.5" />
                 Associés
-              </button>
+              </button>}
             </div>
             <PrivacyToggle />
           </div>
@@ -361,6 +369,7 @@ export function ManagementFeesPageClient({
         </div>
       )}
     </div>
+    </ReadOnlyContext.Provider>
   );
 }
 
@@ -574,6 +583,7 @@ function FeeRow({ row }: { row: ManagementFeeRow }) {
   const associateName = member?.firstName ?? row.associateKey;
   const isPaid = row.paymentStatus === "PAID";
   const eur = useEur();
+  const readOnly = useContext(ReadOnlyContext);
 
   /** Toggle binaire En cours ↔ Encaissé via PaidToggle. Bascule PAID →
    *  paidAt auto = mois courant. Bascule PAID → en cours → paidAt nullifié
@@ -640,6 +650,7 @@ function FeeRow({ row }: { row: ManagementFeeRow }) {
           paidAt auto = mois courant (cf. updateManagementFee server action). */}
       <td className="px-3 py-2 whitespace-nowrap">
         <PaidToggle
+          readOnly={readOnly}
           isOn={isPaid}
           onToggle={togglePaid}
           label="Encaissé"
@@ -676,6 +687,7 @@ function FeeCard({ row }: { row: ManagementFeeRow }) {
   const avatarColor = member?.color ?? "#94a3b8";
   const isPaid = row.paymentStatus === "PAID";
   const eur = useEur();
+  const readOnly = useContext(ReadOnlyContext);
 
   async function togglePaid(next: boolean) {
     const res = await updateManagementFee({
@@ -746,6 +758,7 @@ function FeeCard({ row }: { row: ManagementFeeRow }) {
         )}
         <div className="w-28 shrink-0">
           <PaidToggle
+            readOnly={readOnly}
             isOn={isPaid}
             onToggle={togglePaid}
             label="Encaissé"

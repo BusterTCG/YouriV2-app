@@ -2,6 +2,7 @@ import { AlertTriangle, CheckSquare, Clock, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { requireUser } from "@/lib/auth/users";
+import { isRestricted } from "@/lib/auth/access";
 import {
   getCurrentTasksForAssignee,
   getUpcomingTasksForAssignee,
@@ -37,10 +38,13 @@ interface PageProps {
 export default async function TachesPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const user = await requireUser();
-  const tab = sp.tab === "team" ? "team" : "mine";
+  // Profil « Production » (Nour) : uniquement ses tâches — ni onglet Équipe,
+  // ni file « À attribuer », ni lien vers les templates.
+  const restricted = isRestricted(user);
+  const tab = sp.tab === "team" && !restricted ? "team" : "mine";
 
   // Pangee key de l'user — défaut "stan" si pas défini (dev seed).
-  const myKey = user.pangeeKey ?? "stan";
+  const myKey = user.pangeeKey ?? (restricted ? "_none" : "stan");
 
   const [myTasks, upcomingTasks, allTasks, unassignedTasks, kpi] =
     await Promise.all([
@@ -49,7 +53,7 @@ export default async function TachesPage({ searchParams }: PageProps) {
       tab === "team"
         ? getAllCurrentTasks()
         : Promise.resolve([] as TaskWithDeal[]),
-      getUnassignedCurrentTasks(),
+      restricted ? Promise.resolve([] as TaskWithDeal[]) : getUnassignedCurrentTasks(),
       getTasksKpiForAssignee(myKey),
     ]);
 
@@ -70,14 +74,19 @@ export default async function TachesPage({ searchParams }: PageProps) {
           <h1 className="text-2xl font-semibold tracking-tight">Mes tâches</h1>
           <p className="text-muted-foreground text-sm">
             La tâche en cours de chaque deal. Au validate, la suivante du
-            pipeline apparait. Les templates sont éditables depuis{" "}
-            <Link
-              href="/settings/templates"
-              className="underline hover:text-foreground"
-            >
-              /settings/templates
-            </Link>
-            .
+            pipeline apparait.
+            {!restricted && (
+              <>
+                {" "}Les templates sont éditables depuis{" "}
+                <Link
+                  href="/settings/templates"
+                  className="underline hover:text-foreground"
+                >
+                  /settings/templates
+                </Link>
+                .
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -118,12 +127,14 @@ export default async function TachesPage({ searchParams }: PageProps) {
             )}
           </span>
         </TabLink>
-        <TabLink href="/taches?tab=team" active={tab === "team"}>
-          Équipe{" "}
-          <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px]">
-            {allTasks.length}
-          </span>
-        </TabLink>
+        {!restricted && (
+          <TabLink href="/taches?tab=team" active={tab === "team"}>
+            Équipe{" "}
+            <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px]">
+              {allTasks.length}
+            </span>
+          </TabLink>
+        )}
       </div>
 
       {/* À attribuer — Stan 2026-06-11 audit : deals dont la tâche courante

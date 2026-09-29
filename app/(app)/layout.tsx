@@ -5,7 +5,10 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { Logo } from "@/components/layout/logo";
 import { NotificationBell } from "@/components/layout/notification-bell";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/users";
+import { canAccessPath, homeFor } from "@/lib/auth/roles";
 import { getNotifications } from "@/lib/notifications";
 import { PrivacyProvider } from "@/lib/privacy-context";
 
@@ -31,6 +34,12 @@ export default async function AppLayout({
   const user = await requireUser();
   const isAdmin = user.role === "ADMIN";
 
+  // Profil « Production » : revérifie le chemin avec le rôle EN BASE (le JWT
+  // peut dater d'avant un changement de rôle). x-pathname posé par le
+  // middleware.
+  const pathname = (await headers()).get("x-pathname");
+  if (pathname && !canAccessPath(user.role, pathname)) redirect(homeFor(user.role));
+
   // Sprint 8 — notifications cloche topbar (dérivées à la volée).
   const notifications = await getNotifications({
     myPangeeKey: user.pangeeKey,
@@ -39,11 +48,11 @@ export default async function AppLayout({
   return (
     <PrivacyProvider>
       <div className="flex min-h-screen bg-background">
-        <Sidebar isAdmin={isAdmin} />
+        <Sidebar isAdmin={isAdmin} role={user.role} />
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur md:px-6">
-            <MobileNav isAdmin={isAdmin} />
+            <MobileNav isAdmin={isAdmin} role={user.role} />
             {/* Logo visible uniquement sur mobile — sur desktop il est dans la sidebar */}
             <div className="md:hidden">
               <Logo />

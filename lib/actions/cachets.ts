@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth/users";
+import { requireFullAccess } from "@/lib/auth/access";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
 
@@ -91,7 +91,7 @@ export async function updateCachetsDetails(
   input: z.infer<typeof UpdateCachetsDetailsSchema>,
 ): Promise<ActionResult> {
   return safeAction("updateCachetsDetails", async () => {
-    await requireUser();
+    await requireFullAccess();
     const { id, budgetAmount, cachetsFeesPct, linkedToOwnProd } =
       UpdateCachetsDetailsSchema.parse(input);
 
@@ -144,7 +144,7 @@ export async function addCachetPrestation(
   input: z.infer<typeof AddCachetPrestationSchema>,
 ): Promise<ActionResult<{ id: string }>> {
   return safeAction("addCachetPrestation", async () => {
-    await requireUser();
+    await requireFullAccess();
     const data = AddCachetPrestationSchema.parse(input);
 
     // Détermine l'ordre — à la fin de la liste actuelle.
@@ -191,7 +191,7 @@ export async function updateCachetPrestation(
   input: z.infer<typeof UpdateCachetPrestationSchema>,
 ): Promise<ActionResult> {
   return safeAction("updateCachetPrestation", async () => {
-    await requireUser();
+    await requireFullAccess();
     const { id, prestataire, amount, paymentStatus, isPaye, paidAt, notes } =
       UpdateCachetPrestationSchema.parse(input);
 
@@ -265,7 +265,7 @@ export async function updateCachetPrestation(
 
 export async function deleteCachetPrestation(id: string): Promise<ActionResult> {
   return safeAction("deleteCachetPrestation", async () => {
-    await requireUser();
+    await requireFullAccess();
     if (!id) throw new Error("ID prestation manquant");
     const presta = await prisma.cachetPrestation.update({
       where: { id },
@@ -301,7 +301,7 @@ export async function batchCreateCachetPrestations(
   input: z.infer<typeof BatchCreatePrestationsSchema>,
 ): Promise<ActionResult> {
   return safeAction("batchCreateCachetPrestations", async () => {
-    await requireUser();
+    await requireFullAccess();
     const { dealId, prestations } = BatchCreatePrestationsSchema.parse(input);
     if (prestations.length === 0) return;
 

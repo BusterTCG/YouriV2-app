@@ -65,11 +65,13 @@ beforeAll(async () => {
        ('a-solo','Solo','solo',${T0},${T0}),
        ('a-resid','Resid','resid',${T0},${T0});`,
     // Sossam : résidence Paris (2 mois à 10 %) + 2 dates de tournée à 15 %.
+    // Résidence démarrée le dernier samedi de décembre (saisie en date simple).
+    deal("s-premiere", "Sossam - Seule @ Paris", "Seule", Date.UTC(2026, 11, 26, 19), 10, 0, "Théâtre de Paris"),
     deal("s-jan", "Sossam - Seule @ Paris", "Seule", day(1, 10), 10, 1, "Théâtre de Paris"),
     deal("s-feb", "Sossam - Seule @ Paris", "Seule", day(2, 10), 10, 1, "Théâtre de Paris"),
     deal("s-lyon", "Sossam - Seule @ Lyon", "Seule", day(3, 5), 15, 0, "Bourse du Travail"),
     deal("s-lille", "Sossam - Seule @ Lille", "Seule", day(4, 5), null, 0, "Le Sébasto"),
-    da("da1", "s-jan", "a-sossam"), da("da2", "s-feb", "a-sossam"),
+    da("da0", "s-premiere", "a-sossam"), da("da1", "s-jan", "a-sossam"), da("da2", "s-feb", "a-sossam"),
     da("da3", "s-lyon", "a-sossam"), da("da4", "s-lille", "a-sossam"),
     // Solo : dates uniques à 12 % → pas de contrat résidences séparé.
     deal("o-1", "Solo - Tour @ Nantes", "Tour", day(3, 1), 12),
@@ -114,7 +116,14 @@ describe("reprise des données — contrat résidences distinct (modèle KN)", (
       where: { productionId: prod.id },
       include: { deals: { select: { id: true } } },
     });
-    expect(residency.deals.map((d: { id: string }) => d.id).sort()).toEqual(["s-feb", "s-jan"]);
+    // Le 1er soir (fin décembre) rejoint la résidence ; Lyon / Lille restent
+    // des dates uniques.
+    expect(residency.deals.map((d: { id: string }) => d.id).sort()).toEqual(["s-feb", "s-jan", "s-premiere"]);
+    const premiere = await prisma.deal.findUniqueOrThrow({ where: { id: "s-premiere" } });
+    expect(premiere.isMultiDate).toBe(true);
+    expect(premiere.multiDateDates).toEqual(["2026-12-26"]);
+    const lyon = await prisma.deal.findUniqueOrThrow({ where: { id: "s-lyon" } });
+    expect(lyon.residencyId).toBeNull();
   });
 
   it("dates uniques seules : pas de contrat résidences séparé", async () => {
@@ -135,6 +144,7 @@ describe("reprise des données — contrat résidences distinct (modèle KN)", (
     const deals = await prisma.deal.findMany({ select: { id: true, prodExePct: true } });
     const byId = Object.fromEntries(deals.map((d: { id: string; prodExePct: unknown }) => [d.id, pct(d.prodExePct)]));
     expect(byId).toEqual({
+      "s-premiere": 10,
       "s-jan": 10,
       "s-feb": 10,
       "s-lyon": 15,

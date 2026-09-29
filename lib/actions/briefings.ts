@@ -13,6 +13,7 @@ import { fr } from "date-fns/locale";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
+import { requireDealAccess } from "@/lib/auth/access";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { generateFdrPdf } from "@/lib/fdr-pdf";
 import { sendMail } from "@/lib/mailer";
@@ -20,6 +21,13 @@ import { sendMail } from "@/lib/mailer";
 
 /** FDR servie sur 2 routes : Booking (/deals/booking/[id]/fdr) et date de
  *  production (/shows/[id]/briefing, route KN). */
+/** Deal d'une FDR (garde profil « Production »). */
+async function dealIdOfBriefing(briefingId: string): Promise<string> {
+  const b = await prisma.eventBriefing.findUnique({ where: { id: briefingId }, select: { dealId: true } });
+  if (!b) throw new Error("FDR introuvable");
+  return b.dealId;
+}
+
 function revalidateFdr(dealId: string) {
   revalidatePath(`/deals/booking/${dealId}/fdr`);
   revalidatePath(`/shows/${dealId}/briefing`);
@@ -50,6 +58,7 @@ export async function ensureBriefingWithPrefill(
 ): Promise<ActionResult<{ briefingId: string; created: boolean }>> {
   return safeAction("ensureBriefingWithPrefill", async () => {
     await requireUser();
+    await requireDealAccess(dealId);
     if (!dealId) throw new Error("dealId manquant");
 
     // 1. Charge le deal (et vérifie qu'il existe + qu'il est BOOKING + non supprimé).
@@ -197,6 +206,7 @@ export async function updateBriefing(
   return safeAction("updateBriefing", async () => {
     await requireUser();
     const { briefingId, patch } = UpdateBriefingSchema.parse(input);
+    await requireDealAccess(await dealIdOfBriefing(briefingId));
     if (!briefingId) throw new Error("briefingId manquant");
 
     // Construit le data Prisma en n'incluant que les champs explicitement
@@ -261,6 +271,7 @@ export async function createTravel(
   return safeAction("createTravel", async () => {
     await requireUser();
     const data = TravelInputSchema.parse(input);
+    await requireDealAccess(await dealIdOfBriefing(data.briefingId));
     const travel = await prisma.briefingTravel.create({
       data: {
         briefingId: data.briefingId,
@@ -294,6 +305,8 @@ export async function updateTravel(
   return safeAction("updateTravel", async () => {
     await requireUser();
     const { id, patch } = UpdateTravelSchema.parse(input);
+    const tr = await prisma.briefingTravel.findUnique({ where: { id }, select: { briefingId: true } });
+    if (tr) await requireDealAccess(await dealIdOfBriefing(tr.briefingId));
     if (!id) throw new Error("id manquant");
 
     // `runs` (Json) ne peut pas être typé via cast direct — séparer le traitement.
@@ -317,6 +330,8 @@ export async function deleteTravel(id: string): Promise<ActionResult> {
   return safeAction("deleteTravel", async () => {
     await requireUser();
     if (!id) throw new Error("id manquant");
+    const tr = await prisma.briefingTravel.findUnique({ where: { id }, select: { briefingId: true } });
+    if (tr) await requireDealAccess(await dealIdOfBriefing(tr.briefingId));
     const travel = await prisma.briefingTravel.delete({
       where: { id },
       select: { briefing: { select: { dealId: true } } },
@@ -356,6 +371,7 @@ export async function addBriefingContact(
   return safeAction("addBriefingContact", async () => {
     await requireUser();
     const data = AddBriefingContactSchema.parse(input);
+    await requireDealAccess(await dealIdOfBriefing(data.briefingId));
     const bc = await prisma.briefingContact.create({
       data: {
         briefingId: data.briefingId,
@@ -394,6 +410,7 @@ export async function addBriefingInlineContact(
   return safeAction("addBriefingInlineContact", async () => {
     await requireUser();
     const data = AddBriefingInlineContactSchema.parse(input);
+    await requireDealAccess(await dealIdOfBriefing(data.briefingId));
     const bc = await prisma.briefingContact.create({
       data: {
         briefingId: data.briefingId,
@@ -456,6 +473,7 @@ export async function sendBriefingByEmail(
     await requireUser();
     const { briefingId, dealArtisteIds, subject, body, additionalAttachments } =
       SendBriefingSchema.parse(input);
+    await requireDealAccess(await dealIdOfBriefing(briefingId));
 
     // 1. Récup briefing + deal + dealArtistes + artist profiles
     const briefing = await prisma.eventBriefing.findUnique({
@@ -608,6 +626,8 @@ export async function removeBriefingContact(
   return safeAction("removeBriefingContact", async () => {
     await requireUser();
     if (!id) throw new Error("id manquant");
+    const bcScope = await prisma.briefingContact.findUnique({ where: { id }, select: { briefingId: true } });
+    if (bcScope) await requireDealAccess(await dealIdOfBriefing(bcScope.briefingId));
     const bc = await prisma.briefingContact.delete({
       where: { id },
       select: { briefing: { select: { dealId: true } } },

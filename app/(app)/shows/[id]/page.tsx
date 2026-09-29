@@ -1,3 +1,5 @@
+import { getCurrentUser } from "@/lib/auth/users";
+import { isRestrictedRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
@@ -75,6 +77,9 @@ interface PageProps {
  *   10. Notes
  */
 export default async function ProdExecutiveDetailPage({ params, searchParams }: PageProps) {
+  // Profil « Production » (Nour, externe aux associés) : pas de management
+  // fees sur la fiche (les siennes sont sur la page Management fees).
+  const restricted = isRestrictedRole((await getCurrentUser())?.role);
   const { id } = await params;
   const { tab } = await searchParams;
   const view: TabKey = tab === "comptes" || tab === "contrat" ? tab : "suivi";
@@ -548,7 +553,7 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
       </div>
 
       {/* Management fees — base MF = commission Pangee (avant MF) */}
-      <DealManagementFeesSection
+      {!restricted && <DealManagementFeesSection
         dealId={deal.id}
         budgetAmount={totalRevenue || 0}
         margeYouri={margePangee}
@@ -556,7 +561,7 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
         isEncaisse={allRevenuePaid}
         allArtistesPaid={allArtistesPaid}
         allChargesPaid={allCostPaid}
-      />
+      />}
 
         </>
       )}

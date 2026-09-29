@@ -50,6 +50,14 @@ const USERS = [
     color: "#f59e0b", // amber
     pangeeKey: "angath",
   },
+  {
+    // Profil « Production » (Nour, externe aux associés — Stan 2026-09-30).
+    email: "booking@pangeeprod.com",
+    name: "Nour",
+    role: UserRole.PRODUCTION,
+    color: "#ec4899", // rose
+    pangeeKey: "nour",
+  },
 ] as const;
 
 /**

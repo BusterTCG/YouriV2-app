@@ -11,6 +11,7 @@
 
 import { NextResponse } from "next/server";
 import { generateFdrPdf } from "@/lib/fdr-pdf";
+import { canAccessDeal } from "@/lib/auth/access";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -18,6 +19,10 @@ interface RouteContext {
 
 export async function GET(request: Request, { params }: RouteContext) {
   const { id } = await params;
+  // Profil « Production » (Nour) : FDR des deals Production uniquement.
+  if (!(await canAccessDeal(id))) {
+    return NextResponse.json({ ok: false, error: "Accès non autorisé" }, { status: 403 });
+  }
 
   // Forward du cookie session user à Puppeteer (sinon middleware redirige sur /login)
   const sessionToken = request.headers

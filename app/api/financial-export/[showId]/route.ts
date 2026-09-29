@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 import { getDealReport } from "@/lib/deal-report";
 import { buildDealReportXlsx } from "@/lib/finance/deal-report-excel";
 import { XLSX_MIME, fileResponse, renderPrintPagePdf } from "@/lib/pdf/report-response";
+import { canAccessDeal } from "@/lib/auth/access";
 
 interface RouteContext {
   params: Promise<{ showId: string }>;
@@ -17,6 +18,9 @@ interface RouteContext {
 
 export async function GET(request: Request, { params }: RouteContext) {
   const { showId } = await params;
+  if (!(await canAccessDeal(showId))) {
+    return NextResponse.json({ ok: false, error: "Accès non autorisé" }, { status: 403 });
+  }
   const fmt = new URL(request.url).searchParams.get("format") === "pdf" ? "pdf" : "xlsx";
   const report = await getDealReport(showId, Date.now());
   if (!report) return new NextResponse("Date introuvable", { status: 404 });

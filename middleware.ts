@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import { canAccessPath, homeFor } from "@/lib/auth/roles";
 
 /**
  * Middleware Next.js — protège TOUTES les routes de l'app sauf une liste
@@ -42,8 +43,20 @@ export async function middleware(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   if (token) {
     try {
-      await jwtVerify(token, getSecret(), { algorithms: ["HS256"] });
-      return NextResponse.next(); // session valide
+      const { payload } = await jwtVerify(token, getSecret(), { algorithms: ["HS256"] });
+      // Profil « Production » (Nour) : chemins limités (lib/auth/roles.ts).
+      // Le rôle du JWT sert de 1er filtre ; le layout revérifie avec le rôle
+      // en base (x-pathname) et les server actions ont leurs propres gardes.
+      const role = typeof payload.role === "string" ? payload.role : null;
+      if (!canAccessPath(role, pathname)) {
+        if (pathname.startsWith("/api/")) {
+          return NextResponse.json({ ok: false, error: "Accès non autorisé" }, { status: 403 });
+        }
+        return NextResponse.redirect(new URL(homeFor(role), req.url));
+      }
+      const headers = new Headers(req.headers);
+      headers.set("x-pathname", pathname);
+      return NextResponse.next({ request: { headers } }); // session valide
     } catch {
       // JWT invalide / expiré → traité comme non connecté ci-dessous
     }

@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { prisma } from "@/lib/db";
 import { BriefingPrintView } from "@/components/briefings/briefing-print-view";
+import { canAccessDeal } from "@/lib/auth/access";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -60,6 +61,7 @@ export default async function BriefingPrintPage({
   searchParams,
 }: PageProps) {
   const { id } = await params;
+  if (!(await canAccessDeal(id))) notFound();
   const { preview } = await searchParams;
   const previewMode = preview === "1";
 

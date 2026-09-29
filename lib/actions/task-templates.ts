@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { DealCategory, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth/users";
+import { requireFullAccess } from "@/lib/auth/access";
 import { safeAction, type ActionResult } from "@/lib/errors";
 
 /**
@@ -32,7 +32,7 @@ export async function createTaskTemplate(
   input: z.infer<typeof CreateTemplateSchema>,
 ): Promise<ActionResult<{ id: string }>> {
   return safeAction("createTaskTemplate", async () => {
-    await requireUser();
+    await requireFullAccess();
     const data = CreateTemplateSchema.parse(input);
 
     // Détermine l'ordre — à la fin du pipeline actuel de la catégorie.
@@ -76,7 +76,7 @@ export async function updateTaskTemplate(
   input: z.infer<typeof UpdateTemplateSchema>,
 ): Promise<ActionResult> {
   return safeAction("updateTaskTemplate", async () => {
-    await requireUser();
+    await requireFullAccess();
     const { id, ...patch } = UpdateTemplateSchema.parse(input);
     const data: Prisma.TaskTemplateUpdateInput = {};
     if (patch.label !== undefined) data.label = patch.label;
@@ -94,7 +94,7 @@ export async function updateTaskTemplate(
 
 export async function softDeleteTaskTemplate(id: string): Promise<ActionResult> {
   return safeAction("softDeleteTaskTemplate", async () => {
-    await requireUser();
+    await requireFullAccess();
     if (!id) throw new Error("ID template manquant");
     await prisma.taskTemplate.update({
       where: { id },
@@ -113,7 +113,7 @@ export async function reorderTaskTemplates(
   input: z.infer<typeof ReorderTemplatesSchema>,
 ): Promise<ActionResult> {
   return safeAction("reorderTaskTemplates", async () => {
-    await requireUser();
+    await requireFullAccess();
     const { templateIds } = ReorderTemplatesSchema.parse(input);
     await prisma.$transaction(
       templateIds.map((id, idx) =>

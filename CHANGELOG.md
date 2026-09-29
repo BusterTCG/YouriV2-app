@@ -6,6 +6,22 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [Profil « Production » — Nour (booking@pangeeprod.com)] — 2026-09-30
+
+### Added
+
+- Rôle `PRODUCTION` (portage du profil Nour de KN) et compte `booking@pangeeprod.com` (Nour, externe aux associés), créé par migration avec un mot de passe inutilisable : connexion Google (email à ajouter à `AUTH_ALLOWED_EMAILS`) ou mot de passe défini par Stan dans Réglages → Utilisateurs.
+- Accès de Nour : Productions (deals Production, accès total : dates, résidences, FDR, bilans, compte artiste), Artistes / Contacts / Lieux (accès total, sans export de l'annuaire), Tâches (uniquement les siennes : valider, rouvrir, notes), Management fees (uniquement les siennes, en lecture — les paiements sont faits par les associés). Arrivée sur Productions.
+- Refusé (menu masqué, pages redirigées, actions serveur refusées) : dashboard, Booking, Cachets, reporting, corbeille (restaurer / supprimer définitivement), réglages, templates de tâches, MF des associés, tâches des autres. Fiche artiste : deals Production uniquement.
+- Nour ajoutée à l'équipe (lib/pangee-team.ts) : bénéficiaire de management fees (Apport / Travail) en plus de Stan, Certe et Angath, assignable aux tâches, contact Pangee de la FDR (06 51 95 51 69).
+- Tests : `tests/auth/roles.test.ts`, `tests/integration/production-access.test.ts`.
+
+### Fixed
+
+- Reprise des données : une résidence commencée en fin de mois (1er soir saisi en date simple, ex. Sossam aux Dix Heures le dernier samedi de septembre) est rattachée à sa résidence.
+
+---
+
 ## [Production — revue pré-déploiement] — 2026-09-30
 
 ### Fixed

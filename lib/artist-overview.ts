@@ -22,6 +22,8 @@ import type { ArtistOverviewRow } from "./artist-overview-types";
  */
 export async function getArtistOverviewRows(
   artistId: string,
+  /** Profil « Production » (Nour) : deals Production uniquement. */
+  opts: { productionOnly?: boolean } = {},
 ): Promise<ArtistOverviewRow[]> {
   const rows = await prisma.dealArtiste.findMany({
     where: {
@@ -30,6 +32,7 @@ export async function getArtistOverviewRows(
       deal: {
         deletedAt: null,
         status: { not: DealStatus.ANNULE },
+        ...(opts.productionOnly ? { category: "PROD_EXE" as const } : {}),
       },
     },
     select: {

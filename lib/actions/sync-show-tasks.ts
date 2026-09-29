@@ -2,7 +2,7 @@
 
 import { TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth/users";
+import { requireDealAccess } from "@/lib/auth/access";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import {
   labelMatchesShowKey,
@@ -31,8 +31,8 @@ export async function syncShowTaskToggle(
   isDone: boolean,
 ): Promise<ActionResult> {
   return safeAction("syncShowTaskToggle", async () => {
-    const user = await requireUser();
     if (!dealId) throw new Error("dealId manquant");
+    const user = await requireDealAccess(dealId);
 
     // Audit Stan 2026-05-31 : on n'écrase PAS les tâches SKIPPED (l'user a
     // explicitement marqué la tâche comme "non applicable"). On exclut aussi

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Prisma, VenueDealKind } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
+import { requireDealAccess } from "@/lib/auth/access";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { recomputeShowFinancials } from "@/lib/finance/show-financials";
 import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
@@ -69,6 +70,7 @@ export async function updateShowDetails(
   return safeAction("updateShowDetails", async () => {
     await requireUser();
     const parsedInput = UpdateShowDetailsSchema.parse(input);
+    await requireDealAccess(parsedInput.id);
     const { id, ...rest } = parsedInput;
     let { multiDateDates } = parsedInput;
 

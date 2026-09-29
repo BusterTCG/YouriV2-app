@@ -8,7 +8,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth/users";
+import { requireFullAccess } from "@/lib/auth/access";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { PANGEE_TEAM } from "@/lib/pangee-team";
 
@@ -63,7 +63,7 @@ export async function setManagementFeePool(
   input: z.infer<typeof SetManagementFeePoolSchema>,
 ): Promise<ActionResult> {
   return safeAction("setManagementFeePool", async () => {
-    await requireUser();
+    await requireFullAccess();
     const { dealId, role, poolPct, associateKeys, margeYouri } =
       SetManagementFeePoolSchema.parse(input);
 
@@ -144,7 +144,7 @@ export async function updateManagementFee(
   input: z.infer<typeof UpdateManagementFeeSchema>,
 ): Promise<ActionResult> {
   return safeAction("updateManagementFee", async () => {
-    await requireUser();
+    await requireFullAccess();
     const { id, amount, paymentStatus, isPaye, paidAt, notes } =
       UpdateManagementFeeSchema.parse(input);
 

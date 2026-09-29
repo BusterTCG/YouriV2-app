@@ -1,3 +1,5 @@
+import { getCurrentUser } from "@/lib/auth/users";
+import { isRestrictedRole } from "@/lib/auth/roles";
 import { Users, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { listContacts, listVenues, KnApiUnavailableError } from "@/lib/kn-client";
@@ -33,6 +35,8 @@ export const metadata = {
  * badges et `venue: { name, city }` pour la salle rattachée).
  */
 export default async function ContactsPage({ searchParams }: ContactsPageProps) {
+  // Profil « Production » (Nour) : pas d'export de l'annuaire.
+  const restricted = isRestrictedRole((await getCurrentUser())?.role);
   const sp = await searchParams;
   const type = parseTypeFilter(sp.type);
   const search = sp.q ?? "";
@@ -85,7 +89,7 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {data && (
+          {data && !restricted && (
             <ContactsExportButton
               contacts={data.items}
               typeFilter={type}

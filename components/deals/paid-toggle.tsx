@@ -19,12 +19,15 @@ interface Props {
   onToggle: (next: boolean) => Promise<void>;
   label: string;
   className?: string;
+  /** Lecture seule (profil « Production » : les paiements sont faits par les associés). */
+  readOnly?: boolean;
 }
 
-export function PaidToggle({ isOn, onToggle, label, className }: Props) {
+export function PaidToggle({ isOn, onToggle, label, className, readOnly = false }: Props) {
   const [pending, startTransition] = useTransition();
 
   function handleClick() {
+    if (readOnly) return;
     startTransition(async () => {
       await onToggle(!isOn);
     });
@@ -34,14 +37,15 @@ export function PaidToggle({ isOn, onToggle, label, className }: Props) {
     <button
       type="button"
       onClick={handleClick}
-      disabled={pending}
-      title={isOn ? "Cliquer pour annuler" : `Marquer comme ${label.toLowerCase()}`}
+      disabled={pending || readOnly}
+      title={readOnly ? undefined : isOn ? "Cliquer pour annuler" : `Marquer comme ${label.toLowerCase()}`}
       className={cn(
         "w-full h-7 inline-flex items-center justify-center gap-1 rounded-md px-2 text-[11px] font-medium transition-colors border",
         isOn
           ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-400"
           : "border-border bg-muted/30 text-muted-foreground hover:bg-muted",
         pending && "opacity-60 cursor-wait",
+        readOnly && "cursor-default hover:bg-muted/30",
         className,
       )}
     >

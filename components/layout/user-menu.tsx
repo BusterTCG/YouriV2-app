@@ -8,7 +8,7 @@ interface UserMenuProps {
   name: string;
   email: string;
   color: string;
-  role: "ADMIN" | "MEMBER";
+  role: "ADMIN" | "MEMBER" | "PRODUCTION";
 }
 
 /**
@@ -64,7 +64,7 @@ export function UserMenu({ name, email, color, role }: UserMenuProps) {
             <p className="text-sm font-medium">{name}</p>
             <p className="text-xs text-muted-foreground">{email}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Rôle : <span className="font-medium">{role}</span>
+              Rôle : <span className="font-medium">{role === "PRODUCTION" ? "Production" : role}</span>
             </p>
           </div>
           <div className="my-1 h-px bg-border" />

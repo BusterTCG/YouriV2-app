@@ -4,9 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_GROUPS } from "@/components/layout/nav-config";
 import { cn } from "@/lib/utils";
+import { isRestrictedRole } from "@/lib/auth/roles";
 
 interface SidebarNavProps {
   isAdmin: boolean;
+  /** Rôle de l'utilisateur : le profil « Production » ne voit que ses items. */
+  role?: string;
   onItemClick?: () => void; // pour fermer le sheet mobile au clic
 }
 
@@ -14,13 +17,16 @@ interface SidebarNavProps {
  * Contenu nav réutilisé par la sidebar desktop (md:flex) ET la sheet mobile.
  * Met en évidence l'item actif via comparaison usePathname().
  */
-export function SidebarNav({ isAdmin, onItemClick }: SidebarNavProps) {
+export function SidebarNav({ isAdmin, role, onItemClick }: SidebarNavProps) {
+  const restricted = isRestrictedRole(role);
   const pathname = usePathname();
 
   return (
     <nav className="flex flex-col gap-6 px-2 py-4">
       {NAV_GROUPS.map((group) => {
-        const visibleItems = group.items.filter((item) => !item.adminOnly || isAdmin);
+        const visibleItems = group.items.filter(
+          (item) => (!item.adminOnly || isAdmin) && (!restricted || item.production),
+        );
         if (visibleItems.length === 0) return null;
 
         const groupHeaderActive =
@@ -29,7 +35,7 @@ export function SidebarNav({ isAdmin, onItemClick }: SidebarNavProps) {
 
         return (
           <div key={group.label} className="flex flex-col gap-1">
-            {group.href ? (
+            {group.href && !restricted ? (
               <Link
                 href={group.href}
                 onClick={onItemClick}

@@ -6,6 +6,11 @@ import { z } from "zod";
 import { DealCategory, DealStatus, PaymentStatus, Prisma, TaskStatus, VenueDealKind } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
+import {
+  requireDealAccess,
+  requireDealCategoryAccess,
+  requireFullAccess,
+} from "@/lib/auth/access";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
 import { listContacts, listVenues, type KnContact, type KnVenue } from "@/lib/kn-client";
@@ -95,6 +100,8 @@ export async function createDeal(
   return safeAction("createDeal", async () => {
     const user = await requireUser();
     const data = CreateDealSchema.parse(input);
+    // Profil « Production » (Nour) : deals Production uniquement.
+    await requireDealCategoryAccess(data.category);
     // Si pas de Venue KN sélectionné mais adresse libre : extraire la ville
     // depuis le code postal du label BAN (Stan 2026-05-26).
     const venueCity = data.venueId
@@ -224,6 +231,7 @@ export async function updateDealMeta(
   return safeAction("updateDealMeta", async () => {
     await requireUser();
     const { id, ...patch } = UpdateDealMetaSchema.parse(input);
+    await requireDealAccess(id);
     // Si on update venueAddress sans venueId et sans venueCity explicite,
     // extraire la ville depuis l'adresse (cohérence avec createDeal).
     if (
@@ -290,7 +298,7 @@ export async function updateDealMeta(
  */
 export async function softDeleteDeal(id: string): Promise<ActionResult> {
   return safeAction("softDeleteDeal", async () => {
-    await requireUser();
+    await requireDealAccess(id);
     if (!id) throw new Error("ID deal manquant");
     const existing = await prisma.deal.findUnique({
       where: { id },
@@ -331,7 +339,7 @@ export async function softDeleteDeal(id: string): Promise<ActionResult> {
  */
 export async function restoreDeal(id: string): Promise<ActionResult> {
   return safeAction("restoreDeal", async () => {
-    await requireUser();
+    await requireFullAccess();
     if (!id) throw new Error("ID deal manquant");
     const existing = await prisma.deal.findUnique({
       where: { id },
@@ -368,7 +376,7 @@ export async function restoreDeal(id: string): Promise<ActionResult> {
  */
 export async function permanentlyDeleteDeal(id: string): Promise<ActionResult> {
   return safeAction("permanentlyDeleteDeal", async () => {
-    await requireUser();
+    await requireFullAccess();
     if (!id) throw new Error("ID deal manquant");
     const existing = await prisma.deal.findUnique({
       where: { id },
@@ -441,6 +449,7 @@ export async function addDealArtist(
   return safeAction("addDealArtist", async () => {
     await requireUser();
     const { dealId, artistId, cachetAmount, sharePct } = AddDealArtistSchema.parse(input);
+    await requireDealAccess(dealId);
     const created = await prisma.dealArtiste.create({
       data: {
         dealId,
@@ -466,6 +475,8 @@ export async function addDealArtist(
 export async function removeDealArtist(id: string): Promise<ActionResult> {
   return safeAction("removeDealArtist", async () => {
     await requireUser();
+    const scoped = await prisma.dealArtiste.findUnique({ where: { id }, select: { dealId: true } });
+    if (scoped) await requireDealAccess(scoped.dealId);
     if (!id) throw new Error("ID DealArtiste manquant");
     const da = await prisma.dealArtiste.update({
       where: { id },
@@ -564,6 +575,7 @@ export async function setDealPrimaryArtist(
   return safeAction("setDealPrimaryArtist", async () => {
     await requireUser();
     const { dealId, artistId } = SetDealPrimaryArtistSchema.parse(input);
+    await requireDealAccess(dealId);
 
     const existing = await prisma.dealArtiste.findFirst({
       where: { dealId, deletedAt: null },
@@ -625,6 +637,7 @@ export async function setDealArtistStatus(
   return safeAction("setDealArtistStatus", async () => {
     await requireUser();
     const { dealId, status } = SetDealArtistStatusSchema.parse(input);
+    await requireDealAccess(dealId);
     // Date d'une production (portage KN) : le statut artiste est DÉRIVÉ du
     // compte artiste de la production (versements / remboursements).
     const target = await prisma.deal.findUnique({
@@ -657,6 +670,7 @@ export async function setDealStatus(
   return safeAction("setDealStatus", async () => {
     await requireUser();
     const { dealId, status } = SetDealStatusSchema.parse(input);
+    await requireDealAccess(dealId);
     await prisma.deal.update({
       where: { id: dealId },
       data: { status },
@@ -686,6 +700,7 @@ export async function setDealBudgetStatus(
   return safeAction("setDealBudgetStatus", async () => {
     await requireUser();
     const { dealId, status } = SetDealBudgetStatusSchema.parse(input);
+    await requireDealAccess(dealId);
     await prisma.deal.update({
       where: { id: dealId },
       data: { budgetPaymentStatus: status },
@@ -712,6 +727,7 @@ export async function setDealBudgetPaidAt(
   return safeAction("setDealBudgetPaidAt", async () => {
     await requireUser();
     const { dealId, date } = SetDealBudgetPaidAtSchema.parse(input);
+    await requireDealAccess(dealId);
     await prisma.deal.update({
       where: { id: dealId },
       data: date
@@ -742,6 +758,7 @@ export async function setDealArtistStatusBulk(
   return safeAction("setDealArtistStatusBulk", async () => {
     await requireUser();
     const { dealId, status } = SetBulkPaymentStatusSchema.parse(input);
+    await requireDealAccess(dealId);
     await prisma.dealArtiste.updateMany({
       where: { dealId, deletedAt: null },
       data: { paymentStatus: status },
@@ -767,6 +784,7 @@ export async function setDealArtistPaidAtBulk(
   return safeAction("setDealArtistPaidAtBulk", async () => {
     await requireUser();
     const { dealId, date } = SetDealArtistPaidAtBulkSchema.parse(input);
+    await requireDealAccess(dealId);
     await prisma.dealArtiste.updateMany({
       where: { dealId, deletedAt: null },
       data: date
@@ -806,6 +824,7 @@ export async function updateDealBudget(
   return safeAction("updateDealBudget", async () => {
     await requireUser();
     const { dealId, amount, isEncaisse, paidAt } = UpdateDealBudgetSchema.parse(input);
+    await requireDealAccess(dealId);
 
     const data: Prisma.DealUpdateInput = {};
     if (amount !== undefined) data.budgetAmount = amount;
@@ -861,6 +880,8 @@ export async function updateDealArtiste(
     const user = await requireUser();
     const { id, cachetAmount, sharePct, paymentStatus, isPaye, paidAt, notes } =
       UpdateDealArtisteSchema.parse(input);
+    const scoped = await prisma.dealArtiste.findUnique({ where: { id }, select: { dealId: true } });
+    if (scoped) await requireDealAccess(scoped.dealId);
 
     const data: Prisma.DealArtisteUpdateInput = {};
     if (cachetAmount !== undefined) data.cachetAmount = cachetAmount;
@@ -963,6 +984,7 @@ export async function addDealCharge(
   return safeAction("addDealCharge", async () => {
     await requireUser();
     const { dealId, label, amount, notes } = AddDealChargeSchema.parse(input);
+    await requireDealAccess(dealId);
     const charge = await prisma.dealCharge.create({
       data: {
         dealId,
@@ -1001,6 +1023,8 @@ export async function updateDealCharge(
     await requireUser();
     const { id, label, amount, isPaye, paidAt, notes } =
       UpdateDealChargeSchema.parse(input);
+    const scoped = await prisma.dealCharge.findUnique({ where: { id }, select: { dealId: true } });
+    if (scoped) await requireDealAccess(scoped.dealId);
 
     const data: Prisma.DealChargeUpdateInput = {};
     if (label !== undefined) data.label = label;
@@ -1038,6 +1062,8 @@ export async function updateDealCharge(
 export async function removeDealCharge(id: string): Promise<ActionResult> {
   return safeAction("removeDealCharge", async () => {
     await requireUser();
+    const scoped = await prisma.dealCharge.findUnique({ where: { id }, select: { dealId: true } });
+    if (scoped) await requireDealAccess(scoped.dealId);
     if (!id) throw new Error("ID charge manquant");
     const charge = await prisma.dealCharge.update({
       where: { id },

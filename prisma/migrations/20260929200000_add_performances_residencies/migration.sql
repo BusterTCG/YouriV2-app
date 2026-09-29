@@ -120,6 +120,32 @@ SET "date" = (SELECT MIN(p."date") FROM "Performance" p WHERE p."dealId" = "Deal
 WHERE "category" = 'PROD_EXE'
   AND EXISTS (SELECT 1 FROM "Performance" p WHERE p."dealId" = "Deal"."id");
 
+-- 2b. Résidence commencée en fin de mois (Stan 2026-09-30 : Sossam aux Dix
+--     Heures démarre le dernier samedi de septembre) : ce premier jour a été
+--     saisi comme une date simple. Une date simple de la même production, dans
+--     la même salle qu'un mois complet et à 31 jours au plus de celui-ci,
+--     devient un mois de la résidence (jours = ses séances). Montants
+--     inchangés (même contrat, même poids dans les frais généraux).
+UPDATE "Deal"
+SET "isMultiDate" = 1,
+    "multiDateDates" = (
+      SELECT json_group_array(x."day") FROM (
+        SELECT DISTINCT strftime('%Y-%m-%d', p."date" / 1000, 'unixepoch') AS "day"
+        FROM "Performance" p WHERE p."dealId" = "Deal"."id" AND p."cancelled" = 0
+        ORDER BY 1
+      ) x
+    )
+WHERE "category" = 'PROD_EXE' AND "isMultiDate" = 0 AND "productionId" IS NOT NULL
+  AND EXISTS (
+    SELECT 1 FROM "Deal" m
+    WHERE m."category" = 'PROD_EXE' AND m."isMultiDate" = 1
+      AND m."productionId" = "Deal"."productionId"
+      AND (m."deletedAt" IS NULL) = ("Deal"."deletedAt" IS NULL)
+      AND COALESCE(m."venueId", lower(COALESCE(NULLIF(trim(m."venueName"), ''), trim(m."title"))))
+        = COALESCE("Deal"."venueId", lower(COALESCE(NULLIF(trim("Deal"."venueName"), ''), trim("Deal"."title"))))
+      AND abs(m."date" - "Deal"."date") <= 31 * 86400000
+  );
+
 -- 3. Résidences : les mois complets d'une même production dans une même salle
 --    (salle KN liée, sinon nom de salle saisi, sinon titre).
 INSERT INTO "Residency" ("id", "productionId", "name", "venueId", "venueName", "venueCity", "createdAt", "updatedAt")

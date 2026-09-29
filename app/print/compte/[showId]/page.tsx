@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getDealReport } from "@/lib/deal-report";
 import { DealReportPrint } from "@/components/shows/deal-report-print";
+import { canAccessDeal } from "@/lib/auth/access";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function DealReportPrintPage({ params }: PageProps) {
   const { showId } = await params;
+  if (!(await canAccessDeal(showId))) notFound();
   // eslint-disable-next-line react-hooks/purity -- server component, 1 exécution / requête
   const r = await getDealReport(showId, Date.now());
   if (!r) notFound();

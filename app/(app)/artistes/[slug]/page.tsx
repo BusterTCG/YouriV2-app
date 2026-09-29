@@ -1,3 +1,5 @@
+import { getCurrentUser } from "@/lib/auth/users";
+import { isRestrictedRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Mic2 } from "lucide-react";
@@ -46,7 +48,11 @@ export default async function ArtistPage({ params, searchParams }: ArtistPagePro
   // côté client via le selector). On ne le fait que pour l'onglet "overview"
   // pour éviter la query inutile quand l'user est sur "info".
   const overviewRows =
-    tab === "overview" ? await getArtistOverviewRows(artist.id) : null;
+    tab === "overview"
+      ? await getArtistOverviewRows(artist.id, {
+          productionOnly: isRestrictedRole((await getCurrentUser())?.role),
+        })
+      : null;
 
   return (
     <div className="max-w-6xl space-y-6">

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
+import { requireFullAccess } from "@/lib/auth/access";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
 import { uniqueSlug } from "@/lib/slug";
@@ -310,7 +311,7 @@ export async function softDeleteArtist(
  */
 export async function restoreArtist(id: string): Promise<ActionResult> {
   return safeAction("restoreArtist", async () => {
-    await requireUser();
+    await requireFullAccess();
     if (!id) throw new Error("ID artiste manquant");
     const artist = await prisma.artist.findUnique({
       where: { id },
@@ -343,7 +344,7 @@ export async function restoreArtist(id: string): Promise<ActionResult> {
  */
 export async function permanentlyDeleteArtist(id: string): Promise<ActionResult> {
   return safeAction("permanentlyDeleteArtist", async () => {
-    await requireUser();
+    await requireFullAccess();
     if (!id) throw new Error("ID artiste manquant");
     const artist = await prisma.artist.findUnique({
       where: { id },

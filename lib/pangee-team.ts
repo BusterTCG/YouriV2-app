@@ -64,6 +64,17 @@ export const PANGEE_TEAM: PangeeMember[] = [
     color: "#0ea5e9", // sky — aligné User.color seed
   },
   {
+    // Nour (compte booking@pangeeprod.com, profil « Production ») — externe
+    // aux associés mais bénéficiaire de management fees et assignable aux
+    // tâches (Stan 2026-09-30).
+    key: "nour",
+    firstName: "Nour",
+    lastName: "",
+    phone: "06 51 95 51 69",
+    defaultRole: "PRODUCTION",
+    color: "#ec4899", // rose — aligné User.color
+  },
+  {
     key: "stan",
     firstName: "Stan",
     lastName: "",

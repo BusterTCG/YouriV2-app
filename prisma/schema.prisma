@@ -22,10 +22,15 @@ datasource db {
 ///   templates de tâches (Sprint 6).
 /// - MEMBER : tout le monde fait TOUT (créer/modifier/supprimer n'importe
 ///   quel deal/tâche/artiste). Pas de restrictions métier.
+/// - PRODUCTION : profil externe (Nour, booking@pangeeprod.com — portage du
+///   profil Nour KN, Stan 2026-09-30). Deals Production, Artistes, Contacts,
+///   Lieux, ses tâches et ses management fees (lecture) uniquement. Cf.
+///   lib/auth/roles.ts + lib/auth/access.ts.
 /// Cf. docs/architecture-decisions.md § Users & permissions.
 enum UserRole {
   ADMIN
   MEMBER
+  PRODUCTION
 }
 
 /// Source de l'authentification (audit, debug).

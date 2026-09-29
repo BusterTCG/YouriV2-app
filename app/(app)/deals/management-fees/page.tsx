@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, Briefcase } from "lucide-react";
 import { DealCategory } from "@prisma/client";
 import { requireUser } from "@/lib/auth/users";
+import { isRestrictedRole } from "@/lib/auth/roles";
 import {
   getManagementFeesList,
   type MfStatusFilter,
@@ -42,9 +43,14 @@ export default async function ManagementFeesPage({ searchParams }: PageProps) {
   //   - ?associate=xxx → filtre explicite (peut être null/empty pour Tous)
   //   - sinon scope=mine (défaut) → user.pangeeKey
   //   - sinon scope=all → tous
-  const scope = sp.scope === "all" ? "all" : "mine";
+  // Profil « Production » (Nour) : uniquement ses management fees, en
+  // lecture (les paiements sont faits par les associés).
+  const restricted = isRestrictedRole(user.role);
+  const scope = sp.scope === "all" && !restricted ? "all" : "mine";
   let associateKey: string | null;
-  if (sp.associate !== undefined) {
+  if (restricted) {
+    associateKey = user.pangeeKey ?? "_none";
+  } else if (sp.associate !== undefined) {
     associateKey = sp.associate || null;
   } else if (scope === "all") {
     associateKey = null;
@@ -76,7 +82,7 @@ export default async function ManagementFeesPage({ searchParams }: PageProps) {
     <div className="max-w-7xl space-y-5">
       <div>
         <Link
-          href="/deals"
+          href={restricted ? "/shows" : "/deals"}
           className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
         >
           <ArrowLeft className="h-3 w-3" /> Deals
@@ -98,6 +104,7 @@ export default async function ManagementFeesPage({ searchParams }: PageProps) {
         data={data}
         currentUserPangeeKey={user.pangeeKey}
         scope={scope}
+        readOnly={restricted}
       />
     </div>
   );

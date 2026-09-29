@@ -1,3 +1,5 @@
+import { getCurrentUser } from "@/lib/auth/users";
+import { isRestrictedRole } from "@/lib/auth/roles";
 import { Building2, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { KnApiUnavailableError } from "@/lib/kn-client";
@@ -18,6 +20,8 @@ interface PageProps {
 }
 
 export default async function VenuesPage({ searchParams }: PageProps) {
+  // Profil « Production » (Nour) : pas d'export de l'annuaire.
+  const restricted = isRestrictedRole((await getCurrentUser())?.role);
   const { q } = await searchParams;
   const search = q ?? "";
 
@@ -62,7 +66,7 @@ export default async function VenuesPage({ searchParams }: PageProps) {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {data && (
+          {data && !restricted && (
             <VenuesExportButton venues={data.venues} search={search} />
           )}
           <NewVenueButton />

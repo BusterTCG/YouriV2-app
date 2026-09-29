@@ -19,6 +19,7 @@ This version (Next.js 16) has breaking changes — APIs, conventions, and file s
 ## Écarts AUTORISÉS (validés par Stan)
 
 - Multi-user (table `User`, sessions, role ADMIN/MEMBER, audit log par user)
+- Rôle `PRODUCTION` = profil Nour de KN (compte booking@pangeeprod.com, externe) : chemins dans `lib/auth/roles.ts`, gardes serveur dans `lib/auth/access.ts` — toute nouvelle server action touchant un deal doit appeler `requireDealAccess` (ou `requireFullAccess` si réservée aux associés). Tests : `tests/integration/production-access.test.ts`
 - Multi-artiste sur les deals (table `DealArtiste`, cachet + paymentStatus individuels)
 - 3 catégories de deals : Booking / Production (ex-Prod Exé, enum `PROD_EXE`) / Cachets (vs 5 sur KN)
 - Management fees (DealManagementFee) : internes Pangee, JAMAIS dans les bilans / comptes de production / exports / compte artiste (garde : `tests/finance/no-management-fees.test.ts`)

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Prisma, TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
+import { isRestricted, requireFullAccess, ACCESS_DENIED_MESSAGE } from "@/lib/auth/access";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
 import { getShowKeyFromLabel } from "@/lib/tasks-show-sync-utils";
@@ -35,11 +36,25 @@ function buildDealFlagPatchFromTask(
  * revalidatePath sur les pages impactées (/taches + fiche détail deal).
  */
 
+/**
+ * Profil « Production » (Nour) : n'agit que sur les tâches qui lui sont
+ * assignées (valider / rouvrir / notes). Associés : aucune restriction.
+ */
+async function requireTaskScope(id: string) {
+  const user = await requireUser();
+  if (!isRestricted(user)) return user;
+  const task = await prisma.task.findUnique({ where: { id }, select: { assigneeKey: true } });
+  if (!task || !user.pangeeKey || task.assigneeKey !== user.pangeeKey) {
+    throw new Error(ACCESS_DENIED_MESSAGE);
+  }
+  return user;
+}
+
 // ───────── markTaskDone / markTaskTodo (toggle binaire) ─────────
 
 export async function markTaskDone(id: string): Promise<ActionResult> {
   return safeAction("markTaskDone", async () => {
-    const user = await requireUser();
+    const user = await requireTaskScope(id);
     if (!id) throw new Error("ID tâche manquant");
 
     // Lecture du label avant update pour calculer le patch deal (atomique).
@@ -73,7 +88,7 @@ export async function markTaskDone(id: string): Promise<ActionResult> {
 
 export async function markTaskTodo(id: string): Promise<ActionResult> {
   return safeAction("markTaskTodo", async () => {
-    await requireUser();
+    await requireTaskScope(id);
     if (!id) throw new Error("ID tâche manquant");
 
     const existing = await prisma.task.findUnique({
@@ -125,8 +140,12 @@ export async function updateTask(
   input: z.infer<typeof UpdateTaskSchema>,
 ): Promise<ActionResult> {
   return safeAction("updateTask", async () => {
-    await requireUser();
     const { id, ...patch } = UpdateTaskSchema.parse(input);
+    const user = await requireTaskScope(id);
+    // Nour ne réassigne pas / ne renomme pas : notes et échéance seulement.
+    if (isRestricted(user) && (patch.assigneeKey !== undefined || patch.label !== undefined || patch.order !== undefined)) {
+      throw new Error(ACCESS_DENIED_MESSAGE);
+    }
     const data: Prisma.TaskUpdateInput = {};
     if (patch.label !== undefined) data.label = patch.label;
     if (patch.description !== undefined) data.description = patch.description;
@@ -158,7 +177,7 @@ export async function addTaskToDeal(
   input: z.infer<typeof AddTaskToDealSchema>,
 ): Promise<ActionResult<{ id: string }>> {
   return safeAction("addTaskToDeal", async () => {
-    await requireUser();
+    await requireFullAccess();
     const data = AddTaskToDealSchema.parse(input);
 
     // Détermine l'ordre — à la fin du pipeline actuel du deal.
@@ -191,7 +210,7 @@ export async function addTaskToDeal(
 
 export async function softDeleteTask(id: string): Promise<ActionResult> {
   return safeAction("softDeleteTask", async () => {
-    await requireUser();
+    await requireFullAccess();
     if (!id) throw new Error("ID tâche manquant");
     const updated = await prisma.task.update({
       where: { id },
@@ -216,7 +235,7 @@ export async function softDeleteTask(id: string): Promise<ActionResult> {
  */
 export async function restoreTask(id: string): Promise<ActionResult> {
   return safeAction("restoreTask", async () => {
-    await requireUser();
+    await requireFullAccess();
     if (!id) throw new Error("ID tâche manquant");
     const task = await prisma.task.findUnique({
       where: { id },
@@ -242,7 +261,7 @@ export async function restoreTask(id: string): Promise<ActionResult> {
 /** Suppression DÉFINITIVE (irréversible) d'une tâche depuis la corbeille. */
 export async function permanentlyDeleteTask(id: string): Promise<ActionResult> {
   return safeAction("permanentlyDeleteTask", async () => {
-    await requireUser();
+    await requireFullAccess();
     if (!id) throw new Error("ID tâche manquant");
     const task = await prisma.task.findUnique({
       where: { id },
@@ -274,7 +293,7 @@ export async function reorderTasks(
   input: z.infer<typeof ReorderTasksSchema>,
 ): Promise<ActionResult> {
   return safeAction("reorderTasks", async () => {
-    await requireUser();
+    await requireFullAccess();
     const { dealId, taskIds } = ReorderTasksSchema.parse(input);
     // Update en transaction — chaque tâche reçoit son nouvel `order` selon
     // sa position dans taskIds.

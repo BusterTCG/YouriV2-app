@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Prisma, PaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth/users";
+import { requireFullAccess } from "@/lib/auth/access";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { recomputeBudgetFromInstallments } from "@/lib/finance/deal-installments";
 
@@ -31,7 +31,7 @@ export interface DealInstallmentRow {
 export async function getDealInstallments(
   dealId: string,
 ): Promise<DealInstallmentRow[]> {
-  await requireUser();
+  await requireFullAccess();
   if (!dealId) return [];
   const rows = await prisma.dealInstallment.findMany({
     where: { dealId },
@@ -61,7 +61,7 @@ export async function addDealInstallment(
   input: z.infer<typeof AddInstallmentSchema>,
 ): Promise<ActionResult<{ id: string }>> {
   return safeAction("addDealInstallment", async () => {
-    await requireUser();
+    await requireFullAccess();
     const { dealId, label, amount, dueDate } = AddInstallmentSchema.parse(input);
 
     // Ordre = à la fin de l'échéancier actuel.
@@ -104,7 +104,7 @@ export async function updateDealInstallment(
   input: z.infer<typeof UpdateInstallmentSchema>,
 ): Promise<ActionResult> {
   return safeAction("updateDealInstallment", async () => {
-    await requireUser();
+    await requireFullAccess();
     const { id, label, amount, dueDate, isEncaisse, paidAt } =
       UpdateInstallmentSchema.parse(input);
 
@@ -150,7 +150,7 @@ export async function updateDealInstallment(
 
 export async function removeDealInstallment(id: string): Promise<ActionResult> {
   return safeAction("removeDealInstallment", async () => {
-    await requireUser();
+    await requireFullAccess();
     if (!id) throw new Error("ID échéance manquant");
     const removed = await prisma.dealInstallment.delete({
       where: { id },

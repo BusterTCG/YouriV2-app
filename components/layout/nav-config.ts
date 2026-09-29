@@ -30,6 +30,8 @@ export interface NavItem {
   icon: LucideIcon;
   placeholder?: boolean;
   adminOnly?: boolean;
+  /** Visible par le profil « Production » (Nour) — cf. lib/auth/roles.ts. */
+  production?: boolean;
 }
 
 export interface NavGroup {
@@ -48,7 +50,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Pilotage",
     items: [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { label: "Tâches", href: "/taches", icon: CheckSquare },
+      { label: "Tâches", href: "/taches", icon: CheckSquare, production: true },
     ],
   },
   {
@@ -56,17 +58,17 @@ export const NAV_GROUPS: NavGroup[] = [
     href: "/deals", // page parent avec 3 cards récap (Booking / Prod Exé / Cachet)
     items: [
       { label: "Booking", href: "/deals/booking", icon: Briefcase },
-      { label: "Productions", href: "/shows", icon: Theater },
+      { label: "Productions", href: "/shows", icon: Theater, production: true },
       { label: "Cachets", href: "/deals/cachets", icon: Wallet },
-      { label: "Management fees", href: "/deals/management-fees", icon: HandCoins },
+      { label: "Management fees", href: "/deals/management-fees", icon: HandCoins, production: true },
     ],
   },
   {
     label: "Annuaire",
     items: [
-      { label: "Artistes", href: "/artistes", icon: Mic2 },
-      { label: "Contacts", href: "/contacts", icon: Users },
-      { label: "Lieux", href: "/lieux", icon: MapPin },
+      { label: "Artistes", href: "/artistes", icon: Mic2, production: true },
+      { label: "Contacts", href: "/contacts", icon: Users, production: true },
+      { label: "Lieux", href: "/lieux", icon: MapPin, production: true },
     ],
   },
   {

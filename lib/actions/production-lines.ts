@@ -5,6 +5,7 @@ import { z } from "zod";
 import { PaymentStatus, Prisma, ProductionLineKind, ProductionLineLabel } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
+import { requireDealAccess } from "@/lib/auth/access";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { recomputeShowFinancials } from "@/lib/finance/show-financials";
 import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
@@ -36,6 +37,12 @@ const AddProductionLineSchema = z.object({
   comment: z.string().max(500).nullable().optional(),
 });
 
+/** Ligne d'un deal accessible (garde profil « Production »). */
+async function requireLineAccess(id: string) {
+  const line = await prisma.productionLine.findUnique({ where: { id }, select: { dealId: true } });
+  if (line) await requireDealAccess(line.dealId);
+}
+
 export async function addProductionLine(
   input: z.infer<typeof AddProductionLineSchema>,
 ): Promise<ActionResult<{ id: string }>> {
@@ -43,6 +50,7 @@ export async function addProductionLine(
     await requireUser();
     const { dealId, label, kind, customLabel, amount, comment } =
       AddProductionLineSchema.parse(input);
+    await requireDealAccess(dealId);
 
     // Détermine l'ordre : à la fin du même kind.
     const lastInKind = await prisma.productionLine.findFirst({
@@ -105,6 +113,7 @@ export async function updateProductionLine(
       comment,
       coveredByVenue,
     } = UpdateProductionLineSchema.parse(input);
+    await requireLineAccess(id);
 
     const data: Prisma.ProductionLineUpdateInput = {};
     if (customLabel !== undefined) data.customLabel = customLabel;
@@ -178,6 +187,7 @@ export async function deleteProductionLine(id: string): Promise<ActionResult> {
   return safeAction("deleteProductionLine", async () => {
     await requireUser();
     if (!id) throw new Error("ID ligne manquant");
+    await requireLineAccess(id);
     const line = await prisma.productionLine.update({
       where: { id },
       data: { deletedAt: new Date() },
@@ -222,6 +232,7 @@ export async function upsertProductionLine(
     await requireUser();
     const { dealId, kind, label, amount, comment, coveredByVenue, status } =
       UpsertProductionLineSchema.parse(input);
+    await requireDealAccess(dealId);
 
     const existing = await prisma.productionLine.findFirst({
       where: { dealId, label, deletedAt: null },
@@ -292,6 +303,7 @@ export async function addEmptyProductionLine(
   return safeAction("addEmptyProductionLine", async () => {
     await requireUser();
     const { dealId, kind, label } = AddEmptyProductionLineSchema.parse(input);
+    await requireDealAccess(dealId);
 
     const lastInLabel = await prisma.productionLine.findFirst({
       where: { dealId, label, deletedAt: null },
