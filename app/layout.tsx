@@ -56,7 +56,6 @@ export default function RootLayout({
       <head>
         {isDev && (
           <script
-            // eslint-disable-next-line react/no-danger
             dangerouslySetInnerHTML={{
               __html: `
                 (function() {

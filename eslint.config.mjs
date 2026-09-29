@@ -1,23 +1,44 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTs from "eslint-config-next/typescript";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
-
-const eslintConfig = [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+const eslintConfig = defineConfig([
+  ...nextVitals,
+  ...nextTs,
+  // Override default ignores of eslint-config-next.
+  globalIgnores([
+    // Default ignores of eslint-config-next:
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+    // Spécifique au projet :
+    // Copies complètes de l'appli créées par Claude Code : ESLint ne lit
+    // pas .git/info/exclude et les linterait en double.
+    ".claude/**",
+    "prisma/migrations/**",
+  ]),
+  // Convention équipe : un nom de variable / paramètre / catch préfixé par
+  // un underscore (`_foo`) signale "intentionnellement inutilisé". Évite de
+  // devoir supprimer un paramètre conservé pour symétrie d'API ou pour le
+  // typage. C'est une convention TypeScript/Rust standard.
   {
-    ignores: [
-      ".next/**",
-      "node_modules/**",
-      "prisma/migrations/**",
-    ],
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+      // Règle arrivée avec eslint-plugin-react-hooks 7, postérieure au socle.
+      // Gardée visible en warning plutôt qu'en erreur : les occurrences
+      // restantes ne coûtent qu'un rendu supplémentaire, à traiter au fil des
+      // passages sur les composants concernés et non en refactor de masse.
+      "react-hooks/set-state-in-effect": "warn",
+    },
   },
-];
+]);
 
 export default eslintConfig;

@@ -24,7 +24,7 @@ import {
 import type { ManagementFeeRole } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { PANGEE_TEAM } from "@/lib/pangee-team";
-import { DEAL_CATEGORY_LABELS, dealHref, formatEur } from "@/components/deals/deal-helpers";
+import { DEAL_CATEGORY_LABELS, dealHref } from "@/components/deals/deal-helpers";
 import { PERIOD_PRESET_OPTIONS } from "@/lib/period-presets";
 import { updateManagementFee } from "@/lib/actions/management-fees";
 import { useEur } from "@/lib/privacy-context";

@@ -8,7 +8,6 @@ import { computeCachetsMargeBrute } from "@/lib/finance/cachet-payroll";
 import {
   formatPeriodRangeLabel,
   getPeriodRange,
-  type PeriodPreset,
 } from "./period-presets";
 import {
   CATEGORY_COLORS,

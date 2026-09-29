@@ -9,7 +9,6 @@ import {
   updateContact as knUpdateContact,
   deleteContact as knDeleteContact,
   type CreateContactInput,
-  type KnContact,
 } from "@/lib/kn-client";
 
 /**

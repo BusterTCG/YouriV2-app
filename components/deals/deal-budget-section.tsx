@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { TrendingUp } from "lucide-react";
