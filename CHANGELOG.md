@@ -6,6 +6,14 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [Statuts artiste — resynchro quotidienne] — 2026-09-30
+
+### Fixed
+
+- Statut artiste des dates de production : recalculé pour toutes les productions une fois par jour, à la première page ouverte. Une date ne devient « jouée » qu'au lendemain de sa dernière séance : une billetterie et un versement saisis le soir même laissaient la date « En cours » jusqu'à la modification suivante.
+
+---
+
 ## [Profil « Production » — Nour (booking@pangeeprod.com)] — 2026-09-30
 
 ### Added

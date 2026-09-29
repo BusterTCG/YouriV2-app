@@ -9,6 +9,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/users";
 import { canAccessPath, homeFor } from "@/lib/auth/roles";
+import { syncArtistStatusesDaily } from "@/lib/finance/artist-account-server";
 import { getNotifications } from "@/lib/notifications";
 import { PrivacyProvider } from "@/lib/privacy-context";
 
@@ -39,6 +40,10 @@ export default async function AppLayout({
   // middleware.
   const pathname = (await headers()).get("x-pathname");
   if (pathname && !canAccessPath(user.role, pathname)) redirect(homeFor(user.role));
+
+  // Statuts artiste des productions dépendant du jour (date jouée) : resynchro
+  // une fois par jour, à la première page ouverte (portage KN).
+  await syncArtistStatusesDaily();
 
   // Sprint 8 — notifications cloche topbar (dérivées à la volée).
   const notifications = await getNotifications({

@@ -6,6 +6,7 @@ import "server-only";
 // ⚠️ Les management fees n'entrent jamais dans le compte artiste.
 
 import { prisma } from "@/lib/db";
+import { localDayKey } from "@/lib/finance/artist-status-daily";
 import {
   computeArtistAccount,
   type AccountDeal,
@@ -85,8 +86,11 @@ export async function getArtistAccount(
  * (source de vérité) — listes, dashboard et management fees (« dispo pour
  * paiement ») lisent ces statuts.
  */
-export async function syncArtistStatuses(productionId: string): Promise<void> {
-  const account = await getArtistAccount(productionId, Date.now());
+export async function syncArtistStatuses(
+  productionId: string,
+  nowMs: number = Date.now(),
+): Promise<void> {
+  const account = await getArtistAccount(productionId, nowMs);
   const current = await prisma.deal.findMany({
     where: { productionId, category: "PROD_EXE", deletedAt: null },
     select: { id: true, artistStatus: true },
@@ -97,4 +101,30 @@ export async function syncArtistStatuses(productionId: string): Promise<void> {
       await prisma.deal.update({ where: { id: d.id }, data: { artistStatus: next } });
     }
   }
+}
+
+// Resynchro quotidienne (portage KN, Stan 2026-09-30) : une date ne devient
+// « jouée » (isPast) qu'au lendemain de sa dernière séance. Sans modification
+// sur la production, son statut artiste restait figé (ex. billetterie et
+// versement saisis le soir même). Les statuts sont donc recalculés pour
+// toutes les productions une fois par jour, à la première page ouverte
+// (layout). La « dispo paiement » des management fees se lit à l'affichage.
+let lastDailySync: string | null = null;
+
+export async function syncArtistStatusesDaily(now: Date = new Date()): Promise<void> {
+  const day = localDayKey(now);
+  if (lastDailySync === day) return;
+  lastDailySync = day; // posé avant les await : pas de double passage concurrent
+  try {
+    const productions = await prisma.production.findMany({ select: { id: true } });
+    for (const p of productions) await syncArtistStatuses(p.id, now.getTime());
+  } catch (e) {
+    lastDailySync = null; // réessai à la prochaine page
+    console.error("[syncArtistStatusesDaily]", e);
+  }
+}
+
+/** Tests : oublie la dernière resynchro. */
+export function resetArtistStatusesDailyForTests(): void {
+  lastDailySync = null;
 }
