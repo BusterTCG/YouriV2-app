@@ -10,6 +10,7 @@ import {
   type OverheadAllocation,
 } from "@/lib/finance/production-overhead";
 import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
+import { syncArtistStatuses } from "@/lib/finance/artist-account-server";
 
 /**
  * Calcule et persiste les financials d'une date `PROD_EXE` (portage de la
@@ -59,6 +60,12 @@ export async function recomputeProductionFinancials(
   const allocation = await getProductionOverheadAllocation(productionId);
   for (const [dealId, share] of allocation.byDeal) {
     await writeDealScalars(dealId, share);
+  }
+  // Parts artiste / encaissements changés → statuts artiste dérivés du compte
+  // artiste (KN) — AVANT les management fees, dont la disponibilité lit ce
+  // statut.
+  await syncArtistStatuses(productionId);
+  for (const dealId of allocation.byDeal.keys()) {
     // La part Pangee de chaque date a pu bouger (frais généraux, contrat) →
     // base des management fees à jour (les lignes déjà payées restent figées).
     await recomputeMfForDeal(dealId);

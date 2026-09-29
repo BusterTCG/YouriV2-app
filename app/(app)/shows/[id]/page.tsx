@@ -9,6 +9,7 @@ import {
   Clock,
   MapPin,
   FileText,
+  StickyNote,
 } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { performanceCountOf } from "@/lib/finance/production-overhead";
@@ -33,17 +34,32 @@ import { ShowSummaryCard } from "@/components/deals/show-summary-card";
 import { PerformancesCard } from "@/components/shows/performances-card";
 import { DepositCard } from "@/components/shows/deposit-card";
 import type { BookingDealArtistRow } from "@/lib/deals-list-types";
+import { cn } from "@/lib/utils";
+
+type TabKey = "suivi" | "comptes" | "contrat";
+const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: "suivi", label: "Suivi" },
+  { key: "comptes", label: "Comptes" },
+  { key: "contrat", label: "Contrat" },
+];
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }
 
 /**
  * Fiche date de production (ex-Prod Exécutive, Sprint 4) — style KN show.
  * Refonte Production 2026-09-29 : route /shows/[id] (KN), rattachée à sa
  * production (contrat hérité, quote-part des frais généraux).
+ *
+ * 3 onglets (KN, Stan 2026-09-28) :
+ *   Suivi   : check-list, jauge, séances, acompte salle
+ *   Comptes : recettes, charges, part artiste / part Pangee, management fees
+ *             (écran interne Pangee)
+ *   Contrat : modèle salle, contrat artiste de la date, notes
  *
  * Layout :
  *   1. Back link + eyebrow ("PROD EXÉ · {organisateur}")
@@ -57,8 +73,10 @@ interface PageProps {
  *   9. DealManagementFeesSection — MF (réutilisé)
  *   10. Notes
  */
-export default async function ProdExecutiveDetailPage({ params }: PageProps) {
+export default async function ProdExecutiveDetailPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const { tab } = await searchParams;
+  const view: TabKey = tab === "comptes" || tab === "contrat" ? tab : "suivi";
 
   const deal = await prisma.deal.findFirst({
     where: { id, deletedAt: null, category: "PROD_EXE" },
@@ -321,9 +339,33 @@ export default async function ProdExecutiveDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* ShowSummaryCard — copie fidèle KN (modèle salle, suivi op, mois
-          complet, jauge/payants/% remplissage/ticket moyen) */}
+      {/* Onglets */}
+      <div className="flex items-center gap-1 border-b overflow-x-auto">
+        {TABS.map((t) => (
+          <Link
+            key={t.key}
+            href={t.key === "suivi" ? `/shows/${deal.id}` : `/shows/${deal.id}?tab=${t.key}`}
+            className={cn(
+              "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap",
+              view === t.key
+                ? "border-yr-gold text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t.label}
+            {t.key === "contrat" && !deal.artistShareKind && (
+              <span className="ml-1.5 rounded-full px-1.5 text-[11px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-400">
+                !
+              </span>
+            )}
+          </Link>
+        ))}
+      </div>
+
+      {view === "suivi" && (
+        <>
       <ShowSummaryCard
+        section="suivi"
         dealId={deal.id}
         dealDate={deal.date}
         capacity={deal.capacity}
@@ -406,6 +448,11 @@ export default async function ProdExecutiveDetailPage({ params }: PageProps) {
         />
       )}
 
+        </>
+      )}
+
+      {view === "comptes" && (
+        <>
       {/* Tableau de production — recettes + charges + Cachet Art. inline */}
       <ProductionLinesEditor
         dealId={deal.id}
@@ -440,6 +487,9 @@ export default async function ProdExecutiveDetailPage({ params }: PageProps) {
                 productionId: deal.production.id,
               }
             : null
+        }
+        artistAccountHref={
+          deal.production ? `/shows/production/${deal.production.id}?tab=artiste` : null
         }
       />
 
@@ -483,14 +533,60 @@ export default async function ProdExecutiveDetailPage({ params }: PageProps) {
         allChargesPaid={allCostPaid}
       />
 
-      {/* Notes deal globales */}
-      {deal.notes && (
-        <div className="rounded-md border bg-muted/20 px-4 py-3">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">
-            Notes
+        </>
+      )}
+
+      {view === "contrat" && (
+        <>
+      <ShowSummaryCard
+        section="contrat"
+        dealId={deal.id}
+        dealDate={deal.date}
+        capacity={deal.capacity}
+        paying={deal.paying}
+        venue={venue}
+        venueRoomId={deal.venueRoomId}
+        venueDealKind={deal.venueDealKind}
+        prodExePct={deal.prodExePct != null ? Number(deal.prodExePct) : null}
+        coRealKnPct={deal.coRealKnPct != null ? Number(deal.coRealKnPct) : null}
+        coRealGrossCa={
+          deal.coRealGrossCa != null ? Number(deal.coRealGrossCa) : null
+        }
+        isMultiDate={deal.isMultiDate}
+        performanceCount={deal.performanceCount}
+        multiDateDates={
+          Array.isArray(deal.multiDateDates)
+            ? (deal.multiDateDates as string[]).filter(
+                (d): d is string => typeof d === "string",
+              )
+            : []
+        }
+        contractSigned={deal.contractSigned}
+        ticketingReady={deal.ticketingReady}
+        vhrBooked={deal.vhrBooked}
+        ticketingUrl={deal.ticketingUrl}
+        totalRevenue={totalRevenue}
+        productionContract={
+          deal.production
+            ? { productionId: deal.production.id, summary: contractSummary(contract) }
+            : null
+        }
+        hasPerformances={deal.performances.length > 0}
+      />
+
+      {/* Notes libres — éditables via « Modifier » (formulaire deal). */}
+      {deal.notes && deal.notes.trim().length > 0 && (
+        <div className="rounded-md border bg-card p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <StickyNote className="h-4 w-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold">Notes</h3>
           </div>
-          <p className="text-sm whitespace-pre-wrap">{deal.notes}</p>
+          <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">
+            {deal.notes}
+          </p>
         </div>
+      )}
+        </>
       )}
     </div>
   );

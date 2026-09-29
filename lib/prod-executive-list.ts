@@ -85,6 +85,8 @@ export interface ProdExeDealRow {
   artistAmount: number | null;
   /** Statut consolidé Part Artiste (driver UI, séparé des cachets). */
   artistStatus: "PAID" | "TO_INVOICE" | "VALIDATED" | "INVOICED" | "DISPUTE" | "N_A";
+  /** Production de la date — statut artiste dérivé du compte artiste. */
+  productionId: string | null;
   // Artistes (multi)
   dealArtistes: BookingDealArtistRow[];
   totalArtistes: number;
@@ -338,6 +340,7 @@ export async function getProdExeDealsList(opts: {
         d.commissionAmount != null ? Number(d.commissionAmount) : null,
       artistAmount: d.artistAmount != null ? Number(d.artistAmount) : null,
       artistStatus: d.artistStatus,
+      productionId: d.productionId,
       dealArtistes,
       totalArtistes,
       primaryArtistName: dealArtistes[0]?.artist.name ?? null,

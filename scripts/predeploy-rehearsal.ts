@@ -143,6 +143,9 @@ async function main() {
     where: { category: "PROD_EXE", deletedAt: null, isMultiDate: true, paying: { gt: 0 } },
     select: { title: true, paying: true },
   });
+  const movements = await prisma.artistMovement.findMany({
+    include: { production: { select: { name: true } } },
+  });
   await prisma.$disconnect();
 
   const after = await snapshot(url(afterPath));
@@ -232,6 +235,14 @@ async function main() {
     ``,
     `- Dates de production actives sans séance : ${noPerf.length}${noPerf.length ? " — " + noPerf.map((d) => d.title).join(", ") : ""}`,
     `- Mois complets avec payants en cumul (à ventiler séance par séance) : ${multiPaying.length}${multiPaying.length ? " — " + multiPaying.map((d) => `${d.title} (${d.paying})`).join(", ") : ""}`,
+    ``,
+  );
+
+  md.push(
+    `## Compte artiste`,
+    ``,
+    `- Mouvements repris (dates marquées « Part artiste payée ») : ${movements.length}${movements.length ? " — " + movements.map((m) => `${m.production.name} ${Number(m.amount).toFixed(2)} € (${m.kind})`).join(", ") : ""}`,
+    `- ⚠️ Une date « payée » dont la billetterie n'est pas encaissée n'est pas appelable : son statut repasse « à régler » et le compte artiste affiche un trop-versé (voir les changements artistStatus ci-dessus).`,
     ``,
   );
 

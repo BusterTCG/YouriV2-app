@@ -736,11 +736,39 @@ model Production {
   createdAt                 DateTime         @default(now())
   updatedAt                 DateTime         @updatedAt
 
-  deals       Deal[]
-  overheads   ProductionOverhead[]
-  residencies Residency[]
+  deals           Deal[]
+  overheads       ProductionOverhead[]
+  residencies     Residency[]
+  /// Compte artiste : quote-parts versées / remboursements (étape 4).
+  artistMovements ArtistMovement[]
 
   @@index([artistId])
+}
+
+/// Mouvement du compte artiste d'une production (portage KN, Stan 2026-09-28).
+/// PAYMENT = quote-part versée à l'artiste (appel de quote-part : uniquement
+/// sur des dates jouées dont la billetterie est encaissée) ; REFUND =
+/// remboursement de l'artiste (perte, trop-perçu). Montant toujours > 0.
+/// Les statuts artiste des dates (Deal.artistStatus) en sont DÉRIVÉS
+/// (lib/finance/artist-account.ts) — plus de case « Payé » par date.
+/// ⚠️ Les management fees n'entrent jamais dans ce compte.
+enum ArtistMovementKind {
+  PAYMENT
+  REFUND
+}
+
+model ArtistMovement {
+  id           String             @id @default(cuid())
+  productionId String
+  production   Production         @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  kind         ArtistMovementKind
+  amount       Decimal
+  date         DateTime
+  note         String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([productionId])
 }
 
 /// Frais général d'une production (charge commune à toutes les dates) —

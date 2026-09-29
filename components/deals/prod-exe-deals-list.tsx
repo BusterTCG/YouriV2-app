@@ -78,6 +78,12 @@ function ArtisteStatusPill({ deal }: { deal: ProdExeDealRow }) {
 
   function toggle(e: React.MouseEvent) {
     e.stopPropagation();
+    // Date d'une production : statut dérivé du compte artiste (portage KN) →
+    // on ouvre le compte au lieu de basculer à la main.
+    if (deal.productionId) {
+      router.push(`/shows/production/${deal.productionId}?tab=artiste`);
+      return;
+    }
     const next = paid ? "TO_INVOICE" : "PAID";
     startTransition(async () => {
       await setDealArtistStatus({ dealId: deal.id, status: next });
@@ -91,9 +97,11 @@ function ArtisteStatusPill({ deal }: { deal: ProdExeDealRow }) {
       onClick={toggle}
       disabled={pending}
       title={
-        paid
-          ? "Cliquer pour repasser En cours"
-          : "Marquer comme Payé (statut commercial)"
+        deal.productionId
+          ? "Réglé d'après le compte artiste de la production — cliquer pour l'ouvrir"
+          : paid
+            ? "Cliquer pour repasser En cours"
+            : "Marquer comme Payé (statut commercial)"
       }
       className={cn(
         "inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs whitespace-nowrap transition-colors",

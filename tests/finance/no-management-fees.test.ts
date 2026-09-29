@@ -27,6 +27,9 @@ const REPORT_SOURCES = [
   "lib/performances.ts",
   "lib/residency-plan.ts",
   "lib/finance/deposits.ts",
+  "lib/finance/artist-account.ts",
+  "lib/finance/artist-account-server.ts",
+  "lib/actions/artist-movements.ts",
 ];
 
 const FORBIDDEN = /managementFee|DealManagementFee|management-fees|ManagementFee|margeNette|totalMf/i;

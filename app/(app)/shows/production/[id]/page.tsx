@@ -8,6 +8,7 @@ import {
   CalendarRange,
   ChevronLeft,
   ChevronRight,
+  HandCoins,
   Landmark,
   MapPin,
   StickyNote,
@@ -26,7 +27,10 @@ import { TourWizard } from "@/components/shows/tour-wizard";
 import { SectionTitle } from "@/components/shows/section-title";
 import { UpcomingList, collectUpcoming } from "@/components/shows/upcoming-list";
 import { FinanceSummary } from "@/components/shows/finance-summary";
-import { financeOf, productionRates } from "@/lib/production-report";
+import { computeKpis, financeOf, productionRates } from "@/lib/production-report";
+import { KpiTiles } from "@/components/shows/kpi-visuals";
+import { getArtistAccount } from "@/lib/finance/artist-account-server";
+import { ArtistAccountCard } from "@/components/shows/artist-account-card";
 import { contractRates, productionContractSummary } from "@/lib/finance/production-overhead";
 import { cn } from "@/lib/utils";
 
@@ -37,21 +41,21 @@ interface Props {
   searchParams: Promise<{ tab?: string }>;
 }
 
-type TabKey = "suivi" | "dates" | "resultats" | "frais" | "contrat";
-const TAB_KEYS: TabKey[] = ["suivi", "dates", "resultats", "frais", "contrat"];
+type TabKey = "suivi" | "dates" | "resultats" | "artiste" | "frais" | "contrat";
+const TAB_KEYS: TabKey[] = ["suivi", "dates", "resultats", "artiste", "frais", "contrat"];
 
 /**
  * Fiche spectacle (production) — portage KN (Stan 2026-09-28 : un onglet = une
  * question, dans l'ordre du cycle de vie d'une exploitation).
  *   Suivi          : qu'est-ce que je dois faire ? (alertes, 3 prochaines
- *                    dates, à solder)
+ *                    dates, à solder, solde artiste en une ligne)
  *   Dates          : le planning complet (résidences, à venir, passées)
- *   Résultats      : combien ça rapporte ? (compte d'exploitation, détail
- *                    par date)
+ *   Résultats      : combien ça rapporte ? (KPI visuels, compte
+ *                    d'exploitation, détail par date)
+ *   Artiste        : le compte artiste (settlement)
  *   Frais généraux : les charges communes
  *   Contrat        : prod-exé % / co-prod %, notes, renommer, clôturer
- * (Onglet Artiste — compte artiste — et KPI visuels : étape 4 ; bilan PDF /
- * Excel : étape 5.)
+ * (Bilan PDF / Excel : étape 5.)
  *
  * ⚠️ Management fees : jamais affichées ici (écrans internes uniquement).
  */
@@ -71,6 +75,7 @@ export default async function ProductionPage({ params, searchParams }: Props) {
     }),
   ]);
   if (!prod) notFound();
+  const account = await getArtistAccount(prod.id, nowMs);
 
   const startOfToday = new Date(nowMs);
   startOfToday.setHours(0, 0, 0, 0);
@@ -99,6 +104,7 @@ export default async function ProductionPage({ params, searchParams }: Props) {
   });
   const rates = productionRates(prod);
   const hasUpcoming = prod.deals.some((d) => !d.isPast && d.status !== "ANNULE");
+  const balanceOpen = Math.round(account.balance) !== 0;
 
   const period =
     prod.firstDate && prod.lastDate
@@ -109,6 +115,7 @@ export default async function ProductionPage({ params, searchParams }: Props) {
     { key: "suivi", label: "Suivi", badge: suiviCount ? String(suiviCount) : undefined, tone: "amber" },
     { key: "dates", label: "Dates", badge: String(prod.deals.length), tone: "muted" },
     { key: "resultats", label: "Résultats" },
+    { key: "artiste", label: "Artiste", badge: balanceOpen ? "•" : undefined, tone: "amber" },
     {
       key: "frais",
       label: "Frais généraux",
@@ -256,6 +263,20 @@ export default async function ProductionPage({ params, searchParams }: Props) {
             </Link>
           )}
 
+          {balanceOpen && (
+            <Link
+              href={href("artiste")}
+              className="flex items-center gap-2 rounded-md border bg-card px-4 py-2 text-sm hover:bg-accent/30"
+            >
+              <HandCoins className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+              {account.balance > 0 ? "Quote-part disponible à verser à l'artiste" : "L'artiste doit à Pangee"}
+              <span className="font-semibold ml-auto">
+                <SensitiveAmount value={Math.abs(account.balance)} />
+              </span>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </Link>
+          )}
+
           <section className="space-y-2">
             <SectionTitle tone="blue" icon={<CalendarClock className="h-3.5 w-3.5" />}>
               Prochaines dates · {upcoming.length}
@@ -347,6 +368,12 @@ export default async function ProductionPage({ params, searchParams }: Props) {
               Réalisé = dates jouées · Estimé = toute l&apos;exploitation (sur la base de ce qui est saisi)
             </span>
           </div>
+          <KpiTiles
+            kpis={computeKpis(
+              prod.deals,
+              prod.deals.some((d) => d.isPast && d.status !== "ANNULE") ? "realized" : "all",
+            )}
+          />
           <FinanceSummary
             rates={rates}
             columns={
@@ -367,6 +394,30 @@ export default async function ProductionPage({ params, searchParams }: Props) {
             </div>
           </section>
         </>
+      )}
+
+      {/* ── ARTISTE : compte artiste ────────────────────────────────── */}
+      {view === "artiste" && (
+        <ArtistAccountCard
+          productionId={prod.id}
+          artistName={prod.artist.name}
+          account={{
+            acquired: account.acquired,
+            callable: account.callable,
+            pendingCollection: account.pendingCollection,
+            forecast: account.forecast,
+            paid: account.paid,
+            refunded: account.refunded,
+            balance: account.balance,
+            movements: account.movements.map((m) => ({
+              id: m.id,
+              kind: m.kind,
+              amount: m.amount,
+              date: m.date.toISOString().slice(0, 10),
+              note: m.note,
+            })),
+          }}
+        />
       )}
 
       {/* ── FRAIS GÉNÉRAUX ──────────────────────────────────────────── */}

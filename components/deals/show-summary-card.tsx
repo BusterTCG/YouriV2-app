@@ -95,6 +95,11 @@ interface Props {
    * modèles.
    */
   hasPerformances?: boolean;
+  /**
+   * Partie affichée (fiche date en onglets, portage KN) : « suivi » =
+   * check-list + jauge ; « contrat » = modèle salle + contrat artiste.
+   */
+  section?: "all" | "suivi" | "contrat";
 }
 
 export function ShowSummaryCard({
@@ -118,7 +123,10 @@ export function ShowSummaryCard({
   totalRevenue,
   productionContract,
   hasPerformances = false,
+  section = "all",
 }: Props) {
+  const showContract = section !== "suivi";
+  const showSuivi = section !== "contrat";
   const eur = useEur();
   const [pending, startTransition] = useTransition();
   const [persistError, setPersistError] = useState<string | null>(null);
@@ -242,7 +250,11 @@ export function ShowSummaryCard({
     <div className="rounded-md border bg-card p-4 space-y-4 relative">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Données show
+          {section === "contrat"
+            ? "Contrat de la date"
+            : section === "suivi"
+              ? "Suivi de la date"
+              : "Données show"}
         </h3>
         {pending && (
           <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
@@ -256,6 +268,7 @@ export function ShowSummaryCard({
       )}
 
       {/* Modèle salle + % commission Pangee */}
+      {showContract && (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field
           icon={<Building2 className="h-3.5 w-3.5" />}
@@ -374,9 +387,12 @@ export function ShowSummaryCard({
           </>
         )}
       </div>
+      )}
 
+      {showSuivi && (
+      <>
       {/* Suivi opérationnel — Signature contrat / MEV billetterie + URL / VHR */}
-      <div className="pt-3 border-t space-y-2">
+      <div className={cn("space-y-2", showContract && "pt-3 border-t")}>
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
           Suivi
         </div>
@@ -585,6 +601,8 @@ export function ShowSummaryCard({
         </>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

@@ -6,6 +6,21 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [Production — étape 4 : compte artiste, KPI, fiches en onglets] — 2026-09-29
+
+### Added
+
+- Modèle `ArtistMovement` (migration `20260929230000_add_artist_movements`) : compte artiste par production — quote-parts versées et remboursements de l'artiste. Reprise : chaque date déjà marquée « Part artiste payée » devient un mouvement.
+- Onglet « Artiste » de la production : part acquise (dates jouées), dont appelable (billetterie encaissée), en attente, estimé fin d'exploitation, mouvements, solde (Pangee doit / l'artiste doit / soldé) ; lien de solde dans l'onglet Suivi.
+- KPI visuels (onglet Résultats) : anneaux remplissage et représentations jouées, ticket moyen, résultat par représentation.
+- Fiche date en 3 onglets (KN) : Suivi (check-list, jauge, séances, acompte) / Comptes (recettes, charges, parts, management fees — écran interne) / Contrat (modèle salle, contrat artiste, notes).
+
+### Changed
+
+- Statut « Part artiste réglée » d'une date de production DÉRIVÉ du compte artiste (plus de case à cocher) : la liste et la fiche date renvoient vers l'onglet Artiste.
+
+---
+
 ## [Production — étape 3 : acompte salle et tournées] — 2026-09-29
 
 ### Added

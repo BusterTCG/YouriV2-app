@@ -612,6 +612,17 @@ export async function setDealArtistStatus(
   return safeAction("setDealArtistStatus", async () => {
     await requireUser();
     const { dealId, status } = SetDealArtistStatusSchema.parse(input);
+    // Date d'une production (portage KN) : le statut artiste est DÉRIVÉ du
+    // compte artiste de la production (versements / remboursements).
+    const target = await prisma.deal.findUnique({
+      where: { id: dealId },
+      select: { productionId: true },
+    });
+    if (target?.productionId) {
+      throw new Error(
+        "Date d'une production : le règlement de l'artiste se gère dans le compte artiste (onglet Artiste de la production).",
+      );
+    }
     await prisma.deal.update({
       where: { id: dealId },
       data: { artistStatus: status },

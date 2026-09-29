@@ -98,6 +98,9 @@ interface Props {
     perPerformance: number;
     productionId: string;
   } | null;
+  /** Date d'une production : statut « réglé » artiste DÉRIVÉ du compte
+   *  artiste (portage KN) → lien vers l'onglet Artiste au lieu du toggle. */
+  artistAccountHref?: string | null;
 }
 
 export function ProductionLinesEditor({
@@ -109,6 +112,7 @@ export function ProductionLinesEditor({
   artistStatus,
   coprodKnPct,
   overhead,
+  artistAccountHref,
 }: Props) {
   void dealId; // utilisé via les actions importées dans les sous-composants
   // Index par label : plusieurs lignes possibles par catégorie (sous-entrées).
@@ -437,11 +441,26 @@ export function ProductionLinesEditor({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="w-24">
-            <PartArtistePill
-              dealId={dealId}
-              artistStatus={artistStatus}
-            />
+          <div className={artistAccountHref ? undefined : "w-24"}>
+            {artistAccountHref ? (
+              <a
+                href={artistAccountHref}
+                title="Statut déduit du compte artiste de la production"
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium whitespace-nowrap hover:underline",
+                  artistStatus === "PAID"
+                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                    : "bg-muted/40 text-muted-foreground border-border",
+                )}
+              >
+                {artistStatus === "PAID" ? "✓ Réglé" : "⏳ À régler"} · compte artiste →
+              </a>
+            ) : (
+              <PartArtistePill
+                dealId={dealId}
+                artistStatus={artistStatus}
+              />
+            )}
           </div>
           <div
             className={cn(
