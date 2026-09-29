@@ -22,6 +22,7 @@ import { ProductionActions } from "@/components/shows/production-actions";
 import { ProductionContractCard } from "@/components/shows/production-contract-card";
 import { ProductionOverheadsEditor } from "@/components/shows/production-overheads-editor";
 import { ResidencyWizard } from "@/components/shows/residency-wizard";
+import { TourWizard } from "@/components/shows/tour-wizard";
 import { SectionTitle } from "@/components/shows/section-title";
 import { UpcomingList, collectUpcoming } from "@/components/shows/upcoming-list";
 import { FinanceSummary } from "@/components/shows/finance-summary";
@@ -174,7 +175,12 @@ export default async function ProductionPage({ params, searchParams }: Props) {
             status={prod.status}
             artistId={prod.artist.id}
             artistName={prod.artist.name}
-            extra={<ResidencyWizard productionId={prod.id} label="Ajouter une résidence" />}
+            extra={
+              <>
+                <TourWizard productionId={prod.id} />
+                <ResidencyWizard productionId={prod.id} label="Ajouter une résidence" />
+              </>
+            }
           />
           <PrivacyToggle />
         </div>
@@ -222,6 +228,20 @@ export default async function ProductionPage({ params, searchParams }: Props) {
                   : "Acompte à récupérer auprès de la salle"}{" "}
                 · <SensitiveAmount value={depositsToRecover.reduce((s, dep) => s + dep.toRecover, 0)} />
               </div>
+              {depositsToRecover.map((dep) => (
+                <Link
+                  key={dep.id}
+                  href={dep.href}
+                  className="flex items-center gap-2 text-xs text-amber-900/90 dark:text-amber-200/90 hover:underline"
+                >
+                  <span className="font-semibold tabular-nums">{formatEur(dep.toRecover)}</span>
+                  <span>· {dep.label}</span>
+                  {dep.paidAt && <span>· versé le {format(dep.paidAt, "dd/MM/yyyy")}</span>}
+                  <span className={dep.finished ? "font-semibold text-red-700 dark:text-red-400" : ""}>
+                    · {dep.finished ? "exploitation terminée — à récupérer maintenant" : "à récupérer en fin d'exploitation"}
+                  </span>
+                </Link>
+              ))}
             </div>
           )}
 

@@ -31,6 +31,7 @@ import {
 } from "@/components/deals/production-lines-editor";
 import { ShowSummaryCard } from "@/components/deals/show-summary-card";
 import { PerformancesCard } from "@/components/shows/performances-card";
+import { DepositCard } from "@/components/shows/deposit-card";
 import type { BookingDealArtistRow } from "@/lib/deals-list-types";
 
 export const dynamic = "force-dynamic";
@@ -79,6 +80,7 @@ export default async function ProdExecutiveDetailPage({ params }: PageProps) {
       createdBy: { select: { name: true } },
       performances: { orderBy: [{ date: "asc" }, { time: "asc" }] },
       residency: { select: { id: true, name: true } },
+      venueDeposit: true,
       production: {
         select: {
           id: true,
@@ -379,6 +381,30 @@ export default async function ProdExecutiveDetailPage({ params }: PageProps) {
         legacyPaying={deal.paying}
         todayKey={todayKey}
       />
+
+      {/* Acompte (caution) versé à la salle — date de tournée uniquement (les
+          mois de résidence l'ont sur la fiche résidence). */}
+      {deal.production && !deal.residency && (
+        <DepositCard
+          key={
+            deal.venueDeposit
+              ? `${deal.venueDeposit.amount}-${deal.venueDeposit.paidAt?.getTime()}-${deal.venueDeposit.refundedAt?.getTime()}-${deal.venueDeposit.note}`
+              : "none"
+          }
+          target={{ dealId: deal.id }}
+          deposit={
+            deal.venueDeposit
+              ? {
+                  id: deal.venueDeposit.id,
+                  amount: Number(deal.venueDeposit.amount),
+                  paidAt: deal.venueDeposit.paidAt?.toISOString().slice(0, 10) ?? null,
+                  refundedAt: deal.venueDeposit.refundedAt?.toISOString().slice(0, 10) ?? null,
+                  note: deal.venueDeposit.note,
+                }
+              : null
+          }
+        />
+      )}
 
       {/* Tableau de production — recettes + charges + Cachet Art. inline */}
       <ProductionLinesEditor

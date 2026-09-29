@@ -13,6 +13,7 @@ import { PerformancesCard } from "@/components/shows/performances-card";
 import { ResidencyWizard } from "@/components/shows/residency-wizard";
 import { DeleteResidencyButton, MonthReleve, ResidencyChecklist } from "@/components/shows/residency-month-parts";
 import { SectionTitle } from "@/components/shows/section-title";
+import { DepositCard } from "@/components/shows/deposit-card";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +45,7 @@ export default async function ResidencyPage({ params }: Props) {
   });
   if (!residency) notFound();
 
-  const [deals, [summary]] = await Promise.all([
+  const [deals, [summary], deposit] = await Promise.all([
     prisma.deal.findMany({
       where: { residencyId: id, category: "PROD_EXE", deletedAt: null },
       orderBy: { date: "asc" },
@@ -57,6 +58,7 @@ export default async function ResidencyPage({ params }: Props) {
       },
     }),
     getProductionSummaries({ id: residency.productionId }, nowMs),
+    prisma.venueDeposit.findUnique({ where: { residencyId: id } }),
   ]);
   const views = new Map((summary?.deals ?? []).map((v) => [v.id, v]));
   const today = new Date(nowMs);
@@ -171,6 +173,24 @@ export default async function ResidencyPage({ params }: Props) {
           tone={(prodExe ? artist : result) >= 0 ? "pos" : "neg"}
         />
       </div>
+
+      {/* Acompte (caution) versé à la salle — warning tant que non récupéré */}
+      <DepositCard
+        // key = valeurs saisies : l'état local se réinitialise après refresh.
+        key={deposit ? `${deposit.amount}-${deposit.paidAt?.getTime()}-${deposit.refundedAt?.getTime()}-${deposit.note}` : "none"}
+        target={{ residencyId: id }}
+        deposit={
+          deposit
+            ? {
+                id: deposit.id,
+                amount: Number(deposit.amount),
+                paidAt: deposit.paidAt?.toISOString().slice(0, 10) ?? null,
+                refundedAt: deposit.refundedAt?.toISOString().slice(0, 10) ?? null,
+                note: deposit.note,
+              }
+            : null
+        }
+      />
 
       {deals.length === 0 && (
         <p className="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">

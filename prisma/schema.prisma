@@ -512,6 +512,8 @@ model Deal {
   /// Séances (source de vérité des jours, horaires, payants, invités,
   /// billetterie) — les champs historiques du Deal en sont dérivés.
   performances Performance[]
+  /// Acompte (caution) versé à la salle pour cette date (tournée).
+  venueDeposit VenueDeposit? @relation("DepositDeal")
 
   /// Contrat artiste (hérité de la Production) : marqueur « contrat défini ».
   artistShareKind ArtistShareKind?
@@ -654,9 +656,32 @@ model Residency {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  deals Deal[]
+  deals        Deal[]
+  /// Acompte (caution) versé à la salle pour la résidence.
+  venueDeposit VenueDeposit?
 
   @@index([productionId])
+}
+
+/// Acompte versé à la salle (portage KN, Stan 2026-09-28) — UN seul par
+/// engagement (résidence OU date de tournée). Fonctionne comme une CAUTION :
+/// versé puis récupéré en fin d'exploitation, jamais imputé sur les loyers ni
+/// les séances, sans aucun impact sur le résultat. Warning tant que non
+/// récupéré.
+model VenueDeposit {
+  id          String     @id @default(cuid())
+  amount      Decimal
+  /// Date de versement à la salle.
+  paidAt      DateTime?
+  /// Date de récupération (null = à récupérer).
+  refundedAt  DateTime?
+  note        String?
+  residencyId String?    @unique
+  residency   Residency? @relation(fields: [residencyId], references: [id], onDelete: Cascade)
+  dealId      String?    @unique
+  deal        Deal?      @relation("DepositDeal", fields: [dealId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 }
 
 /// Séance d'une date / d'un mois de résidence (portage KN, étape 2).

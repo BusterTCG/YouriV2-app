@@ -26,6 +26,7 @@ const REPORT_SOURCES = [
   "app/(app)/shows/residence",
   "lib/performances.ts",
   "lib/residency-plan.ts",
+  "lib/finance/deposits.ts",
 ];
 
 const FORBIDDEN = /managementFee|DealManagementFee|management-fees|ManagementFee|margeNette|totalMf/i;

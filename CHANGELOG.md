@@ -6,6 +6,16 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [Production — étape 3 : acompte salle et tournées] — 2026-09-29
+
+### Added
+
+- Modèle `VenueDeposit` (migration `20260929220000_add_venue_deposits`) : acompte versé à la salle = caution, un par engagement (résidence OU date de tournée), sans impact sur le résultat. Carte « Acompte salle » sur la fiche résidence et la fiche date de tournée ; warning orange tant qu'il n'est pas récupéré (bandeau Suivi de la production, carte `/shows`).
+- Suppression d'une résidence refusée tant qu'un acompte n'est pas récupéré.
+- Assistant « Ajouter une tournée » : plusieurs dates d'un coup (salle de l'annuaire KN → ville et jauge reprises, horaire « 19:00 / 21:30 » = doublé, modèle salle par ligne, statut commun) ; après une erreur partielle, les lignes déjà créées sont retirées (pas de doublon au 2e clic).
+
+---
+
 ## [Production — étape 2 : séances et résidences] — 2026-09-29
 
 ### Added

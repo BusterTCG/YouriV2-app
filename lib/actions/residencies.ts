@@ -248,16 +248,25 @@ export async function setResidencyChecklist(
  * est CONSERVÉE (masquée tant qu'elle n'a plus de mois actif) : un mois
  * restauré y revient avec son contrat résidences, au lieu de devenir une date
  * de tournée. Elle est effacée quand son dernier mois est supprimé
- * définitivement.
+ * définitivement. Refusée tant qu'un acompte versé à la salle n'est pas
+ * récupéré.
  */
 export async function deleteResidency(id: string): Promise<ActionResult<{ productionId: string }>> {
   return safeAction("deleteResidency", async () => {
     await requireUser();
     const residency = await prisma.residency.findUnique({
       where: { id },
-      select: { productionId: true, name: true },
+      select: { productionId: true, name: true, venueDeposit: true },
     });
     if (!residency) throw new Error("Résidence introuvable");
+    // Refusée tant qu'un acompte versé à la salle n'est pas récupéré (la
+    // caution disparaîtrait avec la fiche).
+    const dep = residency.venueDeposit;
+    if (dep && Number(dep.amount) > 0 && !dep.refundedAt) {
+      throw new Error(
+        `Acompte de ${Number(dep.amount).toLocaleString("fr-FR")} € versé à la salle non récupéré : indique sa récupération (ou supprime-le) avant de supprimer la résidence.`,
+      );
+    }
     const months = await prisma.deal.findMany({
       where: { residencyId: id, deletedAt: null },
       select: { id: true },

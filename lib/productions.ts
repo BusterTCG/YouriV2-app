@@ -27,6 +27,7 @@ import type {
 } from "@prisma/client";
 import { format } from "date-fns";
 import { prisma } from "@/lib/db";
+import { depositState } from "@/lib/finance/deposits";
 import {
   allocateOverhead,
   dealPnl,
@@ -228,6 +229,21 @@ export async function getProductionSummaries(
     },
   });
 
+  // Acomptes / cautions salle des résidences et des dates de ces productions.
+  const productionIds = productions.map((p) => p.id);
+  const deposits = await prisma.venueDeposit.findMany({
+    where: {
+      OR: [
+        { residency: { productionId: { in: productionIds } } },
+        { deal: { productionId: { in: productionIds }, deletedAt: null } },
+      ],
+    },
+    include: {
+      residency: { select: { id: true, name: true, productionId: true } },
+      deal: { select: { id: true, title: true, productionId: true, venueName: true } },
+    },
+  });
+
   const startOfToday = new Date(nowMs);
   startOfToday.setHours(0, 0, 0, 0);
   // Clé "YYYY-MM-DD" en heure LOCALE (Europe/Paris) — toISOString décalerait
@@ -397,7 +413,26 @@ export async function getProductionSummaries(
       missingContractCount: views.filter(
         (v) => v.status !== "ANNULE" && !v.artistShareKind,
       ).length,
-      deposits: [],
+      deposits: deposits
+        .filter((dep) => (dep.residency?.productionId ?? dep.deal?.productionId) === prod.id)
+        .map((dep) => {
+          const state = depositState({ amount: Number(dep.amount), refundedAt: dep.refundedAt });
+          const covered = views
+            .filter((v) => (dep.residencyId ? v.residencyId === dep.residencyId : v.id === dep.dealId))
+            .filter((v) => v.status !== "ANNULE");
+          return {
+            id: dep.id,
+            amount: Number(dep.amount),
+            paidAt: dep.paidAt,
+            toRecover: state.toRecover,
+            recovered: state.recovered,
+            finished: covered.length > 0 && covered.every((v) => v.isPast),
+            label: dep.residency
+              ? `Résidence ${dep.residency.name}`
+              : dep.deal?.venueName ?? dep.deal?.title ?? "Date",
+            href: dep.residency ? `/shows/residence/${dep.residency.id}` : `/shows/${dep.deal?.id}`,
+          };
+        }),
     };
   });
 }

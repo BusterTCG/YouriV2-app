@@ -78,6 +78,8 @@ const CreateDealSchema = z.object({
   prodExePct: z.number().min(0).max(100).optional().nullable(),
   /** Co-prod Pangee : % du bénéfice restant (contrat à deux taux, portage KN). */
   coprodKnPct: z.number().min(0).max(100).optional().nullable(),
+  /** Jauge (assistant tournée : jauge de la salle KN). */
+  capacity: z.number().int().nonnegative().optional().nullable(),
   // ── Champs CACHETS (Stan 2026-05-28 Sprint 5) ──
   /** Montant facturé au prestataire (tiers). Sert au calcul de la Marge Brute. */
   budgetAmount: z.number().nonnegative().optional().nullable(),
@@ -124,6 +126,7 @@ export async function createDeal(
               venueDealKind: data.venueDealKind ?? null,
               prodExePct: data.prodExePct ?? null,
               coprodKnPct: data.coprodKnPct ?? 0,
+              capacity: data.capacity ?? null,
               // Contrat artiste (portage KN) : marqueur déduit des deux taux.
               // Remplacé par celui de la production si la date y est rattachée.
               artistShareKind: shareKindFor(data.prodExePct, data.coprodKnPct ?? 0),
