@@ -39,7 +39,7 @@ export default async function FdrPage({ params }: PageProps) {
   await ensureBriefingWithPrefill(id);
 
   const deal = await prisma.deal.findFirst({
-    where: { id, deletedAt: null, category: "BOOKING" },
+    where: { id, deletedAt: null, category: { in: ["BOOKING", "PROD_EXE"] } },
     include: {
       dealArtistes: {
         where: { deletedAt: null },
@@ -67,21 +67,23 @@ export default async function FdrPage({ params }: PageProps) {
 
   if (!deal || !deal.briefing) notFound();
   const briefing = deal.briefing;
+  // Date de production (KN : FDR par date de spectacle, /shows/[id]/briefing).
+  const isProduction = deal.category === "PROD_EXE";
 
   return (
     <div className="max-w-5xl space-y-5">
       {/* Breadcrumb — préserve la nav retour */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Link
-          href="/deals/booking"
+          href={isProduction ? "/shows" : "/deals/booking"}
           className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
         >
           <ChevronLeft className="h-3 w-3" />
-          Deals Booking
+          {isProduction ? "Productions" : "Deals Booking"}
         </Link>
         <span>/</span>
         <Link
-          href={`/deals/booking/${id}`}
+          href={isProduction ? `/shows/${id}` : `/deals/booking/${id}`}
           className="hover:text-foreground transition-colors truncate max-w-xs"
         >
           {deal.title}

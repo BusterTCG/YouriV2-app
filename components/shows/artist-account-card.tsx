@@ -129,8 +129,10 @@ export function ArtistAccountCard({
                   className="p-1 text-muted-foreground hover:text-destructive"
                   onClick={() => {
                     if (confirm("Supprimer ce mouvement ?")) {
+                      setError(null);
                       startTransition(async () => {
-                        await deleteArtistMovement(m.id);
+                        const res = await deleteArtistMovement(m.id);
+                        if (!res.ok) setError(res.error);
                         router.refresh();
                       });
                     }
@@ -142,6 +144,8 @@ export function ArtistAccountCard({
             ))}
           </div>
         )}
+
+        {error && !form && <p className="text-xs text-destructive">{error}</p>}
 
         {/* Saisie */}
         {form && (

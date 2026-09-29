@@ -31,7 +31,7 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
   const { id } = await params;
   const deal = await prisma.deal.findFirst({
-    where: { id, deletedAt: null, category: "BOOKING" },
+    where: { id, deletedAt: null, category: { in: ["BOOKING", "PROD_EXE"] } },
     select: {
       date: true,
       venueCity: true,
@@ -64,7 +64,7 @@ export default async function BriefingPrintPage({
   const previewMode = preview === "1";
 
   const deal = await prisma.deal.findFirst({
-    where: { id, deletedAt: null, category: "BOOKING" },
+    where: { id, deletedAt: null, category: { in: ["BOOKING", "PROD_EXE"] } },
     include: {
       dealArtistes: {
         where: { deletedAt: null },
@@ -86,6 +86,7 @@ export default async function BriefingPrintPage({
   return (
     <BriefingPrintView
       dealId={id}
+      fdrHref={deal.category === "PROD_EXE" ? `/shows/${id}/briefing` : undefined}
       previewMode={previewMode}
       deal={{
         title: deal.title,

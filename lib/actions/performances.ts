@@ -25,6 +25,16 @@ function firstIssue(e: z.ZodError): ActionResult<never> {
   return { ok: false, error: e.issues[0]?.message ?? "Validation" };
 }
 
+/** Séance d'une date active (pas en corbeille). */
+async function assertActivePerformance(id: string) {
+  const perf = await prisma.performance.findUnique({
+    where: { id },
+    include: { deal: { select: { deletedAt: true } } },
+  });
+  if (!perf || perf.deal.deletedAt) throw new Error("Séance introuvable");
+  return perf;
+}
+
 const DayKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date invalide");
 
 const AddSchema = z.object({
@@ -43,7 +53,7 @@ export async function addPerformances(input: unknown): Promise<ActionResult<{ co
     await requireUser();
     const { dealId, items } = parsed.data;
     const deal = await prisma.deal.findFirst({
-      where: { id: dealId, deletedAt: null },
+      where: { id: dealId, deletedAt: null, category: "PROD_EXE" },
       select: { id: true },
     });
     if (!deal) throw new Error("Date introuvable");
@@ -73,6 +83,7 @@ export async function updatePerformance(id: string, input: unknown): Promise<Act
   return safeAction("updatePerformance", async () => {
     await requireUser();
     const d = parsed.data;
+    await assertActivePerformance(id);
     const perf = await prisma.performance.update({
       where: { id },
       data: {
@@ -96,8 +107,7 @@ export async function updatePerformance(id: string, input: unknown): Promise<Act
 export async function deletePerformance(id: string): Promise<ActionResult> {
   return safeAction("deletePerformance", async () => {
     await requireUser();
-    const perf = await prisma.performance.findUnique({ where: { id } });
-    if (!perf) throw new Error("Séance introuvable");
+    const perf = await assertActivePerformance(id);
     const count = await prisma.performance.count({ where: { dealId: perf.dealId } });
     if (count <= 1) {
       throw new Error("Une date garde au moins une séance — annule-la plutôt, ou supprime la date.");

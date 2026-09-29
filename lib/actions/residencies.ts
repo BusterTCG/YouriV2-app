@@ -78,6 +78,9 @@ export async function planResidencyPerformances(
       ? await prisma.residency.findUnique({ where: { id: d.residencyId } })
       : null;
     if (d.residencyId && !residency) throw new Error("Résidence introuvable");
+    if (residency && residency.productionId !== production.id) {
+      throw new Error("Cette résidence appartient à une autre production");
+    }
     if (!residency) {
       const name = d.name?.trim() || d.venue?.name?.trim();
       if (!name) throw new Error("Choisis une salle ou donne un nom à la résidence");
@@ -178,8 +181,7 @@ export async function planResidencyPerformances(
 export async function renameResidency(id: string, name: string): Promise<ActionResult> {
   return safeAction("renameResidency", async () => {
     await requireUser();
-    const n = name.trim();
-    if (!n) throw new Error("Nom requis");
+    const n = z.string().trim().min(1, "Nom requis").max(120).parse(name);
     const before = await prisma.residency.findUnique({ where: { id }, select: { name: true } });
     if (!before) throw new Error("Résidence introuvable");
     await prisma.residency.update({ where: { id }, data: { name: n } });
@@ -208,10 +210,22 @@ export async function renameResidency(id: string, name: string): Promise<ActionR
 }
 
 /** Suivi (contrat, MEV, VHR) appliqué à tous les mois de la résidence (+ tâches). */
+const ChecklistSchema = z
+  .object({
+    contractSigned: z.boolean().optional(),
+    ticketingReady: z.boolean().optional(),
+    vhrBooked: z.boolean().optional(),
+  })
+  .strict();
+
 export async function setResidencyChecklist(
   id: string,
-  patch: { contractSigned?: boolean; ticketingReady?: boolean; vhrBooked?: boolean },
+  input: { contractSigned?: boolean; ticketingReady?: boolean; vhrBooked?: boolean },
 ): Promise<ActionResult> {
+  // Liste blanche : seuls les 3 champs du suivi peuvent être écrits.
+  const parsed = ChecklistSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Check-list invalide" };
+  const patch = parsed.data;
   return safeAction("setResidencyChecklist", async () => {
     await requireUser();
     const months = await prisma.deal.findMany({

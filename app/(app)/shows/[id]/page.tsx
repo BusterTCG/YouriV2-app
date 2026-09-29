@@ -82,8 +82,11 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
   const deal = await prisma.deal.findFirst({
     where: { id, deletedAt: null, category: "PROD_EXE" },
     include: {
+      briefing: { select: { id: true } },
       dealArtistes: {
         where: { deletedAt: null },
+        // 1er = artiste principal (même règle que primaryArtistIdOf).
+        orderBy: { createdAt: "asc" },
         include: {
           artist: { select: { id: true, name: true, slug: true, color: true } },
         },
@@ -303,11 +306,11 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
             + Modifier/Supprimer en outline discret */}
         <div className="flex items-center gap-2 flex-wrap">
           <Link
-            href={`/deals/booking/${deal.id}/fdr`}
+            href={`/shows/${deal.id}/briefing`}
             className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors shadow-sm bg-yr-gold text-[#1a2540] hover:bg-yr-gold/90"
           >
             <FileText className="h-4 w-4" />
-            Ouvrir la FDR
+            {deal.briefing ? "Ouvrir la FDR" : "Créer la FDR"}
           </Link>
           <DealActions
             deal={{
@@ -332,6 +335,7 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
               venueDealKind: deal.venueDealKind,
               prodExePct: deal.prodExePct != null ? Number(deal.prodExePct) : null,
               productionId: deal.production?.id ?? null,
+              coprodKnPct: deal.coprodKnPct != null ? Number(deal.coprodKnPct) : null,
               // Artiste principal (1er DealArtiste actif) — éditable depuis le dialog
               artistId: deal.dealArtistes[0]?.artist.id ?? null,
               artistName: deal.dealArtistes[0]?.artist.name ?? null,
@@ -498,6 +502,7 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
         }))}
         artistStatus={deal.artistStatus}
         coprodKnPct={contract.coprodKnPct}
+        artistShareKind={contract.artistShareKind}
         overhead={
           deal.production && overheadAllocation
             ? {

@@ -11,6 +11,7 @@ import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
 import { syncDealProductionLink } from "@/lib/finance/production-link";
 import { revalidateAllDealRoutes } from "@/lib/revalidate-deals";
 import { syncDealFromPerformances } from "@/lib/performances";
+import { shareKindFor } from "@/lib/finance/production-overhead";
 
 /**
  * Server actions spécifiques Prod Exécutive (Sprint 4).
@@ -71,10 +72,11 @@ export async function updateShowDetails(
     const { id, ...rest } = parsedInput;
     let { multiDateDates } = parsedInput;
 
-    const current = await prisma.deal.findUnique({
-      where: { id },
-      select: { productionId: true },
+    const current = await prisma.deal.findFirst({
+      where: { id, deletedAt: null },
+      select: { productionId: true, coprodKnPct: true },
     });
+    if (!current) throw new Error("Date introuvable");
     // Date d'une production (portage KN) : le contrat artiste est celui de
     // l'exploitation — il ne se modifie que sur la fiche production.
     if (current?.productionId) delete rest.prodExePct;
@@ -96,6 +98,11 @@ export async function updateShowDetails(
     if (rest.prodExePct !== undefined) {
       data.prodExePct =
         rest.prodExePct != null ? new Prisma.Decimal(rest.prodExePct) : null;
+      // Date hors production : marqueur de contrat déduit des deux taux (KN).
+      data.artistShareKind = shareKindFor(
+        rest.prodExePct,
+        current.coprodKnPct != null ? Number(current.coprodKnPct) : null,
+      );
     }
     if (rest.coRealKnPct !== undefined) {
       data.coRealKnPct =

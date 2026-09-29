@@ -360,6 +360,15 @@ export async function permanentlyDeleteArtist(id: string): Promise<ActionResult>
       );
     }
 
+    // Garde production : la suppression effacerait en cascade ses productions
+    // (frais généraux, résidences, compte artiste).
+    const productions = await prisma.production.count({ where: { artistId: id } });
+    if (productions > 0) {
+      throw new Error(
+        `Impossible : « ${artist.name} » porte ${productions} production(s) (frais généraux, compte artiste…).`,
+      );
+    }
+
     await prisma.artist.delete({ where: { id } });
     await logAudit({
       entity: "Artist",

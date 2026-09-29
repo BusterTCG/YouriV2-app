@@ -309,7 +309,7 @@ export function ShowSummaryCard({
         ) : (
         <Field
           label="Commission Pangee (%)"
-          hint={`Pangee prend ${formProdExe || prodExePct || 15} % du CA billetterie.`}
+          hint={`Pangee prend ${formProdExe || prodExePct || 0} % du CA billetterie.`}
         >
           <div className="flex items-center gap-2">
             <Input

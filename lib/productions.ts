@@ -210,7 +210,8 @@ export async function getProductionSummaries(
       category: "PROD_EXE",
       deletedAt: null,
     },
-    orderBy: { date: "asc" },
+    // Tiebreak id : même ordre que la répartition des frais généraux.
+    orderBy: [{ date: "asc" }, { id: "asc" }],
     include: {
       briefing: { select: { status: true } },
       productionLines: {

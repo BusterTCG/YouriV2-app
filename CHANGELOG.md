@@ -6,6 +6,23 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [Production — revue pré-déploiement] — 2026-09-30
+
+### Fixed
+
+- Migrations : noms de spectacle normalisés comme l'app (casse, accents, espaces multiples → plus de productions en double) ; dates en corbeille rattachées ; dates sans nom rattachées via le titre « Artiste - Spectacle @ Salle » (KN link_productions_by_title) ; horaires multiples « 19h / 21h / 23h » découpés en autant de séances ; jours en double ignorés ; salle louée : billetterie reprise de la Recette HT.
+- Rattachement : doublons de production (même nom normalisé) fusionnés automatiquement ; ordre déterministe.
+- Tableau de production : mêmes taux que le calcul serveur (taux vide = 0 %, pas de contrat = pas de part Pangee).
+- Formulaire : co-prod pré-remplie en modification, artiste enregistré avant le nom du spectacle, erreurs des enregistrements enchaînés affichées ; co-prod vide par défaut (plus de contrat « co-prod 0 % » implicite).
+- Actions : check-list résidence en liste blanche, séances / acomptes refusés sur une date en corbeille, résidence d'une autre production refusée, date à moitié créée supprimée en cas d'échec, date de paiement d'un frais général conservée.
+- Suppression définitive d'un artiste qui porte une production refusée ; productions des artistes en corbeille masquées.
+- FDR sur les dates de production (comme KN) : bouton « Créer la FDR » / « Ouvrir la FDR » sur la fiche date → `/shows/[id]/briefing` (même éditeur, PDF et aperçu que la FDR Booking ; retours vers la production).
+- Reprise des taux (modèle KN) : contrat principal = taux des dates uniques ; si les mois de résidence avaient un autre taux, « Contrat résidences » séparé (ex. Sossam : résidence Paris 10 %, autres dates 15 %) → aucun taux de date modifié. Test : `tests/integration/production-migration.test.ts`.
+- Répétition : dates dont le taux d'origine diffère de leur contrat cible signalées.
+- Suite de tests d'intégration (`tests/integration/production-flow.test.ts`) : parcours complet étapes 1 → 5 sur base temporaire.
+
+---
+
 ## [Production — étape 5 : bilan d'exploitation et compte de production] — 2026-09-29
 
 ### Added

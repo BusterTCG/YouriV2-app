@@ -60,8 +60,10 @@ export function ProductionActions({
     ) {
       return;
     }
+    setError(null);
     startTransition(async () => {
-      await setProductionStatus(productionId, closing ? "CLOSED" : "ACTIVE");
+      const res = await setProductionStatus(productionId, closing ? "CLOSED" : "ACTIVE");
+      if (!res.ok) setError(res.error);
       router.refresh();
     });
   }
@@ -95,6 +97,7 @@ export function ProductionActions({
           </Button>
         </>
       )}
+      {error && !renameOpen && <span className="text-xs text-destructive">{error}</span>}
 
       {addOpen && (
         <DealFormDialog

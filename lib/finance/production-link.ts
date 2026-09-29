@@ -107,10 +107,16 @@ async function findOrCreateProduction(
   const productions = await prisma.production.findMany({
     where: { artistId },
     select: { id: true, name: true },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   });
   const key = normalizeProductionName(name);
-  const match = productions.find((p) => normalizeProductionName(p.name) === key);
-  if (match) return match.id;
+  const matches = productions.filter((p) => normalizeProductionName(p.name) === key);
+  if (matches.length > 0) {
+    // Doublons (ex. reprise SQL qui ne normalisait pas comme l'app) → fusion
+    // dans la plus ancienne, pour ne jamais éclater une exploitation.
+    if (matches.length > 1) await mergeProductions(matches[0].id, matches.slice(1).map((m) => m.id));
+    return matches[0].id;
+  }
 
   const source = await prisma.deal.findUnique({
     where: { id: sourceDealId },
@@ -126,6 +132,17 @@ async function findOrCreateProduction(
     },
   });
   return created.id;
+}
+
+/** Rapatrie dates, frais généraux, résidences et compte artiste dans `keepId`. */
+async function mergeProductions(keepId: string, dropIds: string[]): Promise<void> {
+  await prisma.$transaction([
+    prisma.deal.updateMany({ where: { productionId: { in: dropIds } }, data: { productionId: keepId } }),
+    prisma.productionOverhead.updateMany({ where: { productionId: { in: dropIds } }, data: { productionId: keepId } }),
+    prisma.residency.updateMany({ where: { productionId: { in: dropIds } }, data: { productionId: keepId } }),
+    prisma.artistMovement.updateMany({ where: { productionId: { in: dropIds } }, data: { productionId: keepId } }),
+    prisma.production.deleteMany({ where: { id: { in: dropIds } } }),
+  ]);
 }
 
 /** toLocaleLowerCase : « Élan » et « élan » = même production. */

@@ -13,11 +13,13 @@ import {
   Trash2,
 } from "lucide-react";
 import type {
+  ArtistShareKind,
   ProductionLineKind,
   ProductionLineLabel,
   PaymentStatus,
   VenueDealKind,
 } from "@prisma/client";
+import { contractRates } from "@/lib/finance/production-overhead";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
@@ -90,6 +92,8 @@ interface Props {
   artistStatus: PaymentStatus;
   /** Co-prod Pangee : % du bénéfice restant (contrat de la production). */
   coprodKnPct?: number | null;
+  /** Marqueur « contrat défini » (null = pas de contrat → pas de part Pangee). */
+  artistShareKind?: ArtistShareKind | null;
   /** Quote-part des frais généraux de la production (lissée au prorata des
    *  représentations) — ligne de charge virtuelle, non éditable ici. */
   overhead?: {
@@ -111,6 +115,7 @@ export function ProductionLinesEditor({
   artistes,
   artistStatus,
   coprodKnPct,
+  artistShareKind,
   overhead,
   artistAccountHref,
 }: Props) {
@@ -198,7 +203,14 @@ export function ProductionLinesEditor({
   const realCost = visibleCosts.reduce((s, label) => s + sumOf(label), 0);
 
   // Ligne virtuelle "Prod exé" : ce que Pangee se retient en commission.
-  const pct = prodExePct ?? 15;
+  // Mêmes taux que le calcul serveur (contractRates) : taux vide = 0 %, pas de
+  // contrat défini = aucune part Pangee.
+  const rates = contractRates({
+    artistShareKind: artistShareKind === undefined ? "PROD_EXE" : artistShareKind,
+    prodExePct: prodExePct ?? null,
+    coprodKnPct: coprodKnPct ?? null,
+  });
+  const pct = rates?.pe ?? 0;
   const prodExeAmount = totalRevenue > 0 ? Math.round((totalRevenue * pct) / 100) : 0;
   // Σ cachets artistes — Stan 2026-05-27 v2 : inclus dans les Charges, donc
   // déduit aussi de la Part Artiste (cohérent avec le tableau récap).
@@ -212,7 +224,7 @@ export function ProductionLinesEditor({
   // après prod-exé est partagé, Pangee co-prod %, l'artiste le reste. Même
   // arrondi que lib/finance/production-overhead.ts `computeShowScalars`.
   const profit = totalRevenue - totalCost;
-  const cp = coprodKnPct ?? 0;
+  const cp = rates?.cp ?? 0;
   const knShare = Math.round(profit * (cp / 100));
   const margin = profit - knShare;
 

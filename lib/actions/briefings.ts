@@ -17,6 +17,13 @@ import { safeAction, type ActionResult } from "@/lib/errors";
 import { generateFdrPdf } from "@/lib/fdr-pdf";
 import { sendMail } from "@/lib/mailer";
 
+
+/** FDR servie sur 2 routes : Booking (/deals/booking/[id]/fdr) et date de
+ *  production (/shows/[id]/briefing, route KN). */
+function revalidateFdr(dealId: string) {
+  revalidatePath(`/deals/booking/${dealId}/fdr`);
+  revalidatePath(`/shows/${dealId}/briefing`);
+}
 /**
  * Server actions FDR (Feuille de route) — copie fidèle KN adaptée Pangee.
  *
@@ -47,7 +54,8 @@ export async function ensureBriefingWithPrefill(
 
     // 1. Charge le deal (et vérifie qu'il existe + qu'il est BOOKING + non supprimé).
     const deal = await prisma.deal.findFirst({
-      where: { id: dealId, deletedAt: null, category: "BOOKING" },
+      // FDR : Booking + dates de production (KN : une FDR par date de spectacle).
+      where: { id: dealId, deletedAt: null, category: { in: ["BOOKING", "PROD_EXE"] } },
       select: {
         id: true,
         venueId: true,
@@ -218,7 +226,7 @@ export async function updateBriefing(
       data,
       select: { dealId: true },
     });
-    revalidatePath(`/deals/booking/${updated.dealId}/fdr`);
+    revalidateFdr(updated.dealId);
   });
 }
 
@@ -270,7 +278,7 @@ export async function createTravel(
       },
       select: { id: true, briefing: { select: { dealId: true } } },
     });
-    revalidatePath(`/deals/booking/${travel.briefing.dealId}/fdr`);
+    revalidateFdr(travel.briefing.dealId);
     return { id: travel.id };
   });
 }
@@ -301,7 +309,7 @@ export async function updateTravel(
       data,
       select: { briefing: { select: { dealId: true } } },
     });
-    revalidatePath(`/deals/booking/${travel.briefing.dealId}/fdr`);
+    revalidateFdr(travel.briefing.dealId);
   });
 }
 
@@ -313,7 +321,7 @@ export async function deleteTravel(id: string): Promise<ActionResult> {
       where: { id },
       select: { briefing: { select: { dealId: true } } },
     });
-    revalidatePath(`/deals/booking/${travel.briefing.dealId}/fdr`);
+    revalidateFdr(travel.briefing.dealId);
   });
 }
 
@@ -361,7 +369,7 @@ export async function addBriefingContact(
       },
       select: { briefing: { select: { dealId: true } } },
     });
-    revalidatePath(`/deals/booking/${bc.briefing.dealId}/fdr`);
+    revalidateFdr(bc.briefing.dealId);
   });
 }
 
@@ -399,7 +407,7 @@ export async function addBriefingInlineContact(
       },
       select: { briefing: { select: { dealId: true } } },
     });
-    revalidatePath(`/deals/booking/${bc.briefing.dealId}/fdr`);
+    revalidateFdr(bc.briefing.dealId);
   });
 }
 
@@ -578,7 +586,7 @@ export async function sendBriefingByEmail(
         status: BriefingStatus.SENT,
       },
     });
-    revalidatePath(`/deals/booking/${briefing.dealId}/fdr`);
+    revalidateFdr(briefing.dealId);
 
     return { sentTo: recipients.map((r) => r.email) };
   });
@@ -604,6 +612,6 @@ export async function removeBriefingContact(
       where: { id },
       select: { briefing: { select: { dealId: true } } },
     });
-    revalidatePath(`/deals/booking/${bc.briefing.dealId}/fdr`);
+    revalidateFdr(bc.briefing.dealId);
   });
 }

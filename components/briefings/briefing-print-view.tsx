@@ -80,6 +80,8 @@ interface BriefingDataPrint {
 
 interface Props {
   dealId: string;
+  /** Lien « Retour à la FDR » (date de production : /shows/[id]/briefing). */
+  fdrHref?: string;
   deal: DealMeta;
   briefing: BriefingDataPrint | null;
   /** Si true, pas d'auto-print au chargement. */
@@ -88,6 +90,7 @@ interface Props {
 
 export function BriefingPrintView({
   dealId,
+  fdrHref,
   deal,
   briefing,
   previewMode = false,
@@ -110,7 +113,7 @@ export function BriefingPrintView({
       {/* Toolbar : visible à l'écran, masquée à l'impression */}
       <div className="print:hidden border-b bg-slate-100 px-4 py-3 flex items-center gap-3 flex-wrap">
         <Link
-          href={`/deals/booking/${dealId}/fdr`}
+          href={fdrHref ?? `/deals/booking/${dealId}/fdr`}
           className="text-xs text-slate-600 hover:text-slate-900 inline-flex items-center gap-1"
         >
           <ArrowLeft className="h-3 w-3" />

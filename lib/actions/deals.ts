@@ -125,11 +125,11 @@ export async function createDeal(
               isMultiDate: data.isMultiDate ?? false,
               venueDealKind: data.venueDealKind ?? null,
               prodExePct: data.prodExePct ?? null,
-              coprodKnPct: data.coprodKnPct ?? 0,
+              coprodKnPct: data.coprodKnPct ?? null,
               capacity: data.capacity ?? null,
               // Contrat artiste (portage KN) : marqueur déduit des deux taux.
               // Remplacé par celui de la production si la date y est rattachée.
-              artistShareKind: shareKindFor(data.prodExePct, data.coprodKnPct ?? 0),
+              artistShareKind: shareKindFor(data.prodExePct, data.coprodKnPct),
             }
           : {}),
         // Champs Cachets (Stan 2026-05-28 Sprint 5)
@@ -173,9 +173,22 @@ export async function createDeal(
     // Production : rattachement auto (artiste principal + nom du spectacle),
     // création de la production si besoin, recalcul (portage KN).
     if (data.category === DealCategory.PROD_EXE) {
-      // Séances créées depuis la date / les jours cochés (source de vérité).
-      await seedPerformancesFromDeal(created.id);
-      await syncDealProductionLink(created.id);
+      try {
+        // Séances créées depuis la date / les jours cochés (source de vérité).
+        await seedPerformancesFromDeal(created.id);
+        await syncDealProductionLink(created.id);
+      } catch (linkErr) {
+        // Même rollback que pour les tâches : pas de date à moitié créée (un
+        // nouvel essai ferait un doublon).
+        const orphan = await prisma.deal
+          .findUnique({ where: { id: created.id }, select: { productionId: true } })
+          .catch(() => null);
+        await prisma.deal.delete({ where: { id: created.id } }).catch(() => {});
+        if (orphan?.productionId) {
+          await recomputeProductionFinancials(orphan.productionId).catch(() => {});
+        }
+        throw linkErr;
+      }
     }
     revalidatePath("/deals");
     revalidatePath("/dashboard");

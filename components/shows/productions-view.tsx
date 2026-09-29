@@ -53,7 +53,8 @@ export async function ProductionsView() {
   // eslint-disable-next-line react-hooks/purity -- server component, 1 exécution / requête
   const nowMs = Date.now();
   const [summaries, unlinkedRaw] = await Promise.all([
-    getProductionSummaries({}, nowMs),
+    // Artistes en corbeille : leurs productions sont masquées.
+    getProductionSummaries({ artist: { deletedAt: null } }, nowMs),
     prisma.deal.findMany({
       where: { category: "PROD_EXE", productionId: null, deletedAt: null },
       orderBy: { date: "asc" },

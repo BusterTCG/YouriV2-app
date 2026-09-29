@@ -87,6 +87,8 @@ export interface DealFormDeal {
   prodExePct?: number | null;
   /** Date rattachée à une production (contrat hérité, non éditable ici). */
   productionId?: string | null;
+  /** Co-prod Pangee (% du bénéfice) — contrat de la date. */
+  coprodKnPct?: number | null;
   /** Artiste principal du deal (1er DealArtiste actif). Permet d'éditer le
    *  lien artiste depuis le dialog de modification (Stan 2026-05-27). */
   artistId?: string | null;
@@ -196,7 +198,9 @@ export function DealFormDialog({
   );
   // Contrat artiste à deux taux cumulables (portage KN 2026-09-29) : prod-exé
   // % du CA puis co-prod % du bénéfice restant. Co-prod 0 par défaut.
-  const [coprodKnPct, setCoprodKnPct] = useState("0");
+  const [coprodKnPct, setCoprodKnPct] = useState(
+    deal?.coprodKnPct != null ? String(deal.coprodKnPct) : "",
+  );
 
   // Productions existantes — suggestions du champ « Nom du spectacle » : la
   // date est rattachée côté serveur à la production (artiste + nom).
@@ -358,23 +362,37 @@ export function DealFormDialog({
           setError(res.error);
           return;
         }
+        // Enregistrements enchaînés : on s'arrête à la 1re erreur et on
+        // l'affiche (au lieu de fermer le formulaire en silence).
+        const steps: Array<() => Promise<{ ok: boolean; error?: string }>> = [];
         // Update statut deal si changé
         if (status !== deal.status) {
-          await setDealStatus({ dealId: deal.id, status });
+          steps.push(() => setDealStatus({ dealId: deal.id, status }));
         }
-        // Update champs Prod Exé si applicable
+        // Update champs Production si applicable. Artiste principal AVANT le
+        // nom du spectacle : le rattachement (artiste + spectacle) se fait
+        // alors en une fois, sans production orpheline pour l'ancien artiste.
         if (isProdExe) {
-          await updateShowDetails({
-            id: deal.id,
-            showName: showName.trim() || null,
-            isMultiDate,
-            venueDealKind: venueDealKind || null,
-            // Date d'une production : contrat hérité (ignoré côté serveur).
-            ...(deal.productionId ? {} : { prodExePct: parseRate(prodExePct) }),
-          });
-          // Update artiste principal si changé
           if (artistId !== (deal.artistId ?? null)) {
-            await setDealPrimaryArtist({ dealId: deal.id, artistId });
+            steps.push(() => setDealPrimaryArtist({ dealId: deal.id, artistId }));
+          }
+          steps.push(() =>
+            updateShowDetails({
+              id: deal.id,
+              showName: showName.trim() || null,
+              isMultiDate,
+              venueDealKind: venueDealKind || null,
+              // Date d'une production : contrat hérité (ignoré côté serveur).
+              ...(deal.productionId ? {} : { prodExePct: parseRate(prodExePct) }),
+            }),
+          );
+        }
+        for (const step of steps) {
+          const r = await step();
+          if (!r.ok) {
+            setError(r.error ?? "Erreur lors de l'enregistrement");
+            router.refresh();
+            return;
           }
         }
         // Update champs CACHETS si applicable. On ne passe PAS budgetAmount

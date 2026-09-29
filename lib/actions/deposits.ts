@@ -33,6 +33,18 @@ export async function upsertVenueDeposit(input: unknown): Promise<ActionResult> 
   const d = parsed.data;
   return safeAction("upsertVenueDeposit", async () => {
     await requireUser();
+    // Engagement actif : résidence avec au moins un mois actif, ou date de
+    // production hors corbeille.
+    const target = d.residencyId
+      ? await prisma.residency.findFirst({
+          where: { id: d.residencyId, deals: { some: { deletedAt: null } } },
+          select: { id: true },
+        })
+      : await prisma.deal.findFirst({
+          where: { id: d.dealId!, deletedAt: null, category: "PROD_EXE" },
+          select: { id: true },
+        });
+    if (!target) throw new Error("Résidence ou date introuvable");
     const where = d.residencyId ? { residencyId: d.residencyId } : { dealId: d.dealId! };
     const existing = await prisma.venueDeposit.findFirst({ where });
     const data = {

@@ -48,7 +48,7 @@ export async function generateFdrPdf(
 ): Promise<FdrPdfResult> {
   // Métadonnées légères pour le nom de fichier.
   const deal = await prisma.deal.findFirst({
-    where: { id: dealId, deletedAt: null, category: "BOOKING" },
+    where: { id: dealId, deletedAt: null, category: { in: ["BOOKING", "PROD_EXE"] } },
     select: {
       date: true,
       venueCity: true,

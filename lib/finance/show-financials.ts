@@ -120,7 +120,8 @@ export async function getProductionOverheadAllocation(
         performanceCount: true,
         multiDateDates: true,
       },
-      orderBy: { date: "asc" },
+      // Tiebreak id : même date → même ordre partout (reliquat d'arrondi).
+      orderBy: [{ date: "asc" }, { id: "asc" }],
     }),
     prisma.productionOverhead.findMany({
       where: { productionId },

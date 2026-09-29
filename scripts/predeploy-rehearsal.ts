@@ -116,6 +116,21 @@ async function main() {
   const { recomputeProductionFinancials, recomputeShowFinancials } = await import(
     "../lib/finance/show-financials"
   );
+  // Dates dont le taux prod-exé d'origine diffère de leur contrat cible
+  // (contrat résidences pour un mois de résidence séparé, sinon contrat
+  // principal) : le recalcul leur applique le contrat → montants modifiés.
+  // Lu AVANT le recalcul (taux d'origine des dates).
+  const mixed = (await prisma.$queryRawUnsafe(
+    `SELECT p."name" AS prod, a."name" AS artist,
+            group_concat(d."title" || ' (' || CAST(d."prodExePct" AS TEXT) || ' % → ' ||
+              CAST(CASE WHEN d."residencyId" IS NOT NULL AND p."residencyContractSeparate" = 1
+                        THEN p."residencyProdExePct" ELSE p."prodExePct" END AS TEXT) || ' %)', ' ; ') AS rates
+       FROM "Deal" d JOIN "Production" p ON p."id" = d."productionId" JOIN "Artist" a ON a."id" = p."artistId"
+      WHERE d."deletedAt" IS NULL
+        AND CAST(d."prodExePct" AS REAL) <> CAST(CASE WHEN d."residencyId" IS NOT NULL AND p."residencyContractSeparate" = 1
+                                                     THEN p."residencyProdExePct" ELSE p."prodExePct" END AS REAL)
+      GROUP BY p."id"`,
+  )) as Array<{ prod: string; artist: string; rates: string }>;
   const productions = await prisma.production.findMany({
     include: {
       artist: { select: { name: true } },
@@ -243,6 +258,15 @@ async function main() {
     ``,
     `- Mouvements repris (dates marquées « Part artiste payée ») : ${movements.length}${movements.length ? " — " + movements.map((m) => `${m.production.name} ${Number(m.amount).toFixed(2)} € (${m.kind})`).join(", ") : ""}`,
     `- ⚠️ Une date « payée » dont la billetterie n'est pas encaissée n'est pas appelable : son statut repasse « à régler » et le compte artiste affiche un trop-versé (voir les changements artistStatus ci-dessus).`,
+    ``,
+  );
+
+  md.push(
+    `## Dates dont le taux diffère de leur contrat (${mixed.length})`,
+    ``,
+    mixed.length
+      ? mixed.map((m) => `- ⚠️ ${m.artist} — ${m.prod} : ${m.rates} → alignées sur le contrat de la production (montants modifiés, voir « Deals dont un montant change »)`).join("\n")
+      : "Aucune.",
     ``,
   );
 

@@ -46,15 +46,19 @@ CREATE INDEX "Performance_dealId_date_idx" ON "Performance"("dealId", "date");
 -- jour UTC midi. Deal.date Youri porte parfois l'heure du show : jour = jour
 -- UTC de la date (les shows finissent avant minuit Paris = 22h/23h UTC).
 
--- 1a. Mois complets : 1 séance par jour coché (multiDateDates JSON).
+-- 1a. Mois complets : 1 séance par jour coché (multiDateDates JSON ; jours
+--     dédoublonnés, horodatages ISO ramenés au jour).
 INSERT INTO "Performance" ("id", "dealId", "date", "time", "cancelled", "createdAt", "updatedAt")
-SELECT 'pf' || lower(hex(randomblob(11))), d."id",
-       CAST(strftime('%s', j.value || ' 12:00:00') AS INTEGER) * 1000,
-       d."showTime", 0, CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000
-FROM "Deal" d, json_each(d."multiDateDates") j
-WHERE d."category" = 'PROD_EXE' AND d."isMultiDate" = 1
-  AND d."multiDateDates" IS NOT NULL AND json_valid(d."multiDateDates")
-  AND j.value GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]';
+SELECT 'pf' || lower(hex(randomblob(11))), x."dealId",
+       CAST(strftime('%s', x."day" || ' 12:00:00') AS INTEGER) * 1000,
+       x."showTime", 0, CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000
+FROM (
+  SELECT DISTINCT d."id" AS "dealId", d."showTime" AS "showTime", substr(j.value, 1, 10) AS "day"
+  FROM "Deal" d, json_each(d."multiDateDates") j
+  WHERE d."category" = 'PROD_EXE' AND d."isMultiDate" = 1
+    AND d."multiDateDates" IS NOT NULL AND json_valid(d."multiDateDates")
+    AND substr(j.value, 1, 10) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+) x;
 
 -- 1b. Mois complets sans jours cochés : 1 séance à la date du deal.
 INSERT INTO "Performance" ("id", "dealId", "date", "time", "cancelled", "createdAt", "updatedAt")
@@ -65,38 +69,45 @@ FROM "Deal" d
 WHERE d."category" = 'PROD_EXE' AND d."isMultiDate" = 1
   AND NOT EXISTS (SELECT 1 FROM "Performance" p WHERE p."dealId" = d."id");
 
--- 1c. Dates simples : 1 séance (payants / invités / billetterie repris), ou
---     2 séances si l'horaire est un doublé « 21h00 / 22h30 » (payants à ventiler).
+-- 1c. Dates simples : 1 séance par horaire (« 21h00 / 22h30 » = doublé,
+--     « 19h / 21h / 23h » = triplé). Une seule séance → payants / invités /
+--     billetterie repris ; plusieurs → à ventiler séance par séance.
+--     Billetterie : salle louée (PROD) = Recette HT saisie (la billetterie
+--     EST la recette) ; sinon CA global billetterie (co-réa).
+WITH RECURSIVE "slots"("dealId", "slot", "rest", "n") AS (
+  SELECT d."id", NULL, COALESCE(d."showTime", '') || '/', 0
+  FROM "Deal" d
+  WHERE d."category" = 'PROD_EXE' AND d."isMultiDate" = 0
+  UNION ALL
+  SELECT "dealId",
+         TRIM(substr("rest", 1, instr("rest", '/') - 1)),
+         substr("rest", instr("rest", '/') + 1),
+         "n" + 1
+  FROM "slots"
+  WHERE "rest" <> ''
+),
+"times" AS (
+  SELECT "dealId", NULLIF("slot", '') AS "time", "n" FROM "slots" WHERE "n" > 0
+),
+"counted" AS (
+  SELECT t.*, (SELECT COUNT(*) FROM "times" t2 WHERE t2."dealId" = t."dealId") AS "cnt" FROM "times" t
+)
 INSERT INTO "Performance" ("id", "dealId", "date", "time", "paying", "invited", "grossTicketing", "cancelled", "createdAt", "updatedAt")
 SELECT 'pf' || lower(hex(randomblob(11))), d."id",
        CAST(strftime('%s', strftime('%Y-%m-%d', d."date" / 1000, 'unixepoch') || ' 12:00:00') AS INTEGER) * 1000,
-       d."showTime", d."paying", d."invited",
-       COALESCE(
-         d."coRealGrossCa",
-         CASE WHEN d."venueDealKind" = 'PROD' THEN (
-           SELECT SUM(l."amount") FROM "ProductionLine" l
-           WHERE l."dealId" = d."id" AND l."label" = 'RECETTE_HT'
-             AND l."deletedAt" IS NULL AND l."coveredByVenue" = 0
-         ) END
-       ),
+       c."time",
+       CASE WHEN c."cnt" = 1 THEN d."paying" END,
+       CASE WHEN c."cnt" = 1 THEN d."invited" END,
+       CASE WHEN c."cnt" = 1 THEN (
+         CASE WHEN d."venueDealKind" = 'PROD' THEN COALESCE((
+             SELECT SUM(l."amount") FROM "ProductionLine" l
+             WHERE l."dealId" = d."id" AND l."label" = 'RECETTE_HT'
+               AND l."deletedAt" IS NULL AND l."coveredByVenue" = 0
+           ), d."coRealGrossCa")
+           ELSE d."coRealGrossCa" END
+       ) END,
        0, CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000
-FROM "Deal" d
-WHERE d."category" = 'PROD_EXE' AND d."isMultiDate" = 0
-  AND (d."showTime" IS NULL OR instr(d."showTime", '/') = 0);
-
-INSERT INTO "Performance" ("id", "dealId", "date", "time", "cancelled", "createdAt", "updatedAt")
-SELECT 'pf' || lower(hex(randomblob(11))), d."id",
-       CAST(strftime('%s', strftime('%Y-%m-%d', d."date" / 1000, 'unixepoch') || ' 12:00:00') AS INTEGER) * 1000,
-       trim(substr(d."showTime", 1, instr(d."showTime", '/') - 1)), 0, CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000
-FROM "Deal" d
-WHERE d."category" = 'PROD_EXE' AND d."isMultiDate" = 0 AND instr(d."showTime", '/') > 0;
-
-INSERT INTO "Performance" ("id", "dealId", "date", "time", "cancelled", "createdAt", "updatedAt")
-SELECT 'pf' || lower(hex(randomblob(11))), d."id",
-       CAST(strftime('%s', strftime('%Y-%m-%d', d."date" / 1000, 'unixepoch') || ' 12:00:00') AS INTEGER) * 1000,
-       trim(substr(d."showTime", instr(d."showTime", '/') + 1)), 0, CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000
-FROM "Deal" d
-WHERE d."category" = 'PROD_EXE' AND d."isMultiDate" = 0 AND instr(d."showTime", '/') > 0;
+FROM "counted" c JOIN "Deal" d ON d."id" = c."dealId";
 
 -- 2. Compteur de représentations = nombre de séances ; date du deal = 1re
 --    séance (UTC midi, comme le fera l'app à chaque modification).

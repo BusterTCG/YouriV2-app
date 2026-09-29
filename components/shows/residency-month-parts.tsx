@@ -123,9 +123,12 @@ export function ResidencyChecklist({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const toggle = (patch: Parameters<typeof setResidencyChecklist>[1]) =>
     startTransition(async () => {
-      await setResidencyChecklist(residencyId, patch);
+      setError(null);
+      const res = await setResidencyChecklist(residencyId, patch);
+      if (!res.ok) setError(res.error);
       router.refresh();
     });
   const pill = (label: string, on: boolean, patch: Parameters<typeof setResidencyChecklist>[1]) => (
@@ -150,6 +153,7 @@ export function ResidencyChecklist({
       {pill("MEV billetterie", ticketingReady, { ticketingReady: !ticketingReady })}
       {pill("VHR pris", vhrBooked, { vhrBooked: !vhrBooked })}
       {pending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+      {error && <span className="text-xs text-destructive">{error}</span>}
     </div>
   );
 }

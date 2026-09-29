@@ -207,6 +207,9 @@ export async function setProductionStatus(
   id: string,
   status: ProductionStatus,
 ): Promise<ActionResult> {
+  if (!z.nativeEnum(ProductionStatus).safeParse(status).success) {
+    return { ok: false, error: "Statut invalide" };
+  }
   return safeAction("setProductionStatus", async () => {
     await requireUser();
     await prisma.production.update({
@@ -305,6 +308,11 @@ export async function updateOverhead(
   return safeAction("updateOverhead", async () => {
     await requireUser();
     const d = parsed.data;
+    const before = await prisma.productionOverhead.findUnique({
+      where: { id },
+      select: { status: true, paidAt: true },
+    });
+    if (!before) throw new UserError("Frais introuvable");
     const row = await prisma.productionOverhead.update({
       where: { id },
       data: {
@@ -312,8 +320,13 @@ export async function updateOverhead(
         ...(d.amount !== undefined ? { amount: new Prisma.Decimal(d.amount) } : {}),
         ...(d.date !== undefined ? { date: d.date } : {}),
         ...(d.comment !== undefined ? { comment: d.comment || null } : {}),
+        // Date de paiement posée au passage à « Payé » seulement (un 2e envoi
+        // PAID ne la déplace pas).
         ...(d.status !== undefined
-          ? { status: d.status, paidAt: d.status === "PAID" ? new Date() : null }
+          ? {
+              status: d.status,
+              paidAt: d.status === "PAID" ? (before.status === "PAID" ? before.paidAt : new Date()) : null,
+            }
           : {}),
       },
     });
