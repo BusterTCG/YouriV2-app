@@ -113,18 +113,22 @@ async function main() {
   //    la première modification) — Prisma de l'app pointé sur la copie.
   process.env.DATABASE_URL = url(afterPath);
   const { prisma } = await import("../lib/db");
-  const { recomputeShowFinancials } = await import("../lib/finance/show-financials");
-  const { recomputeMfForDeal } = await import("../lib/management-fees-recompute");
-  const prodDeals = await prisma.deal.findMany({
-    where: { category: "PROD_EXE", deletedAt: null },
-    select: { id: true },
+  const { recomputeProductionFinancials, recomputeShowFinancials } = await import(
+    "../lib/finance/show-financials"
+  );
+  const productions = await prisma.production.findMany({
+    include: {
+      artist: { select: { name: true } },
+      _count: { select: { deals: true } },
+    },
+    orderBy: [{ artistId: "asc" }, { name: "asc" }],
   });
-  for (const d of prodDeals) {
-    await recomputeShowFinancials(d.id);
-    // revalidatePath (appelé après les écritures) n'existe pas hors Next :
-    // son erreur est sans effet sur les montants recalculés.
-    await recomputeMfForDeal(d.id).catch(() => undefined);
-  }
+  for (const p of productions) await recomputeProductionFinancials(p.id);
+  const unlinked = await prisma.deal.findMany({
+    where: { category: "PROD_EXE", deletedAt: null, productionId: null },
+    select: { id: true, title: true, showName: true },
+  });
+  for (const d of unlinked) await recomputeShowFinancials(d.id);
   await prisma.$disconnect();
 
   const after = await snapshot(url(afterPath));
@@ -191,6 +195,20 @@ async function main() {
   if (changed.length) md.push(`| Artiste(s) | Deal | Catégorie | Changements |`, `|---|---|---|---|`, ...changed);
   else md.push(`Aucun.`);
   md.push(``);
+
+  md.push(`## Productions créées (${productions.length})`, ``, `| Artiste | Production | Dates |`, `|---|---|---:|`);
+  for (const p of productions) md.push(`| ${p.artist.name} | ${p.name} | ${p._count.deals} |`);
+  md.push(``, `## Dates de production non rattachées (${unlinked.length})`, ``);
+  md.push(
+    unlinked.length
+      ? unlinked
+          .map((d) => `- ${d.title}${d.showName ? ` (spectacle « ${d.showName} »)` : " (pas de nom de spectacle)"}`)
+          .join("\n")
+      : "Aucune.",
+    ``,
+    `(Sans artiste ou sans nom de spectacle : à rattacher depuis /shows → « Dates à rattacher ».)`,
+    ``,
+  );
 
   writeFileSync(reportPath, md.join("\n") + "\n");
   console.log("Rapport :", reportPath);

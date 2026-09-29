@@ -45,7 +45,7 @@ function dealHref(category: DealCategory, id: string): string {
     case "BOOKING":
       return `/deals/booking/${id}`;
     case "PROD_EXE":
-      return `/deals/prod-executive/${id}`;
+      return `/shows/${id}`;
     case "CACHETS":
       return `/deals/cachets/${id}`;
   }

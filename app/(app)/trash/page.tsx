@@ -14,7 +14,7 @@ export const metadata = {
 /** Libellés courts de catégorie pour le sous-titre des deals. */
 const CATEGORY_LABEL: Record<string, string> = {
   BOOKING: "Booking",
-  PROD_EXE: "Prod Exé",
+  PROD_EXE: "Production",
   CACHETS: "Cachets",
 };
 

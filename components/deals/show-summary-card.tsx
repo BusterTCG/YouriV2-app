@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
   Loader2,
@@ -84,6 +85,9 @@ interface Props {
   vhrBooked: boolean;
   /** Recettes totales — passées par le parent pour calculer le ticket moyen. */
   totalRevenue: number;
+  /** Date d'une production (portage KN) : contrat artiste hérité, affiché en
+   *  lecture seule — il se modifie sur la fiche production (onglet Contrat). */
+  productionContract?: { productionId: string; summary: string } | null;
 }
 
 export function ShowSummaryCard({
@@ -105,6 +109,7 @@ export function ShowSummaryCard({
   ticketingUrl,
   vhrBooked,
   totalRevenue,
+  productionContract,
 }: Props) {
   const eur = useEur();
   const [pending, startTransition] = useTransition();
@@ -268,6 +273,19 @@ export function ShowSummaryCard({
           </Select>
         </Field>
 
+        {productionContract ? (
+          <Field
+            label="Contrat artiste"
+            hint="Hérité de la production — modifiable dans son onglet Contrat."
+          >
+            <Link
+              href={`/shows/production/${productionContract.productionId}?tab=contrat`}
+              className="inline-flex h-9 items-center text-sm font-medium hover:underline"
+            >
+              {productionContract.summary}
+            </Link>
+          </Field>
+        ) : (
         <Field
           label="Commission Pangee (%)"
           hint={`Pangee prend ${formProdExe || prodExePct || 15} % du CA billetterie.`}
@@ -289,6 +307,7 @@ export function ShowSummaryCard({
             <span className="text-sm text-muted-foreground">%</span>
           </div>
         </Field>
+        )}
 
         {/* Champs CO_REAL */}
         {venueDealKind === "CO_REAL" && (

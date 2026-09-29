@@ -1,7 +1,7 @@
 import {
   LayoutDashboard,
   Briefcase,
-  TrendingUp,
+  Theater,
   Wallet,
   CheckSquare,
   Mic2,
@@ -56,7 +56,7 @@ export const NAV_GROUPS: NavGroup[] = [
     href: "/deals", // page parent avec 3 cards récap (Booking / Prod Exé / Cachet)
     items: [
       { label: "Booking", href: "/deals/booking", icon: Briefcase },
-      { label: "Prod Exé", href: "/deals/prod-executive", icon: TrendingUp },
+      { label: "Productions", href: "/shows", icon: Theater },
       { label: "Cachets", href: "/deals/cachets", icon: Wallet },
       { label: "Management fees", href: "/deals/management-fees", icon: HandCoins },
     ],

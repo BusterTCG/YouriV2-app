@@ -137,8 +137,25 @@ enum ManagementFeeRole {
 // 15 % du CA billetterie, configurable par deal via `prodExePct`). Multi-date
 // supporté via `multiDateDates` JSON (1 deal = 1 tournée / résidence).
 //
-// Copie fidèle du module Production de KuroNeko-App (cf. AGENTS.md), simplifiée
-// pour n'exposer que PROD_EXE côté Pangee (pas de COPROD artiste).
+// Copie fidèle du module Production de KuroNeko-App (cf. AGENTS.md).
+// Refonte « Production » (portage KN, Stan 2026-09-29) : contrat artiste à
+// deux taux cumulables (prod-exé % du CA, puis co-prod % du bénéfice), porté
+// par la Production et hérité par toutes ses dates.
+
+/// Contrat artiste — marqueur « contrat défini » (plus de choix exclusif :
+/// les deux taux `prodExePct` / `coprodKnPct` sont cumulables, cf.
+/// lib/finance/production-overhead.ts `shareKindFor`).
+enum ArtistShareKind {
+  COPROD // Bénéfice (après prod-exé) partagé selon `coprodKnPct`.
+  PROD_EXE // Pangee prend `prodExePct` du CA.
+}
+
+/// Statut d'une production (exploitation d'un spectacle). Une production vit
+/// toute la durée d'exploitation ; on la clôture quand le spectacle s'arrête.
+enum ProductionStatus {
+  ACTIVE
+  CLOSED
+}
 
 /// Modèle de contrat avec la salle — détermine d'où vient le CA billetterie.
 enum VenueDealKind {
@@ -292,6 +309,8 @@ model Artist {
   /// Deals où cet artiste apparaît (jointure DealArtiste avec cachet + com
   /// + statuts paiement individuels). Sprint 3+.
   dealArtistes DealArtiste[]
+  /// Productions (spectacles) de l'artiste — refonte Production 2026-09-29.
+  productions  Production[]
 }
 
 // ─────────────────────────── ARTIST PROFILE (Sprint 2-bis) ───────────────────────────
@@ -480,6 +499,17 @@ model Deal {
   /// de `commissionAmount` via `lib/finance/show-financials.ts`.
   prodExePct Decimal?
 
+  /// Production (spectacle d'un artiste) à laquelle appartient cette date —
+  /// uniquement PROD_EXE. Rattachement auto par (artiste principal, showName),
+  /// cf. lib/finance/production-link.ts. Refonte Production 2026-09-29.
+  productionId String?
+  production   Production? @relation(fields: [productionId], references: [id], onDelete: SetNull)
+
+  /// Contrat artiste (hérité de la Production) : marqueur « contrat défini ».
+  artistShareKind ArtistShareKind?
+  /// Co-prod : % du bénéfice (après prod-exé) qui revient à Pangee.
+  coprodKnPct     Decimal?
+
   /// % du budget que Pangee conserve sur un deal CACHETS — Sprint 5
   /// Stan 2026-05-28. Modèle Cachets : Pangee facture un tiers pour le compte
   /// d'un artiste, conserve `cachetsFeesPct`% (= Marge Brute, default 10%) et
@@ -556,7 +586,7 @@ model Deal {
   /// Statut consolidé de paiement de la Part Artiste (driver UI séparé du
   /// DealArtiste.paymentStatus individuel — Stan 2026-05-27 v2 : pill "Payé"
   /// global du show, indépendant des cachets individuels).
-  artistStatus     PaymentStatus @default(N_A)
+  artistStatus PaymentStatus @default(N_A)
 
   // ── Lignes de production (Sprint 4) ──
   productionLines ProductionLine[]
@@ -595,6 +625,62 @@ model Deal {
   @@index([deletedAt])
   @@index([category])
   @@index([date])
+  @@index([productionId])
+}
+
+/// Production = exploitation d'un spectacle d'UN artiste (ex. « Insomniaque —
+/// Samy Bel »), sur toute sa durée de vie. Regroupe les dates (Deal PROD_EXE)
+/// et porte :
+/// - le contrat artiste (hérité par toutes les dates),
+/// - les frais généraux (carte SNCF, affiches…) lissés au prorata des
+///   représentations sur toutes les dates non annulées.
+/// Portage KN (refonte production) — Stan 2026-09-29.
+model Production {
+  id                        String           @id @default(cuid())
+  artistId                  String
+  artist                    Artist           @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  /// Nom du spectacle — synchronisé avec `Deal.showName` des dates rattachées.
+  name                      String
+  artistShareKind           ArtistShareKind?
+  coprodKnPct               Decimal?
+  prodExePct                Decimal?
+  /// Contrat des résidences : false = les mois de résidence appliquent le
+  /// contrat ci-dessus (cas courant) ; true = taux spécifiques ci-dessous,
+  /// les dates uniques gardant le contrat principal.
+  residencyContractSeparate Boolean          @default(false)
+  residencyArtistShareKind  ArtistShareKind?
+  residencyCoprodKnPct      Decimal?
+  residencyProdExePct       Decimal?
+  status                    ProductionStatus @default(ACTIVE)
+  closedAt                  DateTime?
+  notes                     String?
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
+
+  deals     Deal[]
+  overheads ProductionOverhead[]
+
+  @@index([artistId])
+}
+
+/// Frais général d'une production (charge commune à toutes les dates) —
+/// réparti au prorata du nombre de représentations (cf.
+/// lib/finance/production-overhead.ts).
+model ProductionOverhead {
+  id           String        @id @default(cuid())
+  productionId String
+  production   Production    @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  label        String
+  /// Date d'achat / de la dépense (informatif).
+  date         DateTime?
+  amount       Decimal
+  status       PaymentStatus @default(TO_INVOICE)
+  paidAt       DateTime?
+  comment      String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([productionId])
 }
 
 /// Jointure Deal × Artist avec champs financiers individuels.
@@ -1169,7 +1255,7 @@ model AppSetting {
 /// le flux métier si l'insertion échoue. Pas d'UI d'historique dédiée pour
 /// l'instant (comme KN) — surfacé en compteur dans /settings.
 model AuditEntry {
-  id       String @id @default(cuid())
+  id       String  @id @default(cuid())
   entity   String /// ex: "Deal", "Task", "Artist"
   entityId String
   action   String /// "create" | "update" | "delete" | "restore" | "permanently_delete"

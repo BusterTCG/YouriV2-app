@@ -105,7 +105,7 @@ export function AssigneeChip({
 
 const CATEGORY_LABEL: Record<DealCategory, string> = {
   BOOKING: "Booking",
-  PROD_EXE: "Prod Exé",
+  PROD_EXE: "Production",
   CACHETS: "Cachets",
 };
 const CATEGORY_COLOR: Record<DealCategory, string> = {
@@ -129,7 +129,7 @@ export function CategoryChip({ category }: { category: DealCategory }) {
 
 const CATEGORY_PATH: Record<DealCategory, string> = {
   BOOKING: "/deals/booking",
-  PROD_EXE: "/deals/prod-executive",
+  PROD_EXE: "/shows",
   CACHETS: "/deals/cachets",
 };
 export const dealUrl = (category: DealCategory, dealId: string): string =>

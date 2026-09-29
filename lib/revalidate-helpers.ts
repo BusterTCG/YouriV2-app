@@ -19,7 +19,7 @@ export function revalidateAfterDealMutation(dealId?: string): void {
   revalidatePath("/taches");
   if (dealId) {
     revalidatePath(`/deals/booking/${dealId}`);
-    revalidatePath(`/deals/prod-executive/${dealId}`);
+    revalidatePath(`/shows/${dealId}`);
     revalidatePath(`/deals/cachets/${dealId}`);
   }
 }

@@ -84,7 +84,7 @@ const KPI_DEFS = [
     key: "spectacle" as const,
     label: "Spectacle",
     icon: Theater,
-    hint: "Prod Exé 15 %",
+    hint: "Production",
     accent: false,
   },
   {

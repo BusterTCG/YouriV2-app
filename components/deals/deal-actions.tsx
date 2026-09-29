@@ -35,7 +35,7 @@ export function DealActions({ deal }: Props) {
       // (Stan 2026-05-27 : sinon un delete Prod Exé renvoyait sur Booking).
       const path =
         deal.category === "PROD_EXE"
-          ? "/deals/prod-executive"
+          ? "/shows"
           : deal.category === "CACHETS"
             ? "/deals/cachets"
             : "/deals/booking";

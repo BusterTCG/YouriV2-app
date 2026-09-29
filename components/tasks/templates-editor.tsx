@@ -37,7 +37,7 @@ export function TemplatesEditor({ booking, prodExe, cachets }: Props) {
   const [tab, setTab] = useState<DealCategory>("BOOKING");
   const tabs: Array<{ key: DealCategory; label: string; count: number }> = [
     { key: "BOOKING", label: "Booking", count: booking.length },
-    { key: "PROD_EXE", label: "Prod Exé", count: prodExe.length },
+    { key: "PROD_EXE", label: "Production", count: prodExe.length },
     { key: "CACHETS", label: "Cachets", count: cachets.length },
   ];
   const templates =

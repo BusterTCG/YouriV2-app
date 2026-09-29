@@ -28,7 +28,7 @@ import { setDealArtistStatus } from "@/lib/actions/deals";
 import { useEur } from "@/lib/privacy-context";
 
 /**
- * Tableau récap /deals/prod-executive — refondu Stan 2026-05-27.
+ * Tableau récap /shows — refondu Stan 2026-05-27.
  *
  * Colonnes :
  *   1. Date
@@ -182,7 +182,7 @@ export function ProdExeDealsList({ deals, totals, periodLabel }: Props) {
 
       {deals.length === 0 ? (
         <div className="rounded-md border border-dashed py-12 text-center text-sm text-muted-foreground">
-          Aucun deal Prod Exécutive pour ces filtres.
+          Aucune date de production pour ces filtres.
         </div>
       ) : (
         <>
@@ -247,7 +247,7 @@ export function ProdExeDealsList({ deals, totals, periodLabel }: Props) {
                   return (
                     <tr
                       key={deal.id}
-                      onClick={() => router.push(`/deals/prod-executive/${deal.id}`)}
+                      onClick={() => router.push(`/shows/${deal.id}`)}
                       className={cn(
                         "border-t hover:bg-accent/30 transition-colors cursor-pointer",
                         deal.status === "ANNULE" && "opacity-50",

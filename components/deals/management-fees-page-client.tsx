@@ -238,7 +238,7 @@ export function ManagementFeesPageClient({
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            Prod Exé
+            Production
           </button>
           <button
             type="button"

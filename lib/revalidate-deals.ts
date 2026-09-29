@@ -22,11 +22,11 @@ export function revalidateAllDealRoutes(
 ): void {
   revalidatePath("/deals");
   revalidatePath("/deals/booking");
-  revalidatePath("/deals/prod-executive");
+  // Production (ex-Prod Exé) : liste + fiches production / date / résidence.
+  revalidatePath("/shows", "layout");
   revalidatePath("/deals/cachets");
   if (dealId) {
     revalidatePath(`/deals/booking/${dealId}`);
-    revalidatePath(`/deals/prod-executive/${dealId}`);
     revalidatePath(`/deals/cachets/${dealId}`);
   }
   if (includeMf) {

@@ -6,6 +6,27 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [Production — étape 1 : socle Production] — 2026-09-29
+
+Portage de la refonte « Production » de KuroNeko-App (commits 9ddb445 → b53c55e). « Prod Exé » devient « Production » partout ; routes KN `/shows`.
+
+### Added
+
+- Modèles `Production` (spectacle d'UN artiste : contrat, frais généraux, clôture) et `ProductionOverhead`. `Deal.productionId`, `Deal.artistShareKind`, `Deal.coprodKnPct`. Migration `20260929180000_add_productions` : productions regroupées par (artiste principal, nom du spectacle), contrat explicite (prod-exé 15 % par défaut, co-prod 0 → aucun euro ne change).
+- Contrat artiste à deux taux cumulables (prod-exé % du CA, puis co-prod % du bénéfice restant), hérité par toutes les dates ; option « Contrat résidences » (taux distincts) prête pour l'étape 2.
+- Frais généraux lissés au prorata des représentations (dates annulées exclues), ligne « Frais généraux » sur la fiche date.
+- `/shows` (Productions : prochaines dates 30 j, en cours, dates à rattacher, terminées ; onglet « Toutes les dates » = ex-liste Prod Exé), `/shows/production/[id]` (Suivi / Dates / Résultats / Frais généraux / Contrat), `/shows/[id]` (fiche date). Anciennes URL `/deals/prod-executive*` redirigées.
+- Formulaire : suggestions de productions sur « Nom du spectacle », contrat hérité de la production.
+- Tests : frais généraux / contrat (KN), base des management fees, absence des management fees dans les bilans / exports.
+
+### Changed
+
+- Calcul d'une date (`lib/finance/show-financials.ts`) : part Pangee = prod-exé + co-prod, frais généraux et cachets en charges ; recalcul de toute la production.
+- Management fees : base = part Pangee de la date (`Deal.commissionAmount`), recalculées pour toutes les dates quand le contrat ou les frais généraux changent (lignes payées figées).
+- Process de déploiement porté de KN : `DEPLOY.md`, `npm run predeploy`, `npm run predeploy:rehearsal`, `scripts/dev-recette.mjs`, `deploy.ps1` (contrôles + tag `deploy-*`).
+
+---
+
 ## [Sprint 2 — Master data : kn-client + Artist + sidebar nav] — 2026-05-24
 
 Annuaire (Contact / Venue / VenueRoom) consommé depuis KN via API REST + table Artist locale Youri (rosters distincts) + vraie nav latérale.

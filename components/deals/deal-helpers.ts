@@ -12,7 +12,7 @@ import type { DealCategory, DealStatus, PaymentStatus } from "@prisma/client";
 export function dealHref(category: DealCategory, id: string): string {
   switch (category) {
     case "PROD_EXE":
-      return `/deals/prod-executive/${id}`;
+      return `/shows/${id}`;
     case "CACHETS":
       return `/deals/cachets/${id}`;
     case "BOOKING":
@@ -33,7 +33,7 @@ export function formatEur(n: number | null | undefined, opts?: { decimals?: numb
 
 export const DEAL_CATEGORY_LABELS: Record<DealCategory, string> = {
   BOOKING: "Booking",
-  PROD_EXE: "Prod Exé",
+  PROD_EXE: "Production",
   CACHETS: "Cachets",
 };
 

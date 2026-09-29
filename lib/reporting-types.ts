@@ -30,7 +30,7 @@ export function parseReportingPeriod(v: string | undefined): ReportingPeriod {
 /** Labels lisibles par catégorie (cohérent avec UI Pangee). */
 export const CATEGORY_LABELS: Record<DealCategory, string> = {
   BOOKING: "Booking",
-  PROD_EXE: "Prod Exécutive",
+  PROD_EXE: "Production",
   CACHETS: "Cachets",
 };
 

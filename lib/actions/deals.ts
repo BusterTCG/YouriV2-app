@@ -10,7 +10,12 @@ import { safeAction, type ActionResult } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
 import { listContacts, listVenues, type KnContact, type KnVenue } from "@/lib/kn-client";
 import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
-import { recomputeShowFinancials } from "@/lib/finance/show-financials";
+import {
+  recomputeProductionFinancials,
+  recomputeShowFinancials,
+} from "@/lib/finance/show-financials";
+import { syncDealProductionLink } from "@/lib/finance/production-link";
+import { shareKindFor } from "@/lib/finance/production-overhead";
 import { revalidateAllDealRoutes } from "@/lib/revalidate-deals";
 import { revalidateAfterTaskMutation } from "@/lib/revalidate-helpers";
 import { autoCreateTasksForDeal } from "@/lib/tasks-autocreate";
@@ -65,6 +70,8 @@ const CreateDealSchema = z.object({
   isMultiDate: z.boolean().optional(),
   venueDealKind: z.nativeEnum(VenueDealKind).optional().nullable(),
   prodExePct: z.number().min(0).max(100).optional().nullable(),
+  /** Co-prod Pangee : % du bénéfice restant (contrat à deux taux, portage KN). */
+  coprodKnPct: z.number().min(0).max(100).optional().nullable(),
   // ── Champs CACHETS (Stan 2026-05-28 Sprint 5) ──
   /** Montant facturé au prestataire (tiers). Sert au calcul de la Marge Brute. */
   budgetAmount: z.number().nonnegative().optional().nullable(),
@@ -110,6 +117,10 @@ export async function createDeal(
               isMultiDate: data.isMultiDate ?? false,
               venueDealKind: data.venueDealKind ?? null,
               prodExePct: data.prodExePct ?? null,
+              coprodKnPct: data.coprodKnPct ?? 0,
+              // Contrat artiste (portage KN) : marqueur déduit des deux taux.
+              // Remplacé par celui de la production si la date y est rattachée.
+              artistShareKind: shareKindFor(data.prodExePct, data.coprodKnPct ?? 0),
             }
           : {}),
         // Champs Cachets (Stan 2026-05-28 Sprint 5)
@@ -150,10 +161,15 @@ export async function createDeal(
       await prisma.deal.delete({ where: { id: created.id } }).catch(() => {});
       throw taskErr;
     }
+    // Production : rattachement auto (artiste principal + nom du spectacle),
+    // création de la production si besoin, recalcul (portage KN).
+    if (data.category === DealCategory.PROD_EXE) {
+      await syncDealProductionLink(created.id);
+    }
     revalidatePath("/deals");
     revalidatePath("/dashboard");
     revalidatePath("/deals/booking");
-    revalidatePath("/deals/prod-executive");
+    revalidatePath("/shows", "layout");
     revalidatePath("/deals/cachets");
     revalidatePath("/taches");
     return { id: created.id };
@@ -194,6 +210,9 @@ export async function updateDealMeta(
       patch.venueCity = extractCityFromAddress(patch.venueAddress);
     }
     await prisma.deal.update({ where: { id }, data: patch });
+    // Date d'une production : l'ordre des dates (reliquat d'arrondi des frais
+    // généraux) peut changer.
+    await syncDealProductionLink(id);
     revalidateAllDealRoutes(id);
   });
 }
@@ -237,6 +256,8 @@ export async function softDeleteDeal(id: string): Promise<ActionResult> {
       action: "delete",
       summary: `Deal supprimé : « ${existing.title} » (${existing.category})`,
     });
+    // Production : la date sort de la répartition des frais généraux.
+    await syncDealProductionLink(id);
     revalidateDealWide();
   });
 }
@@ -274,6 +295,7 @@ export async function restoreDeal(id: string): Promise<ActionResult> {
       action: "restore",
       summary: `Deal restauré : « ${existing.title} »`,
     });
+    await syncDealProductionLink(id);
     revalidateDealWide();
   });
 }
@@ -289,10 +311,18 @@ export async function permanentlyDeleteDeal(id: string): Promise<ActionResult> {
     if (!id) throw new Error("ID deal manquant");
     const existing = await prisma.deal.findUnique({
       where: { id },
-      select: { id: true, title: true, category: true, date: true, deletedAt: true },
+      select: {
+        id: true,
+        title: true,
+        category: true,
+        date: true,
+        deletedAt: true,
+        productionId: true,
+      },
     });
     if (!existing) throw new Error("Deal introuvable");
     await prisma.deal.delete({ where: { id } });
+    if (existing.productionId) await recomputeProductionFinancials(existing.productionId);
     await logAudit({
       entity: "Deal",
       entityId: id,
@@ -310,7 +340,7 @@ function revalidateDealWide(): void {
   revalidatePath("/dashboard");
   revalidatePath("/reporting");
   revalidatePath("/deals/booking");
-  revalidatePath("/deals/prod-executive");
+  revalidatePath("/shows", "layout");
   revalidatePath("/deals/cachets");
   revalidatePath("/deals/management-fees");
   revalidatePath("/artistes");
@@ -351,6 +381,8 @@ export async function addDealArtist(
       },
       select: { id: true },
     });
+    // Production : cachet = charge de la date, artiste principal = production.
+    await syncDealProductionLink(dealId);
     await recomputeMfForDeal(dealId);
     revalidatePath("/dashboard");
     revalidatePath("/artistes");
@@ -371,6 +403,7 @@ export async function removeDealArtist(id: string): Promise<ActionResult> {
       data: { deletedAt: new Date() },
       select: { dealId: true },
     });
+    await syncDealProductionLink(da.dealId);
     await recomputeMfForDeal(da.dealId);
     revalidatePath("/dashboard");
     revalidatePath("/artistes");
@@ -498,6 +531,8 @@ export async function setDealPrimaryArtist(
       });
     }
 
+    // Production : l'artiste principal détermine la production de la date.
+    await syncDealProductionLink(dealId);
     await recomputeMfForDeal(dealId);
     // Stan 2026-05-30 audit Sprint 5 : helper centralisé qui revalide les 3
     // catégories d'un coup (évite les oublis).
@@ -546,6 +581,8 @@ export async function setDealStatus(
       where: { id: dealId },
       data: { status },
     });
+    // Production : une date annulée sort de la répartition des frais généraux.
+    await syncDealProductionLink(dealId);
     // Stan 2026-05-30 audit Sprint 5 : helper centralisé. La page liste MF
     // exclut les deals ANNULE → revalider aussi.
     revalidateAllDealRoutes(dealId, true);

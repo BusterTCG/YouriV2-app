@@ -37,9 +37,9 @@ const CATEGORIES: Array<{
   },
   {
     category: "PROD_EXE",
-    label: "Prod Exé",
-    description: "Production exécutive 15 % — lignes recettes/dépenses, multi-date.",
-    href: "/deals/prod-executive",
+    label: "Production",
+    description: "Spectacles produits par Pangee : dates, résidences, frais généraux, contrat artiste.",
+    href: "/shows",
     icon: TrendingUp,
     wip: false,
   },

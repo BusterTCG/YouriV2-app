@@ -20,14 +20,14 @@ This version (Next.js 16) has breaking changes — APIs, conventions, and file s
 
 - Multi-user (table `User`, sessions, role ADMIN/MEMBER, audit log par user)
 - Multi-artiste sur les deals (table `DealArtiste`, cachet + paymentStatus individuels)
-- 3 catégories de deals : Booking / Prod Exé 15% / Cachets (vs 5 sur KN)
+- 3 catégories de deals : Booking / Production (ex-Prod Exé, enum `PROD_EXE`) / Cachets (vs 5 sur KN)
+- Management fees (DealManagementFee) : internes Pangee, JAMAIS dans les bilans / comptes de production / exports / compte artiste (garde : `tests/finance/no-management-fees.test.ts`)
 - API HTTP vers KN pour Contact/Venue/VenueRoom (Youri n'a PAS de table locale)
 
 ## Hors scope V2 — NE PAS implémenter
 
 - Google Calendar / ICS sync
 - Appointments / RDV séparés des deals
-- Shows page séparée (intégré dans Prod Exé)
 - Briefing / FDR / PDF impression
 - Claude API / chat / quick-add AI
 - Page facturation dédiée (les statuts vivent sur la page deal)

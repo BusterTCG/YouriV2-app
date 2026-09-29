@@ -121,7 +121,7 @@ export async function setManagementFeePool(
     // Audit Stan 2026-05-27 : un MF peut être lié à un deal Booking OU Prod Exé.
     // On revalide les deux fiches (cheap : Next ignore le path inexistant).
     revalidatePath(`/deals/booking/${dealId}`);
-    revalidatePath(`/deals/prod-executive/${dealId}`);
+    revalidatePath(`/shows/${dealId}`);
     revalidatePath("/dashboard");
     revalidatePath("/deals/management-fees");
   });
@@ -189,7 +189,7 @@ export async function updateManagementFee(
     });
     // Audit Stan 2026-05-27 : cf. setManagementFeePool.
     revalidatePath(`/deals/booking/${fee.dealId}`);
-    revalidatePath(`/deals/prod-executive/${fee.dealId}`);
+    revalidatePath(`/shows/${fee.dealId}`);
     revalidatePath("/dashboard");
     revalidatePath("/deals/management-fees");
   });

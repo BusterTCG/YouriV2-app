@@ -45,6 +45,8 @@ import { VenueFormDialog } from "@/components/venues/venue-form-dialog";
 import { ArtistSelect } from "./artist-select";
 import { NewArtistDialog } from "@/components/artists/new-artist-dialog";
 import { VENUE_DEAL_KIND_FR } from "@/lib/production-line-labels";
+import { listProductionsForForm } from "@/lib/actions/productions";
+import { contractSummary } from "@/lib/finance/production-overhead";
 
 /**
  * Dialog Nouveau deal / Modifier deal — Sprint 4 v2 (Stan 2026-05-26).
@@ -84,6 +86,8 @@ export interface DealFormDeal {
   isMultiDate?: boolean;
   venueDealKind?: VenueDealKind | null;
   prodExePct?: number | null;
+  /** Date rattachée à une production (contrat hérité, non éditable ici). */
+  productionId?: string | null;
   /** Artiste principal du deal (1er DealArtiste actif). Permet d'éditer le
    *  lien artiste depuis le dialog de modification (Stan 2026-05-27). */
   artistId?: string | null;
@@ -102,16 +106,23 @@ interface Props {
   deal?: DealFormDeal;
   /** Catégorie du deal à créer (BOOKING par défaut). Inutile en mode édition. */
   category?: DealCategory;
+  /** Pré-remplissage à la création (ex. « Ajouter une date » depuis la fiche
+   *  production : artiste + spectacle). */
+  defaults?: {
+    artistId?: string | null;
+    artistName?: string | null;
+    showName?: string | null;
+  };
 }
 
 const CATEGORY_LABEL: Record<DealCategory, string> = {
   BOOKING: "Booking",
-  PROD_EXE: "Prod Exécutive",
+  PROD_EXE: "Production",
   CACHETS: "Cachets",
 };
 const CATEGORY_PATH: Record<DealCategory, string> = {
   BOOKING: "/deals/booking",
-  PROD_EXE: "/deals/prod-executive",
+  PROD_EXE: "/shows",
   CACHETS: "/deals/cachets",
 };
 
@@ -120,6 +131,7 @@ export function DealFormDialog({
   onOpenChange,
   deal,
   category = DealCategory.BOOKING,
+  defaults,
 }: Props) {
   const router = useRouter();
   const isEdit = !!deal;
@@ -146,9 +158,11 @@ export function DealFormDialog({
   );
   const [showTime, setShowTime] = useState(deal?.showTime ?? "");
   const [status, setStatus] = useState<DealStatus>(deal?.status ?? DealStatus.LEAD);
-  const [artistId, setArtistId] = useState<string | null>(deal?.artistId ?? null);
+  const [artistId, setArtistId] = useState<string | null>(
+    deal?.artistId ?? defaults?.artistId ?? null,
+  );
   const [artistName, setArtistName] = useState<string | null>(
-    deal?.artistName ?? null,
+    deal?.artistName ?? defaults?.artistName ?? null,
   );
   const [organizer, setOrganizer] = useState<ContactSnapshot | null>(
     deal?.organizerId
@@ -173,7 +187,7 @@ export function DealFormDialog({
   const [notes, setNotes] = useState(deal?.notes ?? "");
 
   // Champs spécifiques Prod Exé — pré-remplis en mode edit depuis le deal
-  const [showName, setShowName] = useState(deal?.showName ?? "");
+  const [showName, setShowName] = useState(deal?.showName ?? defaults?.showName ?? "");
   const [isMultiDate, setIsMultiDate] = useState(deal?.isMultiDate ?? false);
   const [venueDealKind, setVenueDealKind] = useState<VenueDealKind | "">(
     deal?.venueDealKind ?? "",
@@ -181,6 +195,35 @@ export function DealFormDialog({
   const [prodExePct, setProdExePct] = useState(
     deal?.prodExePct != null ? String(deal.prodExePct) : "15",
   );
+  // Contrat artiste à deux taux cumulables (portage KN 2026-09-29) : prod-exé
+  // % du CA puis co-prod % du bénéfice restant. Co-prod 0 par défaut.
+  const [coprodKnPct, setCoprodKnPct] = useState("0");
+
+  // Productions existantes — suggestions du champ « Nom du spectacle » : la
+  // date est rattachée côté serveur à la production (artiste + nom).
+  const [productions, setProductions] = useState<
+    Awaited<ReturnType<typeof listProductionsForForm>>
+  >([]);
+  useEffect(() => {
+    if (!open || !isProdExe) return;
+    let cancelled = false;
+    listProductionsForForm().then((list) => {
+      if (!cancelled) setProductions(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isProdExe]);
+  const artistProductions = productions.filter((p) => p.artistId === artistId);
+  const matchedProduction = (() => {
+    const key = showName.trim().replace(/\s+/g, " ").toLocaleLowerCase("fr-FR");
+    if (!key) return null;
+    return (
+      artistProductions.find(
+        (p) => p.name.trim().replace(/\s+/g, " ").toLocaleLowerCase("fr-FR") === key,
+      ) ?? null
+    );
+  })();
 
   // ── États spécifiques CACHETS (Stan 2026-05-28 Sprint 5) ──
   const [budgetAmount, setBudgetAmount] = useState(
@@ -284,7 +327,7 @@ export function DealFormDialog({
       return;
     }
     if (isProdExe && !isEdit && !artistId) {
-      setError("Artiste requis pour un deal Prod Exécutive.");
+      setError("Artiste requis pour une date de production.");
       return;
     }
     if (isCachets && !isEdit && !artistId) {
@@ -327,7 +370,8 @@ export function DealFormDialog({
             showName: showName.trim() || null,
             isMultiDate,
             venueDealKind: venueDealKind || null,
-            prodExePct: prodExePct === "" ? null : Number(prodExePct),
+            // Date d'une production : contrat hérité (ignoré côté serveur).
+            ...(deal.productionId ? {} : { prodExePct: parseRate(prodExePct) }),
           });
           // Update artiste principal si changé
           if (artistId !== (deal.artistId ?? null)) {
@@ -359,7 +403,8 @@ export function DealFormDialog({
                 showName: showName.trim() || null,
                 isMultiDate,
                 venueDealKind: venueDealKind || null,
-                prodExePct: Number(prodExePct) || null,
+                prodExePct: parseRate(prodExePct),
+                coprodKnPct: parseRate(coprodKnPct),
               }
             : {}),
           ...(isCachets
@@ -404,13 +449,19 @@ export function DealFormDialog({
             <DialogHeader>
               <DialogTitle>
                 {isEdit
-                  ? "Modifier le deal"
-                  : `Nouveau deal ${CATEGORY_LABEL[category]}`}
+                  ? isProdExe
+                    ? "Modifier la date"
+                    : "Modifier le deal"
+                  : isProdExe
+                    ? "Nouvelle date de production"
+                    : `Nouveau deal ${CATEGORY_LABEL[category]}`}
               </DialogTitle>
               <DialogDescription>
                 {isEdit
                   ? "Met à jour le titre, la date, le lieu, l'organisateur ou les notes."
-                  : `Crée un nouveau deal ${CATEGORY_LABEL[category]}. Tu pourras ajouter les détails après création.`}
+                  : isProdExe
+                    ? "Crée une date de production. Tu pourras ajouter les détails après création."
+                    : `Crée un nouveau deal ${CATEGORY_LABEL[category]}. Tu pourras ajouter les détails après création.`}
               </DialogDescription>
             </DialogHeader>
 
@@ -575,9 +626,25 @@ export function DealFormDialog({
                       id="showName"
                       value={showName}
                       onChange={(e) => setShowName(e.target.value)}
-                      placeholder=""
+                      placeholder="La Source / Insomniaque…"
+                      list="deal-form-productions"
+                      autoComplete="off"
                       disabled={pending}
                     />
+                    <datalist id="deal-form-productions">
+                      {artistProductions.map((p) => (
+                        <option key={p.id} value={p.name} />
+                      ))}
+                    </datalist>
+                    {showName.trim() && artistId && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {matchedProduction
+                          ? `↳ Rattachée à la production « ${matchedProduction.name} »${
+                              matchedProduction.status === "CLOSED" ? " (clôturée)" : ""
+                            }`
+                          : "↳ Nouvelle production créée pour ce spectacle"}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
@@ -792,7 +859,7 @@ export function DealFormDialog({
             {isProdExe && (
               <Section eyebrow="Financier">
                 <p className="rounded-md border border-dashed bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
-                  💡 Pour un deal Prod Exé, les montants sont calculés
+                  💡 Pour une date de production, les montants sont calculés
                   automatiquement depuis les lignes de production (recettes /
                   charges) après création.
                 </p>
@@ -825,19 +892,49 @@ export function DealFormDialog({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1.5">
-                    <FieldLabel>Commission %</FieldLabel>
-                    <Input
-                      type="number"
-                      value={prodExePct}
-                      onChange={(e) => setProdExePct(e.target.value)}
-                      min={0}
-                      max={100}
-                      className="h-9 text-sm text-right tabular-nums"
-                      disabled={pending}
-                    />
-                  </div>
                 </div>
+                {/* Contrat artiste : deux taux cumulables (portage KN) —
+                    prod-exé % du CA puis co-prod % du bénéfice restant.
+                    Date d'une production : contrat de l'exploitation, hérité
+                    (modifiable sur la fiche production, onglet Contrat). */}
+                {(isEdit ? deal?.productionId : matchedProduction) ? (
+                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                    Contrat artiste hérité de la production
+                    {matchedProduction ? ` « ${matchedProduction.name} »` : ""}
+                    {matchedProduction
+                      ? matchedProduction.artistShareKind
+                        ? ` : ${contractSummary(matchedProduction)}`
+                        : " (non défini — à renseigner sur la production)"
+                      : " — modifiable sur la fiche production (onglet Contrat)"}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1.5">
+                      <FieldLabel>Prod-exé Pangee (% du CA)</FieldLabel>
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        value={prodExePct}
+                        onChange={(e) => setProdExePct(e.target.value)}
+                        placeholder="0"
+                        className="h-9 text-sm text-right tabular-nums"
+                        disabled={pending}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <FieldLabel>Co-prod Pangee (% du bénéfice)</FieldLabel>
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        value={coprodKnPct}
+                        onChange={(e) => setCoprodKnPct(e.target.value)}
+                        placeholder="0"
+                        className="h-9 text-sm text-right tabular-nums"
+                        disabled={pending || isEdit}
+                      />
+                    </div>
+                  </div>
+                )}
               </Section>
             )}
 
@@ -1024,4 +1121,12 @@ function toDateInput(d: Date): string {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+/** Taux saisi → nombre (virgule acceptée, clavier iPhone) ; vide / invalide → null. */
+function parseRate(v: string): number | null {
+  const t = v.trim().replace(",", ".");
+  if (t === "") return null;
+  const n = Number(t);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
 }

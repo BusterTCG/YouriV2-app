@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 const CATEGORIES = [
   { value: "all", label: "Toutes" },
   { value: "BOOKING", label: "Booking" },
-  { value: "PROD_EXE", label: "Prod Exé" },
+  { value: "PROD_EXE", label: "Production" },
   { value: "CACHETS", label: "Cachets" },
 ] as const;
 

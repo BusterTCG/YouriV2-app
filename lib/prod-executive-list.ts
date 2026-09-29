@@ -3,7 +3,6 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import type { Prisma, VenueDealKind } from "@prisma/client";
 import { sortArtistsDiversLast } from "@/lib/artists";
-import { computeProdExeBrute } from "@/lib/finance/show-financials";
 import { getPeriodRange, type PeriodPreset } from "@/lib/period-presets";
 import {
   STATUS_OPTIONS,
@@ -294,18 +293,16 @@ export async function getProdExeDealsList(opts: {
     const margePct =
       totalRevenue > 0 ? (margePangee / totalRevenue) * 100 : null;
 
-    // Marge Brute = commission = % × CA
-    const pct =
-      d.prodExePct != null
-        ? Number(d.prodExePct)
-        : d.commissionPct != null
-          ? Number(d.commissionPct)
-          : 15;
-    const margeBrute = computeProdExeBrute(totalRevenue, pct);
-    // Part Artiste = CA − Charges − Cachet Art. − Commission Pangee
-    // (Stan 2026-05-27 v2 : Cachet Art. inclus dans les charges, donc déduit
-    // aussi de la Part Artiste pour cohérence avec la fiche show).
-    const partArtiste = totalRevenue - totalCost - totalArtistes - margeBrute;
+    // Marge Brute = part Pangee de la date (scalar recalculé : prod-exé % du
+    // CA + co-prod % du bénéfice, frais généraux de la production inclus —
+    // refonte Production 2026-09-29, lib/finance/show-financials.ts).
+    const margeBrute = d.commissionAmount != null ? Number(d.commissionAmount) : 0;
+    // Part Artiste = scalar recalculé (CA − charges − cachets − frais
+    // généraux − part Pangee).
+    const partArtiste =
+      d.artistAmount != null
+        ? Number(d.artistAmount)
+        : totalRevenue - totalCost - totalArtistes - margeBrute;
     // Management Fees totaux du deal
     const totalMf = d.managementFees.reduce(
       (acc, mf) => acc + (mf.amount != null ? Number(mf.amount) : 0),

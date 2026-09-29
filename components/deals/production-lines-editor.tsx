@@ -88,6 +88,16 @@ interface Props {
   /** Statut consolidé "Part Artiste" — driver UI séparé des cachets
    *  individuels (Stan 2026-05-27 v2). */
   artistStatus: PaymentStatus;
+  /** Co-prod Pangee : % du bénéfice restant (contrat de la production). */
+  coprodKnPct?: number | null;
+  /** Quote-part des frais généraux de la production (lissée au prorata des
+   *  représentations) — ligne de charge virtuelle, non éditable ici. */
+  overhead?: {
+    amount: number;
+    performances: number;
+    perPerformance: number;
+    productionId: string;
+  } | null;
 }
 
 export function ProductionLinesEditor({
@@ -97,6 +107,8 @@ export function ProductionLinesEditor({
   prodExePct,
   artistes,
   artistStatus,
+  coprodKnPct,
+  overhead,
 }: Props) {
   void dealId; // utilisé via les actions importées dans les sous-composants
   // Index par label : plusieurs lignes possibles par catégorie (sous-entrées).
@@ -190,8 +202,15 @@ export function ProductionLinesEditor({
     (s, a) => s + (a.cachetAmount ?? 0),
     0,
   );
-  const totalCost = realCost + prodExeAmount + totalArtistes;
-  const margin = totalRevenue - totalCost;
+  const overheadAmount = overhead?.amount ?? 0;
+  const totalCost = realCost + prodExeAmount + totalArtistes + overheadAmount;
+  // Contrat à deux taux (refonte Production 2026-09-29) : le bénéfice restant
+  // après prod-exé est partagé, Pangee co-prod %, l'artiste le reste. Même
+  // arrondi que lib/finance/production-overhead.ts `computeShowScalars`.
+  const profit = totalRevenue - totalCost;
+  const cp = coprodKnPct ?? 0;
+  const knShare = Math.round(profit * (cp / 100));
+  const margin = profit - knShare;
 
   return (
     <div className="space-y-5">
@@ -331,6 +350,20 @@ export function ProductionLinesEditor({
             );
           }
 
+          // Quote-part des frais généraux de la production (KN) — en fin
+          // de section, éditable uniquement sur la fiche production.
+          if (overhead && overheadAmount !== 0) {
+            elements.push(
+              <VirtualOverheadLine
+                key="virtual-overhead"
+                amount={overheadAmount}
+                performances={overhead.performances}
+                perPerformance={overhead.perPerformance}
+                productionId={overhead.productionId}
+              />,
+            );
+          }
+
           return elements;
         })()}
 
@@ -398,7 +431,9 @@ export function ProductionLinesEditor({
             = Part Artiste
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5">
-            CA − Charges − Commission Pangee ({pct}%)
+            {cp > 0
+              ? `CA − Charges − Prod-exé Pangee (${pct}%) − Co-prod Pangee (${cp}% du bénéfice)`
+              : `CA − Charges − Commission Pangee (${pct}%)`}
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -479,6 +514,50 @@ function VirtualProdExeLine({ amount, pct }: { amount: number; pct: number }) {
       {/* Spacer aligné sur le bouton "+" des LineEditor (Stan 2026-05-27 :
           garantit que tous les montants finissent à la même position X). */}
       <div className="w-7 shrink-0" />
+    </div>
+  );
+}
+
+/**
+ * Ligne virtuelle "Frais généraux" — part de cette date dans les frais communs
+ * de la production (carte SNCF, affiches…), répartis au prorata des
+ * représentations. Éditable uniquement depuis la fiche production (KN).
+ */
+function VirtualOverheadLine({
+  amount,
+  performances,
+  perPerformance,
+  productionId,
+}: {
+  amount: number;
+  performances: number;
+  perPerformance: number;
+  productionId: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 px-3 py-2 hover:bg-accent/30 transition-colors flex-wrap sm:flex-nowrap">
+      <div className="w-[200px] shrink-0 min-w-0">
+        <div className="text-sm font-medium leading-tight">Frais généraux</div>
+        <div className="text-[11px] text-muted-foreground leading-tight">
+          {performances} repr. ×{" "}
+          {perPerformance.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} €
+        </div>
+      </div>
+      <div className="w-32 shrink-0">
+        <Input
+          type="number"
+          value={amount}
+          readOnly
+          tabIndex={-1}
+          className="h-8 text-sm text-right tabular-nums cursor-default focus-visible:ring-0 focus-visible:border-input"
+        />
+      </div>
+      <a
+        href={`/shows/production/${productionId}?tab=frais`}
+        className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+      >
+        Modifier sur la production
+      </a>
     </div>
   );
 }

@@ -38,7 +38,7 @@ export default async function SettingsIndexPage() {
           href="/settings/templates"
           icon={<ListChecks className="h-5 w-5" />}
           title="Templates de tâches"
-          description="Pipelines auto-générés à la création d'un deal (Booking / Prod Exé / Cachets)."
+          description="Pipelines auto-générés à la création d'un deal (Booking / Production / Cachets)."
         />
         {isAdmin && (
           <SettingsCard

@@ -51,7 +51,9 @@ export function DealsFilters({ period, status, artistSlug, artists }: Props) {
     period !== DEFAULT_PERIOD || status !== DEFAULT_STATUS || !!artistSlug;
 
   function reset() {
-    router.replace(pathname);
+    // Conserve l'onglet (/shows?view=dates) — seuls les filtres sont remis à zéro.
+    const view = params.get("view");
+    router.replace(view ? `${pathname}?view=${view}` : pathname);
   }
 
   return (

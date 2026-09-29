@@ -13,7 +13,7 @@ import { PRODUCTION_LINE_KIND_OF } from "@/lib/production-line-labels";
 /**
  * Server actions pour les lignes de production (Sprint 4, Prod Exécutive).
  *
- * CRUD du tableau de prod sur la fiche détail `/deals/prod-executive/[id]`.
+ * CRUD du tableau de prod sur la fiche détail `/shows/[id]`.
  * Chaque mutation déclenche :
  *   1. `recomputeShowFinancials(dealId)` — met à jour grossAmount /
  *      commissionPct / commissionAmount / artistAmount sur Deal
@@ -69,8 +69,8 @@ export async function addProductionLine(
     await recomputeMfForDeal(dealId);
 
     revalidatePath("/dashboard");
-    revalidatePath("/deals/prod-executive");
-    revalidatePath(`/deals/prod-executive/${dealId}`);
+    revalidatePath("/shows");
+    revalidatePath(`/shows/${dealId}`);
     revalidatePath("/deals/management-fees");
     return { id: created.id };
   });
@@ -166,8 +166,8 @@ export async function updateProductionLine(
     }
 
     revalidatePath("/dashboard");
-    revalidatePath("/deals/prod-executive");
-    revalidatePath(`/deals/prod-executive/${line.dealId}`);
+    revalidatePath("/shows");
+    revalidatePath(`/shows/${line.dealId}`);
     if (marginChanged) revalidatePath("/deals/management-fees");
   });
 }
@@ -186,8 +186,8 @@ export async function deleteProductionLine(id: string): Promise<ActionResult> {
     await recomputeShowFinancials(line.dealId);
     await recomputeMfForDeal(line.dealId);
     revalidatePath("/dashboard");
-    revalidatePath("/deals/prod-executive");
-    revalidatePath(`/deals/prod-executive/${line.dealId}`);
+    revalidatePath("/shows");
+    revalidatePath(`/shows/${line.dealId}`);
     revalidatePath("/deals/management-fees");
   });
 }
@@ -268,8 +268,8 @@ export async function upsertProductionLine(
     await recomputeShowFinancials(dealId);
     await recomputeMfForDeal(dealId);
     revalidatePath("/dashboard");
-    revalidatePath("/deals/prod-executive");
-    revalidatePath(`/deals/prod-executive/${dealId}`);
+    revalidatePath("/shows");
+    revalidatePath(`/shows/${dealId}`);
     revalidatePath("/deals/management-fees");
   });
 }
@@ -311,7 +311,7 @@ export async function addEmptyProductionLine(
     });
     // Pas de recompute (amount=0 → marge inchangée).
     revalidatePath("/dashboard");
-    revalidatePath(`/deals/prod-executive/${dealId}`);
+    revalidatePath(`/shows/${dealId}`);
   });
 }
 

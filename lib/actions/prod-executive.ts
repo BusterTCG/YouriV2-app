@@ -8,6 +8,8 @@ import { requireUser } from "@/lib/auth/users";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { recomputeShowFinancials } from "@/lib/finance/show-financials";
 import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
+import { syncDealProductionLink } from "@/lib/finance/production-link";
+import { revalidateAllDealRoutes } from "@/lib/revalidate-deals";
 
 /**
  * Server actions spécifiques Prod Exécutive (Sprint 4).
@@ -67,6 +69,14 @@ export async function updateShowDetails(
     const { id, multiDateDates, ...rest } =
       UpdateShowDetailsSchema.parse(input);
 
+    const current = await prisma.deal.findUnique({
+      where: { id },
+      select: { productionId: true },
+    });
+    // Date d'une production (portage KN) : le contrat artiste est celui de
+    // l'exploitation — il ne se modifie que sur la fiche production.
+    if (current?.productionId) delete rest.prodExePct;
+
     const data: Prisma.DealUpdateInput = {};
     // Champs simples — on copie tels quels.
     if (rest.venueDealKind !== undefined) data.venueDealKind = rest.venueDealKind;
@@ -108,18 +118,25 @@ export async function updateShowDetails(
 
     await prisma.deal.update({ where: { id }, data });
 
-    // Si venueDealKind ou prodExePct ont bougé → recompute financials
-    // (commissionAmount / artistAmount peuvent changer).
+    // Si venueDealKind, prodExePct ou le nombre de représentations (quote-part
+    // des frais généraux) ont bougé → recompute financials (commissionAmount /
+    // artistAmount peuvent changer).
     const financialChanged =
-      rest.venueDealKind !== undefined || rest.prodExePct !== undefined;
-    if (financialChanged) {
+      rest.venueDealKind !== undefined ||
+      rest.prodExePct !== undefined ||
+      rest.isMultiDate !== undefined ||
+      rest.performanceCount !== undefined ||
+      multiDateDates !== undefined;
+    if (rest.showName !== undefined) {
+      // Nom du spectacle → rattachement à la production (+ recalcul).
+      await syncDealProductionLink(id);
+    } else if (financialChanged) {
       await recomputeShowFinancials(id);
       await recomputeMfForDeal(id);
     }
 
     revalidatePath("/dashboard");
-    revalidatePath("/deals/prod-executive");
-    revalidatePath(`/deals/prod-executive/${id}`);
-    if (financialChanged) revalidatePath("/deals/management-fees");
+    revalidatePath("/shows", "layout");
+    revalidateAllDealRoutes(id, financialChanged || rest.showName !== undefined);
   });
 }

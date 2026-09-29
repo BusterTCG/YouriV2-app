@@ -18,7 +18,7 @@ export function NewDealButton({ category }: { category?: DealCategory }) {
     <>
       <Button size="sm" onClick={() => setOpen(true)} className="gap-1.5">
         <Plus className="h-4 w-4" />
-        Nouveau deal
+        {category === "PROD_EXE" ? "Nouvelle date" : "Nouveau deal"}
       </Button>
       <DealFormDialog open={open} onOpenChange={setOpen} category={category} />
     </>

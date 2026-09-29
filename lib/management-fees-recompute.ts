@@ -2,7 +2,6 @@ import "server-only";
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { computeProdExeBrute } from "@/lib/finance/show-financials";
 import { computeCachetsMargeBrute } from "@/lib/finance/cachet-payroll";
 
 /**
@@ -11,7 +10,9 @@ import { computeCachetsMargeBrute } from "@/lib/finance/cachet-payroll";
  *
  * Base par catégorie :
  *   - **BOOKING** : margeYouri = budget − Σ artistes − Σ charges
- *   - **PROD_EXE** : margeYouri = Σ recettes × prodExePct%  (= commission)
+ *   - **PROD_EXE** : margeYouri = part Pangee de la date (`Deal.commissionAmount`
+ *     = prod-exé % du CA + co-prod % du bénéfice, frais généraux inclus),
+ *     calculée par lib/finance/show-financials.ts — refonte Production 2026-09-29
  *   - **CACHETS** : margeYouri = budget × cachetsFeesPct%  (Stan 2026-05-28)
  *
  * À appeler **après** toute action qui modifie la marge brute :
@@ -20,6 +21,7 @@ import { computeCachetsMargeBrute } from "@/lib/finance/cachet-payroll";
  *   - addDealCharge / removeDealCharge / updateDealCharge (Booking)
  *   - upsertProductionLine / deleteProductionLine (Prod Exé)
  *   - updateShowDetails (changement venueDealKind / prodExePct, Prod Exé)
+ *   - recomputeProductionFinancials (contrat, frais généraux — toutes les dates)
  *
  * Logique :
  *   - Si margeYouri ≤ 0 → tous les amounts MF passent à 0 (cohérent avec le
@@ -38,7 +40,7 @@ export async function recomputeMfForDeal(dealId: string): Promise<void> {
     select: {
       category: true,
       budgetAmount: true,
-      prodExePct: true,
+      commissionAmount: true,
       cachetsFeesPct: true,
       linkedToOwnProd: true,
       dealArtistes: {
@@ -48,10 +50,6 @@ export async function recomputeMfForDeal(dealId: string): Promise<void> {
       dealCharges: {
         where: { deletedAt: null },
         select: { amount: true },
-      },
-      productionLines: {
-        where: { deletedAt: null },
-        select: { kind: true, amount: true, coveredByVenue: true },
       },
       managementFees: {
         where: { deletedAt: null },
@@ -63,16 +61,9 @@ export async function recomputeMfForDeal(dealId: string): Promise<void> {
 
   let margeYouri: number;
   if (deal.category === "PROD_EXE") {
-    // Marge brute Pangee = commission = Σ recettes × prodExePct%
-    const totalRevenue = deal.productionLines.reduce(
-      (acc, l) =>
-        l.kind === "REVENUE" && !l.coveredByVenue && l.amount != null
-          ? acc + Number(l.amount)
-          : acc,
-      0,
-    );
-    const pct = deal.prodExePct != null ? Number(deal.prodExePct) : 15;
-    margeYouri = computeProdExeBrute(totalRevenue, pct);
+    // Marge brute Pangee = part Pangee de la date (prod-exé + co-prod), déjà
+    // recalculée par recomputeShowFinancials (appelé avant ce recompute).
+    margeYouri = deal.commissionAmount != null ? Number(deal.commissionAmount) : 0;
   } else if (deal.category === "CACHETS") {
     // Marge brute Pangee = Σ prestations − Σ cachets bruts (Stan 2026-06-17).
     // Pangee facture le tiers, paie le cachet brut à l'artiste, garde la diff.
@@ -127,5 +118,11 @@ export async function recomputeMfForDeal(dealId: string): Promise<void> {
   // La page liste /deals/management-fees agrège tous les fees → invalider son
   // cache pour que les nouveaux amounts soient visibles immédiatement (audit
   // 2026-05-26 : sinon stale après chaque modif budget/cachet/charge).
-  revalidatePath("/deals/management-fees");
+  // try/catch : ce recalcul tourne aussi hors requête Next (répétition
+  // pré-déploiement, scripts) où revalidatePath n'est pas disponible.
+  try {
+    revalidatePath("/deals/management-fees");
+  } catch {
+    // hors contexte Next : rien à invalider
+  }
 }
