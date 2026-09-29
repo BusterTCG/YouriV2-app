@@ -6,6 +6,7 @@ import {
   allocateOverhead,
   computeShowScalars,
   performanceCountOf,
+  residencyContractOf,
   type OverheadAllocation,
 } from "@/lib/finance/production-overhead";
 import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
@@ -73,12 +74,24 @@ export async function recomputeProductionFinancials(
 async function syncProductionContract(productionId: string): Promise<void> {
   const prod = await prisma.production.findUnique({ where: { id: productionId } });
   if (!prod) return;
+  // Dates uniques (tournée) → contrat principal.
   await prisma.deal.updateMany({
-    where: { productionId },
+    where: { productionId, residencyId: null },
     data: {
       artistShareKind: prod.artistShareKind,
       prodExePct: prod.prodExePct,
       coprodKnPct: prod.coprodKnPct,
+    },
+  });
+  // Mois de résidence → contrat « Résidences » s'il est distinct (KN, Stan
+  // 2026-09-29), sinon le même.
+  const res = residencyContractOf(prod);
+  await prisma.deal.updateMany({
+    where: { productionId, residencyId: { not: null } },
+    data: {
+      artistShareKind: res.artistShareKind,
+      prodExePct: res.prodExePct,
+      coprodKnPct: res.coprodKnPct,
     },
   });
 }

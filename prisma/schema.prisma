@@ -503,7 +503,15 @@ model Deal {
   /// uniquement PROD_EXE. Rattachement auto par (artiste principal, showName),
   /// cf. lib/finance/production-link.ts. Refonte Production 2026-09-29.
   productionId String?
-  production   Production? @relation(fields: [productionId], references: [id], onDelete: SetNull)
+  production   Production?   @relation(fields: [productionId], references: [id], onDelete: SetNull)
+  /// Résidence (fiche multi-mois dans une même salle) à laquelle appartient
+  /// ce mois — null pour une date de tournée. Chaque mois reste un Deal
+  /// (unité financière : relevé du théâtre, charges, statuts, reporting).
+  residencyId  String?
+  residency    Residency?    @relation(fields: [residencyId], references: [id], onDelete: SetNull)
+  /// Séances (source de vérité des jours, horaires, payants, invités,
+  /// billetterie) — les champs historiques du Deal en sont dérivés.
+  performances Performance[]
 
   /// Contrat artiste (hérité de la Production) : marqueur « contrat défini ».
   artistShareKind ArtistShareKind?
@@ -626,6 +634,52 @@ model Deal {
   @@index([category])
   @@index([date])
   @@index([productionId])
+  @@index([residencyId])
+}
+
+/// Résidence : une même salle sur plusieurs mois (ex. « Petite Loge,
+/// sept → déc »). Fiche unique côté UI, mois à l'intérieur (1 Deal par mois).
+/// Portage KN (refonte production étape 2). Pas de table Venue locale chez
+/// Youri : salle = id KN + snapshot nom / ville (comme Deal.venueId).
+model Residency {
+  id           String     @id @default(cuid())
+  productionId String
+  production   Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  /// Nom affiché (par défaut le nom de la salle).
+  name         String
+  /// Salle KN (annuaire distant) — snapshot nom / ville.
+  venueId      String?
+  venueName    String?
+  venueCity    String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  deals Deal[]
+
+  @@index([productionId])
+}
+
+/// Séance d'une date / d'un mois de résidence (portage KN, étape 2).
+model Performance {
+  id             String   @id @default(cuid())
+  dealId         String
+  deal           Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  /// Jour de la séance (UTC midi).
+  date           DateTime
+  /// Horaire libre "19:30".
+  time           String?
+  /// Jauge de la séance — null = jauge de la date (Deal.capacity).
+  capacity       Int?
+  paying         Int?
+  invited        Int?
+  /// Billetterie HT de la séance = total vendu ce soir-là (avant partage en
+  /// co-réa). Sert au remplissage / ticket moyen / contrôle du relevé.
+  grossTicketing Decimal?
+  cancelled      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([dealId, date])
 }
 
 /// Production = exploitation d'un spectacle d'UN artiste (ex. « Insomniaque —
@@ -657,8 +711,9 @@ model Production {
   createdAt                 DateTime         @default(now())
   updatedAt                 DateTime         @updatedAt
 
-  deals     Deal[]
-  overheads ProductionOverhead[]
+  deals       Deal[]
+  overheads   ProductionOverhead[]
+  residencies Residency[]
 
   @@index([artistId])
 }

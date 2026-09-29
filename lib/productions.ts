@@ -220,6 +220,11 @@ export async function getProductionSummaries(
         where: { deletedAt: null },
         select: { cachetAmount: true, paymentStatus: true },
       },
+      performances: {
+        where: { cancelled: false },
+        select: { date: true, time: true },
+        orderBy: [{ date: "asc" }, { time: "asc" }],
+      },
     },
   });
 
@@ -290,19 +295,21 @@ export async function getProductionSummaries(
         ...lines.map((l) => ({ kind: l.kind, amount: Number(l.amount) })),
         ...(cachets ? [{ kind: "COST" as const, amount: cachets }] : []),
       ];
-      // Séances : jours cochés du mois complet, sinon le jour de la date
-      // (étape 2 : dérivées de la table Performance).
+      // Séances (table Performance, source de vérité — étape 2) ; repli
+      // historique si la date n'en a pas encore.
       const sessions = cancelled
         ? []
-        : d.isMultiDate
-          ? multiDates.map((day) => ({ day, time: d.showTime }))
-          : [{ day: dayKey, time: d.showTime }];
+        : d.performances.length
+          ? d.performances.map((p) => ({ day: p.date.toISOString().slice(0, 10), time: p.time }))
+          : d.isMultiDate
+            ? multiDates.map((day) => ({ day, time: d.showTime }))
+            : [{ day: dayKey, time: d.showTime }];
       const openCachets = d.dealArtistes
         .filter((a) => a.paymentStatus !== "PAID")
         .reduce((s, a) => s + (dec(a.cachetAmount) ?? 0), 0);
       return {
         id: d.id,
-        residencyId: null,
+        residencyId: d.residencyId,
         date: d.date,
         showTime: d.showTime,
         title: d.title,

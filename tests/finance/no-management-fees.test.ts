@@ -23,6 +23,9 @@ const REPORT_SOURCES = [
   "lib/finance/production-overhead.ts",
   "components/shows",
   "app/(app)/shows/production",
+  "app/(app)/shows/residence",
+  "lib/performances.ts",
+  "lib/residency-plan.ts",
 ];
 
 const FORBIDDEN = /managementFee|DealManagementFee|management-fees|ManagementFee|margeNette|totalMf/i;

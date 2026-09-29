@@ -129,6 +129,20 @@ async function main() {
     select: { id: true, title: true, showName: true },
   });
   for (const d of unlinked) await recomputeShowFinancials(d.id);
+  const residencies = await prisma.residency.findMany({
+    include: {
+      production: { select: { name: true } },
+      _count: { select: { deals: true } },
+    },
+  });
+  const noPerf = await prisma.deal.findMany({
+    where: { category: "PROD_EXE", deletedAt: null, performances: { none: {} } },
+    select: { title: true },
+  });
+  const multiPaying = await prisma.deal.findMany({
+    where: { category: "PROD_EXE", deletedAt: null, isMultiDate: true, paying: { gt: 0 } },
+    select: { title: true, paying: true },
+  });
   await prisma.$disconnect();
 
   const after = await snapshot(url(afterPath));
@@ -207,6 +221,17 @@ async function main() {
       : "Aucune.",
     ``,
     `(Sans artiste ou sans nom de spectacle : à rattacher depuis /shows → « Dates à rattacher ».)`,
+    ``,
+  );
+
+  md.push(`## Résidences créées (${residencies.length})`, ``, `| Production | Résidence | Mois |`, `|---|---|---:|`);
+  for (const r of residencies) md.push(`| ${r.production.name} | ${r.name} | ${r._count.deals} |`);
+  md.push(
+    ``,
+    `## Contrôles séances`,
+    ``,
+    `- Dates de production actives sans séance : ${noPerf.length}${noPerf.length ? " — " + noPerf.map((d) => d.title).join(", ") : ""}`,
+    `- Mois complets avec payants en cumul (à ventiler séance par séance) : ${multiPaying.length}${multiPaying.length ? " — " + multiPaying.map((d) => `${d.title} (${d.paying})`).join(", ") : ""}`,
     ``,
   );
 

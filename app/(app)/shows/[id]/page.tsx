@@ -30,6 +30,7 @@ import {
   type ArtisteLineRow,
 } from "@/components/deals/production-lines-editor";
 import { ShowSummaryCard } from "@/components/deals/show-summary-card";
+import { PerformancesCard } from "@/components/shows/performances-card";
 import type { BookingDealArtistRow } from "@/lib/deals-list-types";
 
 export const dynamic = "force-dynamic";
@@ -76,6 +77,8 @@ export default async function ProdExecutiveDetailPage({ params }: PageProps) {
         orderBy: [{ role: "asc" }, { createdAt: "asc" }],
       },
       createdBy: { select: { name: true } },
+      performances: { orderBy: [{ date: "asc" }, { time: "asc" }] },
+      residency: { select: { id: true, name: true } },
       production: {
         select: {
           id: true,
@@ -88,6 +91,10 @@ export default async function ProdExecutiveDetailPage({ params }: PageProps) {
     },
   });
   if (!deal) notFound();
+
+  // Aujourd'hui "YYYY-MM-DD" (séances passées grisées).
+  // eslint-disable-next-line react-hooks/purity -- server component, 1 exécution / requête
+  const todayKey = format(new Date(Date.now()), "yyyy-MM-dd");
 
   // Quote-part des frais généraux de la production (ligne virtuelle).
   const overheadAllocation = deal.production
@@ -196,11 +203,21 @@ export default async function ProdExecutiveDetailPage({ params }: PageProps) {
       {/* Breadcrumb + back — pattern fidèle KN show (text-xs simple) */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Link
-          href={deal.production ? `/shows/production/${deal.production.id}` : "/shows?view=dates"}
+          href={
+            deal.residency
+              ? `/shows/residence/${deal.residency.id}`
+              : deal.production
+                ? `/shows/production/${deal.production.id}`
+                : "/shows?view=dates"
+          }
           className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-3 w-3" />
-          {deal.production ? deal.production.name : "Productions"}
+          {deal.residency
+            ? `Résidence ${deal.residency.name}`
+            : deal.production
+              ? deal.production.name
+              : "Productions"}
         </Link>
       </div>
 
@@ -336,6 +353,31 @@ export default async function ProdExecutiveDetailPage({ params }: PageProps) {
             ? { productionId: deal.production.id, summary: contractSummary(contract) }
             : null
         }
+        hasPerformances={deal.performances.length > 0}
+      />
+
+      {/* Séances — source de vérité des jours, horaires, payants, invités et
+          billetterie (portage KN, étape 2). */}
+      <PerformancesCard
+        dealId={deal.id}
+        title={deal.residency ? `Séances · résidence ${deal.residency.name}` : "Séances"}
+        performances={deal.performances.map((p) => ({
+          id: p.id,
+          day: p.date.toISOString().slice(0, 10),
+          time: p.time,
+          capacity: p.capacity,
+          paying: p.paying,
+          invited: p.invited,
+          grossTicketing: p.grossTicketing != null ? Number(p.grossTicketing) : null,
+          cancelled: p.cancelled,
+        }))}
+        dealCapacity={deal.capacity}
+        venueDealKind={deal.venueDealKind}
+        recetteHt={deal.productionLines
+          .filter((l) => l.label === "RECETTE_HT" && !l.coveredByVenue)
+          .reduce((s, l) => s + (l.amount != null ? Number(l.amount) : 0), 0)}
+        legacyPaying={deal.paying}
+        todayKey={todayKey}
       />
 
       {/* Tableau de production — recettes + charges + Cachet Art. inline */}

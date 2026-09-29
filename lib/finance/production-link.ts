@@ -41,9 +41,19 @@ export async function syncDealProductionLink(dealId: string): Promise<void> {
       showName: true,
       productionId: true,
       deletedAt: true,
+      residency: { select: { id: true, productionId: true } },
     },
   });
   if (!deal) return;
+
+  // Date en corbeille : ses DealArtiste y sont aussi (cascade soft-delete) →
+  // on NE touche PAS aux rattachements (production, résidence), pour qu'une
+  // restauration la remette exactement à sa place. On recalcule seulement sa
+  // production (la date sort de la répartition des frais généraux).
+  if (deal.deletedAt) {
+    if (deal.productionId) await recomputeProductionFinancials(deal.productionId);
+    return;
+  }
 
   const artistId = await primaryArtistIdOf(dealId);
   const previousProductionId = deal.productionId;
@@ -66,10 +76,16 @@ export async function syncDealProductionLink(dealId: string): Promise<void> {
     }
   }
 
-  if (nextProductionId !== previousProductionId) {
+  // Mois de résidence déplacé vers une autre production (nom / artiste
+  // changé) → il quitte la résidence (qui appartient à l'ancienne).
+  const leavesResidency = !!deal.residency && deal.residency.productionId !== nextProductionId;
+  if (nextProductionId !== previousProductionId || leavesResidency) {
     await prisma.deal.update({
       where: { id: dealId },
-      data: { productionId: nextProductionId },
+      data: {
+        productionId: nextProductionId,
+        ...(leavesResidency ? { residencyId: null } : {}),
+      },
     });
   }
 

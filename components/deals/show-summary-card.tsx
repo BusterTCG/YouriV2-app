@@ -88,6 +88,13 @@ interface Props {
   /** Date d'une production (portage KN) : contrat artiste hérité, affiché en
    *  lecture seule — il se modifie sur la fiche production (onglet Contrat). */
   productionContract?: { productionId: string; summary: string } | null;
+  /**
+   * Étape 2 (KN) : la date a des séances → payants / remplissage / ticket
+   * moyen / billetterie / jours sont gérés dans la carte Séances (valeurs
+   * dérivées). La carte ne garde que la jauge (défaut des séances) et les
+   * modèles.
+   */
+  hasPerformances?: boolean;
 }
 
 export function ShowSummaryCard({
@@ -110,6 +117,7 @@ export function ShowSummaryCard({
   vhrBooked,
   totalRevenue,
   productionContract,
+  hasPerformances = false,
 }: Props) {
   const eur = useEur();
   const [pending, startTransition] = useTransition();
@@ -333,6 +341,13 @@ export function ShowSummaryCard({
                 <span className="text-sm text-muted-foreground">%</span>
               </div>
             </Field>
+            {hasPerformances ? (
+              <ReadOnlyStat
+                label="CA global billetterie"
+                value={coRealGrossCa != null ? eur(coRealGrossCa) : "—"}
+                hint="Somme de la billetterie HT des séances."
+              />
+            ) : (
             <Field
               label="CA global billetterie (€)"
               hint="Total billetterie HT avant partage. Sert au ticket moyen."
@@ -355,6 +370,7 @@ export function ShowSummaryCard({
                 <span className="text-sm text-muted-foreground">€</span>
               </div>
             </Field>
+            )}
           </>
         )}
       </div>
@@ -425,7 +441,9 @@ export function ShowSummaryCard({
         </div>
       </div>
 
-      {/* Toggle "Mois complet" + MultiDatesPicker */}
+      {/* Toggle "Mois complet" + MultiDatesPicker — legacy, remplacé par la
+          carte Séances dès que la date a des séances (KN étape 2). */}
+      {!hasPerformances && (
       <div className="pt-3 border-t flex items-center justify-between gap-3 flex-wrap">
         <button
           type="button"
@@ -465,16 +483,19 @@ export function ShowSummaryCard({
           </div>
         )}
       </div>
+      )}
 
       {/* Jauge / Payants / % Remplissage / Ticket moyen */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className={cn("grid gap-3", hasPerformances ? "grid-cols-1 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-4")}>
         <Field
           icon={<Users className="h-3.5 w-3.5" />}
-          label={isMultiDate ? "Jauge / repr." : "Jauge"}
+          label={hasPerformances ? "Jauge / séance" : isMultiDate ? "Jauge / repr." : "Jauge"}
           hint={
-            isMultiDate && totalCapacity != null
-              ? `Capacité totale : ${totalCapacity}`
-              : null
+            hasPerformances
+              ? "Jauge par défaut des séances."
+              : isMultiDate && totalCapacity != null
+                ? `Capacité totale : ${totalCapacity}`
+                : null
           }
         >
           {hasVenueJaugeOptions ? (
@@ -528,6 +549,8 @@ export function ShowSummaryCard({
             />
           )}
         </Field>
+        {!hasPerformances && (
+        <>
         <Field
           label="Payants"
           hint={isMultiDate ? "Total cumulé sur la série" : null}
@@ -559,6 +582,8 @@ export function ShowSummaryCard({
             venueDealKind === "CO_REAL" ? "CA global ÷ payants" : "Recettes ÷ payants"
           }
         />
+        </>
+        )}
       </div>
     </div>
   );

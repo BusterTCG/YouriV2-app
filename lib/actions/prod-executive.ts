@@ -10,6 +10,7 @@ import { recomputeShowFinancials } from "@/lib/finance/show-financials";
 import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
 import { syncDealProductionLink } from "@/lib/finance/production-link";
 import { revalidateAllDealRoutes } from "@/lib/revalidate-deals";
+import { syncDealFromPerformances } from "@/lib/performances";
 
 /**
  * Server actions spécifiques Prod Exécutive (Sprint 4).
@@ -66,8 +67,9 @@ export async function updateShowDetails(
 ): Promise<ActionResult> {
   return safeAction("updateShowDetails", async () => {
     await requireUser();
-    const { id, multiDateDates, ...rest } =
-      UpdateShowDetailsSchema.parse(input);
+    const parsedInput = UpdateShowDetailsSchema.parse(input);
+    const { id, ...rest } = parsedInput;
+    let { multiDateDates } = parsedInput;
 
     const current = await prisma.deal.findUnique({
       where: { id },
@@ -76,6 +78,17 @@ export async function updateShowDetails(
     // Date d'une production (portage KN) : le contrat artiste est celui de
     // l'exploitation — il ne se modifie que sur la fiche production.
     if (current?.productionId) delete rest.prodExePct;
+    // Séances = source de vérité des payants / invités / jours / billetterie
+    // (étape 2, KN) : ces champs ne sont plus écrits depuis la carte show.
+    const ownsDays = (await prisma.performance.count({ where: { dealId: id } })) > 0;
+    if (ownsDays) {
+      delete rest.paying;
+      delete rest.invited;
+      delete rest.coRealGrossCa;
+      delete rest.isMultiDate;
+      delete rest.performanceCount;
+      multiDateDates = undefined;
+    }
 
     const data: Prisma.DealUpdateInput = {};
     // Champs simples — on copie tels quels.
@@ -127,6 +140,10 @@ export async function updateShowDetails(
       rest.isMultiDate !== undefined ||
       rest.performanceCount !== undefined ||
       multiDateDates !== undefined;
+    if (ownsDays && (rest.capacity !== undefined || rest.venueDealKind !== undefined)) {
+      // Jauge / modèle salle changés → totaux dérivés des séances recalculés.
+      await syncDealFromPerformances(id);
+    }
     if (rest.showName !== undefined) {
       // Nom du spectacle → rattachement à la production (+ recalcul).
       await syncDealProductionLink(id);

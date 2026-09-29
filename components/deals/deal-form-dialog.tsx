@@ -24,7 +24,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
-import { cn } from "@/lib/utils";
 import {
   createDeal,
   updateDealMeta,
@@ -188,7 +187,7 @@ export function DealFormDialog({
 
   // Champs spécifiques Prod Exé — pré-remplis en mode edit depuis le deal
   const [showName, setShowName] = useState(deal?.showName ?? defaults?.showName ?? "");
-  const [isMultiDate, setIsMultiDate] = useState(deal?.isMultiDate ?? false);
+  const [isMultiDate] = useState(deal?.isMultiDate ?? false);
   const [venueDealKind, setVenueDealKind] = useState<VenueDealKind | "">(
     deal?.venueDealKind ?? "",
   );
@@ -566,15 +565,11 @@ export function DealFormDialog({
                     </div>
                   )}
 
-                  {/* Booking + Prod Exé : Date + heure début + Mois complet */}
-                  <div
-                    className={cn(
-                      "grid gap-2",
-                      isProdExe
-                        ? "grid-cols-[200px_140px_1fr]"
-                        : "grid-cols-[200px_140px]",
-                    )}
-                  >
+                  {/* Booking + Production : Date + heure début. (« Mois complet »
+                      retiré — portage KN étape 2 : les séries passent par
+                      l'assistant « Ajouter une résidence » de la production,
+                      les doublés par la carte Séances.) */}
+                  <div className="grid gap-2 grid-cols-[200px_140px]">
                   <div className="space-y-1.5">
                     <FieldLabel htmlFor="date" required>
                       Date
@@ -598,21 +593,6 @@ export function DealFormDialog({
                       disabled={pending}
                     />
                   </div>
-                  {/* Mois complet (Prod Exé) inline avec date/heure pour densifier */}
-                  {isProdExe && (
-                    <div className="space-y-1.5">
-                      <FieldLabel>Série multi-dates</FieldLabel>
-                      <label className="flex items-center gap-2 cursor-pointer rounded-md border bg-muted/20 px-3 h-9">
-                        <input
-                          type="checkbox"
-                          checked={isMultiDate}
-                          onChange={(e) => setIsMultiDate(e.target.checked)}
-                          className="h-4 w-4 rounded border-input"
-                        />
-                        <span className="text-sm font-medium">📅 Mois complet</span>
-                      </label>
-                    </div>
-                  )}
                   </div>
                 </>
               )}

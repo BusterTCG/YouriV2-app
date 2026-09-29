@@ -13,6 +13,7 @@ import {
   StickyNote,
   Theater,
 } from "lucide-react";
+import { prisma } from "@/lib/db";
 import { getProductionSummaries, type ProductionDealView } from "@/lib/productions";
 import { dealStatusLabel, formatEur } from "@/components/deals/deal-helpers";
 import { SensitiveAmount } from "@/components/dashboard/sensitive-amount";
@@ -20,6 +21,7 @@ import { PrivacyToggle } from "@/components/dashboard/privacy-toggle";
 import { ProductionActions } from "@/components/shows/production-actions";
 import { ProductionContractCard } from "@/components/shows/production-contract-card";
 import { ProductionOverheadsEditor } from "@/components/shows/production-overheads-editor";
+import { ResidencyWizard } from "@/components/shows/residency-wizard";
 import { SectionTitle } from "@/components/shows/section-title";
 import { UpcomingList, collectUpcoming } from "@/components/shows/upcoming-list";
 import { FinanceSummary } from "@/components/shows/finance-summary";
@@ -42,7 +44,7 @@ const TAB_KEYS: TabKey[] = ["suivi", "dates", "resultats", "frais", "contrat"];
  * question, dans l'ordre du cycle de vie d'une exploitation).
  *   Suivi          : qu'est-ce que je dois faire ? (alertes, 3 prochaines
  *                    dates, à solder)
- *   Dates          : le planning complet (à venir, passées)
+ *   Dates          : le planning complet (résidences, à venir, passées)
  *   Résultats      : combien ça rapporte ? (compte d'exploitation, détail
  *                    par date)
  *   Frais généraux : les charges communes
@@ -58,7 +60,15 @@ export default async function ProductionPage({ params, searchParams }: Props) {
   const view: TabKey = TAB_KEYS.includes(tab as TabKey) ? (tab as TabKey) : "suivi";
   // eslint-disable-next-line react-hooks/purity -- server component, 1 exécution / requête
   const nowMs = Date.now();
-  const [prod] = await getProductionSummaries({ id }, nowMs);
+  const [[prod], residencies] = await Promise.all([
+    getProductionSummaries({ id }, nowMs),
+    prisma.residency.findMany({
+      // Résidences supprimées (tous leurs mois en corbeille) masquées.
+      where: { productionId: id, deals: { some: { deletedAt: null } } },
+      select: { id: true, name: true },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
   if (!prod) notFound();
 
   const startOfToday = new Date(nowMs);
@@ -74,6 +84,18 @@ export default async function ProductionPage({ params, searchParams }: Props) {
   const suiviCount = toSettle.length + depositsToRecover.length;
 
   const tourDates = prod.deals.filter((d) => !d.residencyId);
+  const residencyCards = residencies.map((r) => {
+    const months = prod.deals.filter((d) => d.residencyId === r.id && d.status !== "ANNULE");
+    return {
+      ...r,
+      months: months.length,
+      planned: months.reduce((s, d) => s + d.performances, 0),
+      played: months.reduce((s, d) => s + d.performancesPlayed, 0),
+      paying: months.reduce((s, d) => s + (d.paying ?? 0), 0),
+      first: months[0]?.firstDate ?? null,
+      last: months.length ? months[months.length - 1].lastDate : null,
+    };
+  });
   const rates = productionRates(prod);
   const hasUpcoming = prod.deals.some((d) => !d.isPast && d.status !== "ANNULE");
 
@@ -132,8 +154,13 @@ export default async function ProductionPage({ params, searchParams }: Props) {
               </span>
             )}
             <span>
-              {tourDates.length > 0 &&
-                `${tourDates.length} date${tourDates.length > 1 ? "s" : ""} de tournée · `}
+              {[
+                residencies.length > 0 && `${residencies.length} résidence${residencies.length > 1 ? "s" : ""}`,
+                tourDates.length > 0 && `${tourDates.length} date${tourDates.length > 1 ? "s" : ""} de tournée`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              {" · "}
               {prod.performancesPlayed}/{prod.performancesPlanned} repr. jouées
             </span>
             <span>{rates ? productionContractSummary(prod) : "Contrat non défini"}</span>
@@ -147,6 +174,7 @@ export default async function ProductionPage({ params, searchParams }: Props) {
             status={prod.status}
             artistId={prod.artist.id}
             artistName={prod.artist.name}
+            extra={<ResidencyWizard productionId={prod.id} label="Ajouter une résidence" />}
           />
           <PrivacyToggle />
         </div>
@@ -242,6 +270,32 @@ export default async function ProductionPage({ params, searchParams }: Props) {
       {/* ── DATES : le planning complet ─────────────────────────────── */}
       {view === "dates" && (
         <>
+          {residencyCards.length > 0 && (
+            <section className="space-y-2">
+              <SectionTitle tone="gold">Résidences · {residencyCards.length}</SectionTitle>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {residencyCards.map((r) => (
+                  <Link
+                    key={r.id}
+                    href={`/shows/residence/${r.id}`}
+                    className="rounded-md border bg-card px-4 py-3 hover:bg-accent/30 transition-colors flex items-center gap-3"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold truncate">{r.name}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {r.first && r.last
+                          ? `${format(r.first, "d MMM", { locale: fr })} → ${format(r.last, "d MMM yyyy", { locale: fr })} · `
+                          : ""}
+                        {r.months} mois · {r.played}/{r.planned} séances jouées
+                        {r.paying ? ` · ${r.paying} payants` : ""}
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
           <section className="space-y-2">
             <SectionTitle tone="blue" icon={<CalendarClock className="h-3.5 w-3.5" />}>
               À venir · {upcoming.length}
@@ -320,7 +374,7 @@ export default async function ProductionPage({ params, searchParams }: Props) {
             residencySeparate={prod.residencyContractSeparate}
             residencyProdExePct={prod.residencyProdExePct}
             residencyCoprodKnPct={prod.residencyCoprodKnPct}
-            hasResidencies={false}
+            hasResidencies={residencies.length > 0}
           />
           <div className="rounded-md border bg-card p-4 space-y-3">
             <SectionTitle tone="slate" as="h3">
@@ -382,10 +436,10 @@ function SettlementRow({ d, items }: { d: ProductionDealView; items: OpenItem[] 
     >
       <div className="w-28 shrink-0 leading-tight">
         <div className="font-semibold tabular-nums capitalize">
-          {d.isMultiDate ? format(d.firstDate, "MMMM yyyy", { locale: fr }) : format(d.date, "dd/MM/yyyy")}
+          {d.residencyId ? format(d.firstDate, "MMMM yyyy", { locale: fr }) : format(d.date, "dd/MM/yyyy")}
         </div>
         <div className="text-[11px] text-muted-foreground first-letter:uppercase">
-          {d.isMultiDate ? `${d.performances} repr.` : format(d.date, "EEEE", { locale: fr })}
+          {d.residencyId ? `${d.performances} séances` : format(d.date, "EEEE", { locale: fr })}
         </div>
       </div>
       <div className="flex-1 min-w-[160px]">

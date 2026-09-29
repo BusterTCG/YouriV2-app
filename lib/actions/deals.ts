@@ -16,6 +16,12 @@ import {
 } from "@/lib/finance/show-financials";
 import { syncDealProductionLink } from "@/lib/finance/production-link";
 import { shareKindFor } from "@/lib/finance/production-overhead";
+import {
+  dayKey,
+  dayToUtcNoon,
+  seedPerformancesFromDeal,
+  syncDealFromPerformances,
+} from "@/lib/performances";
 import { revalidateAllDealRoutes } from "@/lib/revalidate-deals";
 import { revalidateAfterTaskMutation } from "@/lib/revalidate-helpers";
 import { autoCreateTasksForDeal } from "@/lib/tasks-autocreate";
@@ -164,6 +170,8 @@ export async function createDeal(
     // Production : rattachement auto (artiste principal + nom du spectacle),
     // création de la production si besoin, recalcul (portage KN).
     if (data.category === DealCategory.PROD_EXE) {
+      // Séances créées depuis la date / les jours cochés (source de vérité).
+      await seedPerformancesFromDeal(created.id);
       await syncDealProductionLink(created.id);
     }
     revalidatePath("/deals");
@@ -209,7 +217,44 @@ export async function updateDealMeta(
     ) {
       patch.venueCity = extractCityFromAddress(patch.venueAddress);
     }
-    await prisma.deal.update({ where: { id }, data: patch });
+    // Date de production avec séances : les séances sont la source de vérité
+    // des jours (portage KN). Mois de résidence : jour et horaires = séances
+    // (le formulaire envoie le 1er du mois → l'écrire décalait le mois).
+    const existing = await prisma.deal.findUnique({
+      where: { id },
+      select: { category: true, isMultiDate: true, date: true, showTime: true },
+    });
+    const ownsDays =
+      existing?.category === "PROD_EXE" &&
+      (await prisma.performance.count({ where: { dealId: id } })) > 0;
+    if (ownsDays && existing?.isMultiDate) {
+      delete patch.date;
+      delete patch.showTime;
+    }
+    const deal = await prisma.deal.update({ where: { id }, data: patch });
+    // Date simple modifiée dans le formulaire → les séances suivent (jour et,
+    // si le nombre d'horaires correspond, horaires). Les payants saisis par
+    // séance sont conservés.
+    if (ownsDays && existing && !existing.isMultiDate) {
+      const perfs = await prisma.performance.findMany({
+        where: { dealId: id },
+        orderBy: [{ date: "asc" }, { time: "asc" }],
+      });
+      const dayChanged = dayKey(deal.date) !== dayKey(existing.date);
+      const times = (deal.showTime ?? "").split("/").map((t) => t.trim()).filter(Boolean);
+      const timeChanged = (deal.showTime ?? "") !== (existing.showTime ?? "");
+      for (const [i, p] of perfs.entries()) {
+        await prisma.performance.update({
+          where: { id: p.id },
+          data: {
+            ...(dayChanged ? { date: dayToUtcNoon(dayKey(deal.date)) } : {}),
+            ...(timeChanged && times.length === perfs.length ? { time: times[i] } : {}),
+            ...(timeChanged && times.length === 0 ? { time: null } : {}),
+          },
+        });
+      }
+      await syncDealFromPerformances(id);
+    }
     // Date d'une production : l'ordre des dates (reliquat d'arrondi des frais
     // généraux) peut changer.
     await syncDealProductionLink(id);
@@ -318,10 +363,18 @@ export async function permanentlyDeleteDeal(id: string): Promise<ActionResult> {
         date: true,
         deletedAt: true,
         productionId: true,
+        residencyId: true,
       },
     });
     if (!existing) throw new Error("Deal introuvable");
     await prisma.deal.delete({ where: { id } });
+    // Résidence dont c'était le dernier mois (même en corbeille) → effacée.
+    if (
+      existing.residencyId &&
+      (await prisma.deal.count({ where: { residencyId: existing.residencyId } })) === 0
+    ) {
+      await prisma.residency.delete({ where: { id: existing.residencyId } });
+    }
     if (existing.productionId) await recomputeProductionFinancials(existing.productionId);
     await logAudit({
       entity: "Deal",

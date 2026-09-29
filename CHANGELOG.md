@@ -6,6 +6,26 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [Production — étape 2 : séances et résidences] — 2026-09-29
+
+### Added
+
+- Modèles `Performance` (séances : jour, horaire, jauge, payants, invités, billetterie HT, annulée) et `Residency` (salle KN id + snapshot, mois à l'intérieur) ; `Deal.residencyId`. Migration `20260929200000_add_performances_residencies` : séances créées depuis les dates (jours cochés des mois complets, doublés « 21h00 / 22h30 » → 2 séances, payants / billetterie repris), résidences regroupées par production + salle, doublons fusionnés.
+- Séances = source de vérité : nombre de représentations, date, horaires, payants, invités, billetterie dérivés ; salle louée → Recette HT = billetterie des séances. Une date dont toutes les séances sont annulées compte 0 représentation.
+- Carte « Séances » sur la fiche date (saisie par séance, doublé, annulation, suppression).
+- Assistant « Ajouter une résidence » (salle, période multi-mois, jours, horaires, jauge, modèle salle, aperçu avec exclusion de séances) et « Ajouter des séances » (sans doublon) ; fiche résidence `/shows/residence/[id]` (KPI, un bloc par mois : séances, relevé du théâtre, résultat), check-list appliquée à tous les mois (+ tâches du pipeline), suppression (mois à la corbeille, résidence effacée avec son dernier mois).
+- Contrat « Résidences » appliqué aux mois de résidence.
+
+### Changed
+
+- Formulaire : « Mois complet » retiré (séries = assistant résidence, doublés = carte Séances). Une date simple modifiée : ses séances suivent (jour, horaires).
+
+### Fixed
+
+- Une date mise à la corbeille garde sa production et sa résidence (restauration à l'identique).
+
+---
+
 ## [Production — étape 1 : socle Production] — 2026-09-29
 
 Portage de la refonte « Production » de KuroNeko-App (commits 9ddb445 → b53c55e). « Prod Exé » devient « Production » partout ; routes KN `/shows`.
