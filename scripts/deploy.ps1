@@ -5,6 +5,8 @@
 # machine ; Youri est juste servi sur app.pangeeprod.com / port 3001.
 #
 # Pipeline (copie du deploy KN) :
+#   0. Controles pre-deploiement (npm run predeploy : git propre, tests, types,
+#      lint, schema = migrations, build) -> stop si un controle echoue
 #   1. Backup DB pre-deploy (SQLite .backup côté VPS) -> /home/stan/backups
 #   2. Tar du code local (exclut node_modules/.next/.env/prisma/*.db/uploads)
 #   3. scp -> /tmp sur VPS
@@ -12,6 +14,10 @@
 #   5. Extract over /home/stan/youri (préserve .env, prod.db, public/uploads)
 #   6. npm ci (skip puppeteer) + prisma migrate deploy + npm run build
 #   7. Start service + health check HTTPS 2xx
+#   8. Tag git deploy-AAAAMMJJ-HHMM (+ push) = version en ligne (aussi ecrite
+#      dans DEPLOYED_COMMIT sur le serveur)
+#
+# Rollback : voir DEPLOY.md (backup pre-deploy + tag git precedent).
 #
 # PRÉ-REQUIS (one-time, cf. docs/process/vps-deploy.md) : /home/stan/youri créé,
 # .env rempli, youri.service installé, google-chrome-stable installé, nginx
@@ -20,9 +26,11 @@
 # Usage :
 #   .\scripts\deploy.ps1
 #   .\scripts\deploy.ps1 -SkipBuild   # rapide, juste push code (à éviter en prod)
+#   .\scripts\deploy.ps1 -SkipChecks  # saute l'etape 0 (urgence / rollback uniquement)
 
 param(
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$SkipChecks
 )
 
 $ErrorActionPreference = "Stop"
@@ -70,6 +78,20 @@ function Invoke-RemoteBash {
     }
 }
 
+# ───────── 0. Controles pre-deploiement ─────────
+if (-not $SkipChecks) {
+    Log "Controles pre-deploiement (npm run predeploy)..."
+    Push-Location $LOCAL_REPO
+    try {
+        npm run predeploy
+        if ($LASTEXITCODE -ne 0) { Fail "Controles pre-deploiement en echec : deploiement annule." }
+    } finally {
+        Pop-Location
+    }
+}
+$deployCommit = (git -C $LOCAL_REPO rev-parse --short HEAD).Trim()
+Log "Version deployee : $deployCommit"
+
 # ───────── 1. Backup DB pre-deploy ─────────
 Log "Backup DB pre-deploy sur VPS..."
 $preDeployTag = "youri-pre-deploy-$(Get-Date -Format yyyyMMdd-HHmmss)"
@@ -96,10 +118,12 @@ try {
         --exclude=".env.production" `
         --exclude="prisma/dev.db*" `
         --exclude="prisma/prod.db*" `
+        --exclude="prisma/recette.db*" `
         --exclude="public/uploads" `
         --exclude=".git" `
         --exclude="tsconfig.tsbuildinfo" `
         --exclude="backups" `
+        --exclude="./client_secret*.json" `
         -czf $TARBALL `
         .
     if ($LASTEXITCODE -ne 0) { Fail "tar a echoue" }
@@ -128,8 +152,13 @@ echo '[VPS] Extract + sync code (rsync --delete : retire les fichiers obsoletes/
 rm -rf /tmp/youri-new
 mkdir -p /tmp/youri-new
 tar -xzf $VPS_TMP -C /tmp/youri-new
-rsync -a --delete --exclude='node_modules' --exclude='.next' --exclude='.env' --exclude='.env.local' --exclude='.env.production' --exclude='prisma/dev.db*' --exclude='prisma/prod.db*' --exclude='public/uploads' --exclude='.git' --exclude='tsconfig.tsbuildinfo' --exclude='backups' /tmp/youri-new/ $VPS_APP_DIR/
+rsync -a --delete \
+  --exclude='node_modules' --exclude='.next' --exclude='.env' --exclude='.env.local' --exclude='.env.production' \
+  --exclude='prisma/dev.db*' --exclude='prisma/prod.db*' --exclude='prisma/recette.db*' --exclude='public/uploads' \
+  --exclude='.git' --exclude='.claude' --exclude='tsconfig.tsbuildinfo' --exclude='backups' --exclude='client_secret*.json' \
+  /tmp/youri-new/ $VPS_APP_DIR/
 rm -rf /tmp/youri-new
+echo '$deployCommit' > $VPS_APP_DIR/DEPLOYED_COMMIT
 
 echo '[VPS] npm ci (skip puppeteer download)'
 cd $VPS_APP_DIR
@@ -168,5 +197,11 @@ if ($healthCode -match '^\s*[23]\d\d\s*$') {
 
 # Cleanup local
 Remove-Item $TARBALL
+
+# ───────── 8. Tag git de la version en ligne ─────────
+$deployTag = "deploy-$(Get-Date -Format yyyyMMdd-HHmm)"
+git -C $LOCAL_REPO tag -a $deployTag -m "Deploiement $deployCommit ($preDeployTag)"
+git -C $LOCAL_REPO push origin $deployTag
+Log "Tag $deployTag cree (version en ligne = $deployCommit)"
 
 Log "Deploy reussi. Backup pre-deploy conserve : $preDeployTag.db.gz"

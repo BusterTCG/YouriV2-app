@@ -62,3 +62,7 @@ client_secret_*.json
 .claude/scheduled_tasks.lock
 # Préférences locales user (Claude Code) — par convention non versionné
 .claude/settings.local.json
+
+# Recette / répétition pré-déploiement (copies de la base de prod — DEPLOY.md)
+/prisma/recette.db*
+/backups/rehearsal-*
