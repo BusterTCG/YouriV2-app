@@ -89,9 +89,9 @@ beforeAll(async () => {
   artistB = (await prisma.artist.create({ data: { name: "Artiste B", slug: "artiste-b" } })).id;
   await prisma.taskTemplate.createMany({
     data: [
-      { category: "PROD_EXE", order: 1, label: "Signature du contrat" },
-      { category: "PROD_EXE", order: 2, label: "Mise en ligne billetterie" },
-      { category: "PROD_EXE", order: 3, label: "Gestion VHR" },
+      { category: "PROD_EXE", order: 1, label: "Signature du contrat", syncKey: "contractSigned" },
+      { category: "PROD_EXE", order: 2, label: "Mise en ligne billetterie", syncKey: "ticketingReady" },
+      { category: "PROD_EXE", order: 3, label: "Gestion VHR", syncKey: "vhrBooked" },
     ],
   });
 }, 180_000);
@@ -329,6 +329,19 @@ describe("Étape 2 — séances et résidences", () => {
     expect(num(n2.artistAmount)).toBeCloseTo(profit - Math.round(profit * 0.2), 2);
   });
 
+  it("tâche renommée : la synchro suit le lien fixe syncKey, pas le libellé (Stan 2026-10-01)", async () => {
+    const months = await prisma.deal.findMany({ where: { residencyId }, include: { tasks: true } });
+    for (const m of months) {
+      const vhr = m.tasks.find((t: { syncKey: string | null }) => t.syncKey === "vhrBooked");
+      await prisma.task.update({ where: { id: vhr.id }, data: { label: "Trains + hôtel" } });
+    }
+    ok(await R.setResidencyChecklist(residencyId, { vhrBooked: true }));
+    for (const m of await prisma.deal.findMany({ where: { residencyId }, include: { tasks: true } })) {
+      expect(m.tasks.find((t: { label: string }) => t.label === "Trains + hôtel").status).toBe("DONE");
+    }
+    ok(await R.setResidencyChecklist(residencyId, { vhrBooked: false }));
+  });
+
   it("check-list résidence → tous les mois + tâches du pipeline", async () => {
     ok(await R.setResidencyChecklist(residencyId, { contractSigned: true }));
     const months = await prisma.deal.findMany({ where: { residencyId }, include: { tasks: true } });
@@ -345,7 +358,7 @@ describe("Étape 2 — séances et résidences", () => {
       expect(m).toMatchObject({ vhrBooked: true, venueDealKind: "CO_REAL", capacity: 120 });
       expect(num(m.coRealKnPct)).toBe(60);
       // Tâche du mois modifié : cochée par la carte (client) ; autres mois : serveur.
-      if (m.id !== first.id) expect(m.tasks.find((t: { label: string }) => /vhr/i.test(t.label)).status).toBe("DONE");
+      if (m.id !== first.id) expect(m.tasks.find((t: { syncKey: string | null }) => t.syncKey === "vhrBooked").status).toBe("DONE");
     }
     // Ce mois seulement : les autres mois gardent leur valeur.
     ok(await PE.updateShowDetails({ id: first.id, venueDealKind: "CESSION", applyToResidency: false }));
@@ -603,8 +616,8 @@ describe("Lot 3 — solder par appel de quote-part, frais généraux figés (Sta
     expect(s.artistStatus).toBe("PAID");
     const { getProductionSummaries } = await import("@/lib/productions");
     const [summary] = await getProductionSummaries({ id: prod }, Date.now());
-    expect(summary.deals.find((d: { id: string }) => d.id === ids[0]).stage).toBe("SOLDEE");
-    expect(summary.deals.find((d: { id: string }) => d.id === ids[1]).stage).toBe("A_SOLDER");
+    expect(summary.deals.find((d: { id: string }) => d.id === ids[0])!.stage).toBe("SOLDEE");
+    expect(summary.deals.find((d: { id: string }) => d.id === ids[1])!.stage).toBe("A_SOLDER");
     // Déjà soldée → refusé.
     const again = await AM.settleDatesWithPayment({ productionId: prod, dealIds: [ids[0]], amount: 0, date: new Date() });
     expect(again.ok).toBe(false);
@@ -647,5 +660,28 @@ describe("Lot 3 — solder par appel de quote-part, frais généraux figés (Sta
     const { freezeSettledOverheads } = await import("@/lib/finance/show-financials");
     await freezeSettledOverheads(prod);
     expect(num((await deal(ids[2])).settledOverheadShare)).toBe(75);
+  });
+});
+
+describe("Recette HT saisie à la main en salle louée (Stan 2026-10-01)", () => {
+  it("billetterie → recette auto ; recette tapée → préservée ; « reprendre la billetterie » → auto", async () => {
+    const id = await newDate({ day: "2025-05-10", time: "20:00", showName: "Recette main", artistId: artistB });
+    const recette = async () =>
+      (await prisma.productionLine.findMany({ where: { dealId: id, label: "RECETTE_HT", deletedAt: null } }))
+        .reduce((s: number, l: { amount: unknown }) => s + Number(l.amount), 0);
+    const perf = (await deal(id)).performances[0];
+    ok(await PF.updatePerformance(perf.id, { paying: 50, grossTicketing: 900 }));
+    expect(await recette()).toBe(900);
+    expect((await deal(id)).recetteManual).toBe(false);
+
+    // Accord particulier (ex. 35 € puis 50/50) : on force la recette réelle.
+    ok(await PL.upsertProductionLine({ dealId: id, kind: "REVENUE", label: "RECETTE_HT", amount: 420, status: "TO_INVOICE" }));
+    expect((await deal(id)).recetteManual).toBe(true);
+    ok(await PF.updatePerformance(perf.id, { paying: 60, grossTicketing: 1000 }));
+    expect(await recette()).toBe(420);
+
+    ok(await PL.resetRecetteToTicketing(id));
+    expect(await recette()).toBe(1000);
+    expect((await deal(id)).recetteManual).toBe(false);
   });
 });

@@ -271,6 +271,7 @@ export default async function ResidencyPage({ params }: Props) {
               recetteLines={recetteLines.length}
               status={recetteLines[0]?.paymentStatus ?? null}
               ticketing={t.grossTicketing}
+              manual={d.recetteManual}
             />
           </section>
         );

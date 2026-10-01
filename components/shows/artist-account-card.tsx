@@ -7,6 +7,7 @@
 // Lot 3 (Stan 2026-10-01) : « Verser une quote-part » coche les dates jouées
 // qu'elle solde (pré-cochées : billetterie encaissée) ; montant pré-rempli.
 
+import { GlossaryHint } from "@/components/shows/glossary-hint";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -56,20 +57,25 @@ export function ArtistAccountCard({
   artistName,
   account,
   settleable = [],
+  openForDealId = null,
 }: {
   productionId: string;
   artistName: string;
   account: ArtistAccountData;
   settleable?: SettleableDate[];
+  /** Arrivée depuis une date (« À régler · compte artiste → ») : formulaire
+   *  de versement ouvert, cette date cochée (Stan 2026-10-01). */
+  openForDealId?: string | null;
 }) {
+  const openFor = openForDealId ? settleable.find((d) => d.id === openForDealId) ?? null : null;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState<null | "PAYMENT" | "REFUND">(null);
-  const [amount, setAmount] = useState("");
+  const [form, setForm] = useState<null | "PAYMENT" | "REFUND">(openFor ? "PAYMENT" : null);
+  const [amount, setAmount] = useState(openFor && openFor.artistAmount > 0 ? String(openFor.artistAmount) : "");
   const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [note, setNote] = useState("");
-  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [checked, setChecked] = useState<Set<string>>(() => new Set(openFor ? [openFor.id] : []));
   const b = account.balance;
 
   const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -138,7 +144,7 @@ export function ArtistAccountCard({
     <div className="rounded-md border bg-card">
       <div className="px-4 py-2.5 border-b flex items-center justify-between gap-2 flex-wrap">
         <SectionTitle tone="violet" as="h3" icon={<HandCoins className="h-3.5 w-3.5" />}>
-          Compte artiste · {artistName}
+          Compte artiste · {artistName} <GlossaryHint term="quotePart" />
         </SectionTitle>
         <div className="flex items-center gap-2">
           {pending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}

@@ -1,4 +1,5 @@
 import { getCurrentUser } from "@/lib/auth/users";
+import { GlossaryHint } from "@/components/shows/glossary-hint";
 import { isRestrictedRole } from "@/lib/auth/roles";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -329,6 +330,7 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
               </span>
             )}
             <DealStatusInline dealId={deal.id} value={deal.status} />
+            <GlossaryHint term="stage" />
             <StagePill stage={stage} detail={stage === "EN_PREPARATION" ? nextPrepStep(deal) : null} />
             <DealPipelineBar dealId={deal.id} tasks={tasks} />
           </div>
@@ -412,9 +414,7 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
         section="all"
         residencyMonths={deal.residency?._count.deals ?? 0}
         dealId={deal.id}
-        dealDate={deal.date}
         capacity={deal.capacity}
-        paying={deal.paying}
         venue={venue}
         venueRoomId={deal.venueRoomId}
         venueDealKind={deal.venueDealKind}
@@ -423,26 +423,15 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
         coRealGrossCa={
           deal.coRealGrossCa != null ? Number(deal.coRealGrossCa) : null
         }
-        isMultiDate={deal.isMultiDate}
-        performanceCount={deal.performanceCount}
-        multiDateDates={
-          Array.isArray(deal.multiDateDates)
-            ? (deal.multiDateDates as string[]).filter(
-                (d): d is string => typeof d === "string",
-              )
-            : []
-        }
         contractSigned={deal.contractSigned}
         ticketingReady={deal.ticketingReady}
         vhrBooked={deal.vhrBooked}
         ticketingUrl={deal.ticketingUrl}
-        totalRevenue={totalRevenue}
         productionContract={
           deal.production
             ? { productionId: deal.production.id, summary: contractSummary(contract) }
             : null
         }
-        hasPerformances={deal.performances.length > 0}
       />
 
       {/* Notes libres — éditables via « Modifier » (formulaire deal). */}
@@ -543,7 +532,15 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
             : null
         }
         artistAccountHref={
-          deal.production ? `/shows/production/${deal.production.id}?tab=artiste` : null
+          deal.production ? `/shows/production/${deal.production.id}?tab=artiste&verser=${deal.id}` : null
+        }
+        recette={
+          deal.venueDealKind === "PROD"
+            ? {
+                manual: deal.recetteManual,
+                ticketing: deal.coRealGrossCa != null ? Number(deal.coRealGrossCa) : null,
+              }
+            : null
         }
       />
 

@@ -8,7 +8,7 @@ import { requireUser } from "@/lib/auth/users";
 import { isRestricted, requireFullAccess, ACCESS_DENIED_MESSAGE } from "@/lib/auth/access";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
-import { getShowKeyFromLabel } from "@/lib/tasks-show-sync-utils";
+import { showKeyOf } from "@/lib/tasks-show-sync-utils";
 import { revalidateAfterTaskMutation } from "@/lib/revalidate-helpers";
 
 /**
@@ -21,10 +21,10 @@ import { revalidateAfterTaskMutation } from "@/lib/revalidate-helpers";
  * @returns le `data` à passer à `prisma.deal.update`, ou null si pas de match.
  */
 function buildDealFlagPatchFromTask(
-  taskLabel: string,
+  task: { label: string; syncKey: string | null },
   done: boolean,
 ): { contractSigned?: boolean; ticketingReady?: boolean; vhrBooked?: boolean } | null {
-  const showKey = getShowKeyFromLabel(taskLabel);
+  const showKey = showKeyOf(task);
   if (!showKey) return null;
   return { [showKey]: done };
 }
@@ -60,11 +60,11 @@ export async function markTaskDone(id: string): Promise<ActionResult> {
     // Lecture du label avant update pour calculer le patch deal (atomique).
     const existing = await prisma.task.findUnique({
       where: { id },
-      select: { dealId: true, label: true },
+      select: { dealId: true, label: true, syncKey: true },
     });
     if (!existing) throw new Error("Tâche introuvable");
 
-    const dealPatch = buildDealFlagPatchFromTask(existing.label, true);
+    const dealPatch = buildDealFlagPatchFromTask(existing, true);
     const ops: Prisma.PrismaPromise<unknown>[] = [
       prisma.task.update({
         where: { id },
@@ -93,11 +93,11 @@ export async function markTaskTodo(id: string): Promise<ActionResult> {
 
     const existing = await prisma.task.findUnique({
       where: { id },
-      select: { dealId: true, label: true },
+      select: { dealId: true, label: true, syncKey: true },
     });
     if (!existing) throw new Error("Tâche introuvable");
 
-    const dealPatch = buildDealFlagPatchFromTask(existing.label, false);
+    const dealPatch = buildDealFlagPatchFromTask(existing, false);
     const ops: Prisma.PrismaPromise<unknown>[] = [
       prisma.task.update({
         where: { id },

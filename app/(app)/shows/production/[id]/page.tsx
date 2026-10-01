@@ -40,7 +40,8 @@ export const dynamic = "force-dynamic";
 
 interface Props {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  /** verser = id d'une date : ouvre « Verser une quote-part » avec cette date cochée. */
+  searchParams: Promise<{ tab?: string; verser?: string }>;
 }
 
 type TabKey = "suivi" | "resultats" | "artiste" | "frais" | "contrat";
@@ -64,7 +65,7 @@ const UPCOMING_VISIBLE = 4;
  */
 export default async function ProductionPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { tab } = await searchParams;
+  const { tab, verser } = await searchParams;
   const view: TabKey = TAB_KEYS.includes(tab as TabKey) ? (tab as TabKey) : "suivi";
   // eslint-disable-next-line react-hooks/purity -- server component, 1 exécution / requête
   const nowMs = Date.now();
@@ -254,16 +255,45 @@ export default async function ProductionPage({ params, searchParams }: Props) {
             </div>
           )}
 
-          {!rates && (
-            <Link
-              href={href("contrat")}
-              className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-4 py-2 text-sm text-amber-800 dark:text-amber-300 hover:bg-amber-500/10"
-            >
-              <AlertCircle className="h-4 w-4" />
-              Contrat artiste non défini — à renseigner
-              <ChevronRight className="h-4 w-4 ml-auto" />
-            </Link>
-          )}
+          {(!rates || prod.deals.length === 0) ? (
+            <div className="rounded-md border-2 border-sky-500/40 bg-sky-500/5 px-4 py-3 space-y-2">
+              <div className="text-sm font-semibold">Pour démarrer cette production</div>
+              <ol className="space-y-1.5 text-sm">
+                {[
+                  {
+                    done: !!rates,
+                    label: "Renseigner le contrat artiste (prod-exé %, co-prod %)",
+                    action: <Link href={href("contrat")} className="text-sky-700 dark:text-sky-400 hover:underline">Onglet Contrat →</Link>,
+                  },
+                  {
+                    done: prod.deals.length > 0,
+                    label: "Ajouter les dates : une date, une tournée ou une résidence",
+                    action: <span className="text-muted-foreground">boutons en haut de la fiche</span>,
+                  },
+                  {
+                    done: prod.overheads.length > 0,
+                    label: "Frais généraux communs (affiches, train…) — facultatif",
+                    action: <Link href={href("frais")} className="text-sky-700 dark:text-sky-400 hover:underline">Onglet Frais généraux →</Link>,
+                  },
+                ].map((step, i) => (
+                  <li key={i} className="flex items-center gap-2 flex-wrap">
+                    <span
+                      className={cn(
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                        step.done
+                          ? "bg-emerald-500 text-white"
+                          : "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+                      )}
+                    >
+                      {step.done ? "✓" : i + 1}
+                    </span>
+                    <span className={cn(step.done && "text-muted-foreground line-through")}>{step.label}</span>
+                    {!step.done && <span className="text-xs">{step.action}</span>}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
 
           {balanceOpen && (
             <Link
@@ -400,6 +430,7 @@ export default async function ProductionPage({ params, searchParams }: Props) {
         <ArtistAccountCard
           productionId={prod.id}
           artistName={prod.artist.name}
+          openForDealId={verser ?? null}
           settleable={prod.deals
             .filter((d) => d.stage === "A_SOLDER")
             .map((d) => ({

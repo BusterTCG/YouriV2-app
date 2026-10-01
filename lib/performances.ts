@@ -80,6 +80,7 @@ export async function syncDealFromPerformances(dealId: string): Promise<void> {
         isMultiDate: true,
         capacity: true,
         venueDealKind: true,
+        recetteManual: true,
         productionLines: {
           where: { label: "RECETTE_HT", deletedAt: null },
           select: { id: true },
@@ -113,8 +114,9 @@ export async function syncDealFromPerformances(dealId: string): Promise<void> {
   };
   await prisma.deal.update({ where: { id: dealId }, data });
 
-  // Salle louée : la Recette HT EST la billetterie des séances.
-  if (deal.venueDealKind === "PROD" && totals.grossTicketing != null) {
+  // Salle louée : la Recette HT EST la billetterie des séances — sauf si
+  // elle a été saisie à la main (recetteManual, Stan 2026-10-01).
+  if (deal.venueDealKind === "PROD" && !deal.recetteManual && totals.grossTicketing != null) {
     const amount = new Prisma.Decimal(totals.grossTicketing);
     if (deal.productionLines.length === 0) {
       await prisma.productionLine.create({

@@ -1,5 +1,7 @@
 "use client";
 
+import { GlossaryHint } from "@/components/shows/glossary-hint";
+import type { GlossaryKey } from "@/lib/production-glossary";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { HandCoins, Loader2 } from "lucide-react";
@@ -119,6 +121,7 @@ export function ProductionContractCard({
         <RateRow
           step={1}
           label="Prod-exé Pangee"
+          term="prodExe"
           hint="sur le CA de chaque date"
           value={pe}
           onChange={setPe}
@@ -127,6 +130,7 @@ export function ProductionContractCard({
         <RateRow
           step={2}
           label="Co-prod Pangee"
+          term="coprod"
           hint="sur le bénéfice restant"
           value={cp}
           onChange={setCp}
@@ -154,6 +158,7 @@ export function ProductionContractCard({
             <RateRow
               step={1}
               label="Prod-exé Pangee"
+          term="prodExe"
               hint="sur le CA de chaque mois de résidence"
               value={rpe}
               onChange={setRpe}
@@ -162,6 +167,7 @@ export function ProductionContractCard({
             <RateRow
               step={2}
               label="Co-prod Pangee"
+          term="coprod"
               hint="sur le bénéfice restant"
               value={rcp}
               onChange={setRcp}
@@ -190,6 +196,7 @@ function parseRate(v: string): number | null {
 function RateRow({
   step,
   label,
+  term,
   hint,
   value,
   onChange,
@@ -197,6 +204,8 @@ function RateRow({
 }: {
   step: number;
   label: string;
+  /** Terme métier expliqué dans une bulle « ? ». */
+  term?: GlossaryKey;
   hint: string;
   value: string;
   onChange: (v: string) => void;
@@ -208,7 +217,10 @@ function RateRow({
         {step}
       </span>
       <span className="flex-1 min-w-0 leading-tight">
-        <span className="block text-sm font-medium">{label}</span>
+        <span className="flex items-center gap-1 text-sm font-medium">
+          {label}
+          {term && <GlossaryHint term={term} />}
+        </span>
         <span className="block text-[11px] text-muted-foreground">{hint}</span>
       </span>
       <span className="relative">

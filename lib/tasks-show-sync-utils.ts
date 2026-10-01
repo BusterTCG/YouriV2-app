@@ -43,3 +43,20 @@ export function getShowKeyFromLabel(label: string): ShowTaskKey | null {
   ];
   return keys.find((k) => labelMatchesShowKey(label, k)) ?? null;
 }
+
+const SHOW_TASK_KEYS: ShowTaskKey[] = ["contractSigned", "ticketingReady", "vhrBooked"];
+
+export function isShowTaskKey(v: unknown): v is ShowTaskKey {
+  return typeof v === "string" && (SHOW_TASK_KEYS as string[]).includes(v);
+}
+
+/**
+ * Clé de check-list d'une tâche (Stan 2026-10-01) : le lien FIXE `syncKey`
+ * (copié du modèle) fait foi ; la reconnaissance par libellé ne sert plus que
+ * de repli pour une tâche sans lien (ajoutée à la main).
+ */
+export function showKeyOf(task: { syncKey?: string | null; label: string }): ShowTaskKey | null {
+  if (isShowTaskKey(task.syncKey)) return task.syncKey;
+  if (task.syncKey) return null; // lien explicite vers autre chose
+  return getShowKeyFromLabel(task.label);
+}

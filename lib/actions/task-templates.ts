@@ -1,5 +1,6 @@
 "use server";
 
+import { getShowKeyFromLabel } from "@/lib/tasks-show-sync-utils";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { DealCategory, Prisma } from "@prisma/client";
@@ -53,6 +54,9 @@ export async function createTaskTemplate(
         description: data.description ?? null,
         defaultAssigneeKey: data.defaultAssigneeKey ?? null,
         defaultDueOffsetDays: data.defaultDueOffsetDays ?? null,
+        // Lien fixe avec la check-list, déduit du libellé À LA CRÉATION
+        // seulement : renommer ensuite ne casse plus la synchro.
+        syncKey: data.category === "PROD_EXE" ? getShowKeyFromLabel(data.label) : null,
         order,
       },
       select: { id: true },

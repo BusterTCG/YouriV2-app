@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { GlossaryHint } from "@/components/shows/glossary-hint";
+import { createContext, useContext, useMemo, useState, useTransition } from "react";
 import {
   Loader2,
   TrendingUp,
@@ -41,6 +42,7 @@ import {
   addEmptyProductionLine,
   updateProductionLineById,
   deleteProductionLine,
+  resetRecetteToTicketing,
 } from "@/lib/actions/production-lines";
 import { updateDealArtiste, setDealArtistStatus } from "@/lib/actions/deals";
 import { cn } from "@/lib/utils";
@@ -107,6 +109,43 @@ interface Props {
   /** Date d'une production : statut « réglé » artiste DÉRIVÉ du compte
    *  artiste (portage KN) → lien vers l'onglet Artiste au lieu du toggle. */
   artistAccountHref?: string | null;
+  /**
+   * Salle louée (Stan 2026-10-01, portage KN) : origine de la Recette HT —
+   * billetterie des séances (auto) ou saisie à la main.
+   */
+  recette?: { manual: boolean; ticketing: number | null } | null;
+}
+
+/** Origine de la Recette HT (cf. Props.recette) pour la ligne RECETTE_HT. */
+const RecetteContext = createContext<{ dealId: string; manual: boolean; ticketing: number | null } | null>(null);
+
+function RecetteSource() {
+  const ctx = useContext(RecetteContext);
+  const [pending, startTransition] = useTransition();
+  if (!ctx) return null;
+  if (!ctx.manual) {
+    return (
+      <div className="text-[11px] text-emerald-700 dark:text-emerald-400">
+        = billetterie des séances (calcul auto)
+      </div>
+    );
+  }
+  return (
+    <div className="text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1 flex-wrap">
+      Saisie à la main
+      {ctx.ticketing != null && (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => startTransition(async () => { await resetRecetteToTicketing(ctx.dealId); })}
+          className="underline underline-offset-2 hover:text-foreground"
+          title="La Recette HT reprend la billetterie des séances (calcul auto)"
+        >
+          · reprendre la billetterie ({formatEur(ctx.ticketing)})
+        </button>
+      )}
+    </div>
+  );
 }
 
 export function ProductionLinesEditor({
@@ -120,6 +159,7 @@ export function ProductionLinesEditor({
   artistShareKind,
   overhead,
   artistAccountHref,
+  recette = null,
 }: Props) {
   void dealId; // utilisé via les actions importées dans les sous-composants
   // Index par label : plusieurs lignes possibles par catégorie (sous-entrées).
@@ -229,6 +269,7 @@ export function ProductionLinesEditor({
   const margin = profit - knShare;
 
   return (
+    <RecetteContext.Provider value={recette ? { dealId, ...recette } : null}>
     <div className="space-y-5">
       {/* Section Recettes — RECETTE_HT toujours visible, DL_PROD masquable */}
       <Section
@@ -488,6 +529,7 @@ export function ProductionLinesEditor({
         </div>
       </div>
     </div>
+    </RecetteContext.Provider>
   );
 }
 
@@ -572,7 +614,7 @@ function VirtualOverheadLine({
   return (
     <div className="flex items-center gap-3 px-3 py-2 hover:bg-accent/30 transition-colors flex-wrap sm:flex-nowrap">
       <div className="w-[200px] shrink-0 min-w-0">
-        <div className="text-sm font-medium leading-tight">Frais généraux</div>
+        <div className="text-sm font-medium leading-tight inline-flex items-center gap-1">Frais généraux <GlossaryHint term="overhead" /></div>
         <div className="text-[11px] text-muted-foreground leading-tight">
           {frozen ? (
             "figée au solde de la date"
@@ -1033,6 +1075,14 @@ function SubEntryRow({
 /** Taux proposés en un clic sur une charge (montant modifiable ensuite). */
 const AUTO_RATES: Partial<Record<ProductionLineLabel, number>> = { CNM: 3.5, SACD: 15 };
 
+/** Postes expliqués dans une bulle « ? » (glossaire production). */
+const LINE_TERMS: Partial<Record<ProductionLineLabel, "CNM" | "SACD" | "DL_PROD" | "VHR">> = {
+  CNM: "CNM",
+  SACD: "SACD",
+  DL_PROD: "DL_PROD",
+  VHR: "VHR",
+};
+
 function LineEditor({
   dealId,
   label,
@@ -1142,6 +1192,7 @@ function LineEditor({
       <div className="w-[200px] shrink-0 min-w-0">
         <div className="text-sm font-medium leading-tight flex items-center gap-1.5">
           {PRODUCTION_LINE_LABELS[label]}
+          {LINE_TERMS[label] && <GlossaryHint term={LINE_TERMS[label]!} />}
           {autoAmount != null && !isCovered && autoAmount !== (line?.amount ?? 0) && (
             <button
               type="button"
@@ -1163,7 +1214,10 @@ function LineEditor({
             Pris par la salle
           </div>
         ) : (
-          hint && <div className="text-[11px] text-muted-foreground">{hint}</div>
+          <>
+            {hint && <div className="text-[11px] text-muted-foreground">{hint}</div>}
+            {label === "RECETTE_HT" && line != null && <RecetteSource />}
+          </>
         )}
       </div>
 

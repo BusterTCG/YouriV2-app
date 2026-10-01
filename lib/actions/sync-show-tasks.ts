@@ -4,10 +4,7 @@ import { TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireDealAccess } from "@/lib/auth/access";
 import { safeAction, type ActionResult } from "@/lib/errors";
-import {
-  labelMatchesShowKey,
-  type ShowTaskKey,
-} from "@/lib/tasks-show-sync-utils";
+import { showKeyOf, type ShowTaskKey } from "@/lib/tasks-show-sync-utils";
 import { revalidateAfterTaskMutation } from "@/lib/revalidate-helpers";
 
 // NB : pas de `export type { ShowTaskKey }` ici — ce fichier est "use server",
@@ -45,11 +42,11 @@ export async function syncShowTaskToggle(
         deletedAt: null,
         status: { not: TaskStatus.SKIPPED },
       },
-      select: { id: true, label: true, status: true },
+      select: { id: true, label: true, syncKey: true, status: true },
     });
+    // Lien fixe syncKey (repli : libellé) — Stan 2026-10-01.
     const matching = tasks.filter(
-      (t) =>
-        labelMatchesShowKey(t.label, showKey) && t.status !== targetStatus,
+      (t) => showKeyOf(t) === showKey && t.status !== targetStatus,
     );
     if (matching.length === 0) return; // pas de tâche → no-op
 

@@ -1,14 +1,13 @@
 "use client";
 
+import { GlossaryHint } from "@/components/shows/glossary-hint";
+import type { GlossaryKey } from "@/lib/production-glossary";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
   Loader2,
   Users,
-  Percent,
   Building2,
-  Ticket,
-  CalendarRange,
   FileSignature,
   Tag,
   Plane,
@@ -25,7 +24,6 @@ import {
 import type { VenueDealKind } from "@prisma/client";
 import { updateShowDetails } from "@/lib/actions/prod-executive";
 import { syncShowTaskToggle } from "@/lib/actions/sync-show-tasks";
-import { MultiDatesPicker } from "./multi-dates-picker";
 import { useEur } from "@/lib/privacy-context";
 import { cn } from "@/lib/utils";
 
@@ -58,10 +56,7 @@ const VENUE_DESCRIPTIONS: Record<VenueDealKind, string> = {
 
 interface Props {
   dealId: string;
-  /** Date du deal — utilisée par MultiDatesPicker pour pré-afficher le mois. */
-  dealDate: Date;
   capacity: number | null;
-  paying: number | null;
   /** Lieu KN lié (capacité par défaut + sous-salles) — alimente le menu
    *  déroulant jauge. null = pas de venue en base → jauge en input libre. */
   venue: {
@@ -76,25 +71,13 @@ interface Props {
   prodExePct: number | null;
   coRealKnPct: number | null;
   coRealGrossCa: number | null;
-  isMultiDate: boolean;
-  performanceCount: number | null;
-  multiDateDates: string[];
   contractSigned: boolean;
   ticketingReady: boolean;
   ticketingUrl: string | null;
   vhrBooked: boolean;
-  /** Recettes totales — passées par le parent pour calculer le ticket moyen. */
-  totalRevenue: number;
   /** Date d'une production (portage KN) : contrat artiste hérité, affiché en
    *  lecture seule — il se modifie sur la fiche production (onglet Contrat). */
   productionContract?: { productionId: string; summary: string } | null;
-  /**
-   * Étape 2 (KN) : la date a des séances → payants / remplissage / ticket
-   * moyen / billetterie / jours sont gérés dans la carte Séances (valeurs
-   * dérivées). La carte ne garde que la jauge (défaut des séances) et les
-   * modèles.
-   */
-  hasPerformances?: boolean;
   /**
    * Partie affichée (fiche date en onglets, portage KN) : « suivi » =
    * check-list + jauge ; « contrat » = modèle salle + contrat artiste.
@@ -110,25 +93,18 @@ interface Props {
 
 export function ShowSummaryCard({
   dealId,
-  dealDate,
   capacity,
-  paying,
   venue,
   venueRoomId,
   venueDealKind,
   prodExePct,
   coRealKnPct,
   coRealGrossCa,
-  isMultiDate,
-  performanceCount,
-  multiDateDates,
   contractSigned,
   ticketingReady,
   ticketingUrl,
   vhrBooked,
-  totalRevenue,
   productionContract,
-  hasPerformances = false,
   section = "all",
   residencyMonths = 0,
 }: Props) {
@@ -138,16 +114,14 @@ export function ShowSummaryCard({
   const showSuivi = section !== "contrat";
   const eur = useEur();
   const [pending, startTransition] = useTransition();
+  // « Enregistré ✓ » 2,5 s après chaque sauvegarde réussie (Stan 2026-10-01).
+  const [saved, setSaved] = useState(false);
   const [persistError, setPersistError] = useState<string | null>(null);
 
   const [formCapacity, setFormCapacity] = useState<string>(capacity?.toString() ?? "");
-  const [formPaying, setFormPaying] = useState<string>(paying?.toString() ?? "");
   const [formProdExe, setFormProdExe] = useState<string>(prodExePct?.toString() ?? "");
   const [formCoRealKnPct, setFormCoRealKnPct] = useState<string>(
     coRealKnPct?.toString() ?? "",
-  );
-  const [formCoRealGrossCa, setFormCoRealGrossCa] = useState<string>(
-    coRealGrossCa?.toString() ?? "",
   );
   const [formTicketingUrl, setFormTicketingUrl] = useState<string>(ticketingUrl ?? "");
 
@@ -169,6 +143,9 @@ export function ShowSummaryCard({
               ")"
             : "";
         setPersistError(`${res.error}${details}`);
+      } else {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
       }
     });
   }
@@ -219,41 +196,6 @@ export function ShowSummaryCard({
     }
   }
 
-  // Capacité totale : jauge si simple date, jauge × repr. si série
-  const totalCapacity =
-    capacity != null
-      ? isMultiDate && performanceCount && performanceCount > 0
-        ? capacity * performanceCount
-        : capacity
-      : null;
-
-  const fillRate =
-    totalCapacity && paying != null && paying > 0
-      ? Math.round((paying / totalCapacity) * 100)
-      : null;
-
-  // Ticket moyen :
-  //   CO_REAL : CA global (saisi à la main, reflète le prix public)
-  //   Sinon   : recettes Pangee ÷ payants
-  const ticketMoyenBase =
-    venueDealKind === "CO_REAL" && coRealGrossCa != null && coRealGrossCa > 0
-      ? coRealGrossCa
-      : totalRevenue;
-  const ticketMoyen =
-    paying && paying > 0 && ticketMoyenBase > 0
-      ? Math.round(ticketMoyenBase / paying)
-      : null;
-
-  function toggleMultiDate() {
-    const next = !isMultiDate;
-    const dates = next ? multiDateDates : [];
-    persist({
-      isMultiDate: next,
-      multiDateDates: dates,
-      performanceCount: dates.length > 0 ? dates.length : null,
-    });
-  }
-
   function onChangeVenueDealKind(next: string) {
     const v = next === NONE ? null : (next as VenueDealKind);
     persist({ venueDealKind: v });
@@ -269,8 +211,10 @@ export function ShowSummaryCard({
               ? "Suivi de la date"
               : "Paramètres & suivi"}
         </h3>
-        {pending && (
+        {pending ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+        ) : (
+          saved && <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">Enregistré ✓</span>
         )}
       </div>
 
@@ -313,8 +257,8 @@ export function ShowSummaryCard({
       <>
       {/* Suivi opérationnel — Signature contrat / MEV billetterie + URL / VHR */}
       <div className="space-y-2">
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-          Suivi
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold inline-flex items-center gap-1">
+          Suivi <GlossaryHint term="suivi" />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <CheckPill
@@ -377,62 +321,13 @@ export function ShowSummaryCard({
         </div>
       </div>
 
-      {/* Toggle "Mois complet" + MultiDatesPicker — legacy, remplacé par la
-          carte Séances dès que la date a des séances (KN étape 2). */}
-      {!hasPerformances && (
-      <div className="pt-3 border-t flex items-center justify-between gap-3 flex-wrap">
-        <button
-          type="button"
-          onClick={toggleMultiDate}
-          className={cn(
-            "inline-flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-md border transition-colors",
-            isMultiDate
-              ? "bg-yr-gold/15 border-yr-gold/40 text-yr-gold font-semibold"
-              : "border-border bg-muted/30 text-muted-foreground hover:bg-muted",
-          )}
-        >
-          <CalendarRange className="h-3.5 w-3.5" />
-          <span>Mois complet</span>
-          <span
-            className={cn(
-              "h-3.5 w-3.5 rounded-sm border inline-flex items-center justify-center text-[10px]",
-              isMultiDate
-                ? "bg-yr-gold border-yr-gold text-yr-navy"
-                : "border-muted-foreground/40",
-            )}
-          >
-            {isMultiDate && "✓"}
-          </span>
-        </button>
-        {isMultiDate && (
-          <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-            <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-              Représentations
-            </label>
-            <div className="flex-1">
-              <MultiDatesPicker
-                dealId={dealId}
-                dealDate={dealDate}
-                initialDates={multiDateDates}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-      )}
-
-      {/* Jauge / Payants / % Remplissage / Ticket moyen */}
-      <div className={cn("grid gap-3", hasPerformances ? "grid-cols-1 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-4")}>
+      {/* Jauge par défaut des séances (payants, remplissage et ticket moyen
+          sont dans la carte Séances — toute date a au moins une séance). */}
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-4">
         <Field
           icon={<Users className="h-3.5 w-3.5" />}
-          label={hasPerformances ? "Jauge / séance" : isMultiDate ? "Jauge / repr." : "Jauge"}
-          hint={
-            hasPerformances
-              ? "Jauge par défaut des séances."
-              : isMultiDate && totalCapacity != null
-                ? `Capacité totale : ${totalCapacity}`
-                : null
-          }
+          label="Jauge / séance"
+          hint="Jauge par défaut des séances."
         >
           {hasVenueJaugeOptions ? (
             <div className="space-y-1.5">
@@ -485,41 +380,6 @@ export function ShowSummaryCard({
             />
           )}
         </Field>
-        {!hasPerformances && (
-        <>
-        <Field
-          label="Payants"
-          hint={isMultiDate ? "Total cumulé sur la série" : null}
-        >
-          <Input
-            type="number"
-            value={formPaying}
-            onChange={(e) => setFormPaying(e.target.value)}
-            onBlur={() => {
-              const n = formPaying === "" ? null : Number(formPaying);
-              if (n !== paying) persist({ paying: n });
-            }}
-            placeholder="0"
-            className="h-9 text-sm tabular-nums"
-          />
-        </Field>
-        <ReadOnlyStat
-          icon={<Percent className="h-3.5 w-3.5" />}
-          label="Remplissage"
-          value={fillRate != null ? `${fillRate}%` : "—"}
-          accent={fillRate != null && fillRate >= 80}
-          hint={isMultiDate ? "Payants ÷ (jauge × repr.)" : "Payants ÷ jauge"}
-        />
-        <ReadOnlyStat
-          icon={<Ticket className="h-3.5 w-3.5" />}
-          label="Ticket moyen"
-          value={ticketMoyen != null ? eur(ticketMoyen) : "—"}
-          hint={
-            venueDealKind === "CO_REAL" ? "CA global ÷ payants" : "Recettes ÷ payants"
-          }
-        />
-        </>
-        )}
       </div>
       </>
       )}
@@ -529,6 +389,7 @@ export function ShowSummaryCard({
         <Field
           icon={<Building2 className="h-3.5 w-3.5" />}
           label="Modèle salle"
+          term="venueDeal"
           hint={
             venueDealKind
               ? VENUE_DESCRIPTIONS[venueDealKind]
@@ -591,6 +452,7 @@ export function ShowSummaryCard({
           <>
             <Field
               label="Co-réa avec la salle (%)"
+              term="coReal"
               hint="Part Pangee sur la billetterie totale. Le reste → salle."
             >
               <div className="flex items-center gap-2">
@@ -610,36 +472,11 @@ export function ShowSummaryCard({
                 <span className="text-sm text-muted-foreground">%</span>
               </div>
             </Field>
-            {hasPerformances ? (
-              <ReadOnlyStat
-                label="CA global billetterie"
-                value={coRealGrossCa != null ? eur(coRealGrossCa) : "—"}
-                hint="Somme de la billetterie HT des séances."
-              />
-            ) : (
-            <Field
-              label="CA global billetterie (€)"
-              hint="Total billetterie HT avant partage. Sert au ticket moyen."
-              className="sm:col-start-2"
-            >
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  value={formCoRealGrossCa}
-                  onChange={(e) => setFormCoRealGrossCa(e.target.value)}
-                  onBlur={() => {
-                    const n =
-                      formCoRealGrossCa === "" ? null : Number(formCoRealGrossCa);
-                    if (n !== coRealGrossCa) persist({ coRealGrossCa: n });
-                  }}
-                  placeholder="ex. 8 000"
-                  className="h-9 text-sm"
-                  min={0}
-                />
-                <span className="text-sm text-muted-foreground">€</span>
-              </div>
-            </Field>
-            )}
+            <ReadOnlyStat
+              label="CA global billetterie"
+              value={coRealGrossCa != null ? eur(coRealGrossCa) : "—"}
+              hint="Somme de la billetterie HT des séances."
+            />
           </>
         )}
       </div>
@@ -695,18 +532,22 @@ function Field({
   hint,
   children,
   className,
+  term,
 }: {
   icon?: React.ReactNode;
   label: string;
   hint?: string | null;
   children: React.ReactNode;
   className?: string;
+  /** Terme métier expliqué dans une bulle « ? ». */
+  term?: GlossaryKey;
 }) {
   return (
     <div className={cn("space-y-1", className)}>
       <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1">
         {icon}
         {label}
+        {term && <GlossaryHint term={term} />}
       </label>
       {children}
       {hint && <p className="text-[10px] text-muted-foreground italic">{hint}</p>}

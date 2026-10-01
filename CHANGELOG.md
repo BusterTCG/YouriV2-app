@@ -6,6 +6,23 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [Production — analyse d'architecture, points 2 à 5] — 2026-10-01
+
+### Changed
+- **Recette HT : un seul endroit, origine visible** (migration `deal_recette_manual`) — saisie uniquement dans le bloc Financier (le relevé du mois de résidence devient un affichage + lien). En salle louée : « = billetterie des séances (calcul auto) », ou « Saisie à la main » (la billetterie ne l'écrase plus) avec « reprendre la billetterie ». Reprise : recettes déjà différentes de la billetterie marquées « à la main ».
+- Lien « À régler · compte artiste → » d'une date : ouvre l'onglet Artiste avec « Verser une quote-part » déplié et la date cochée (ouvrait l'onglet Suivi).
+
+### Added
+- **Tâches liées par un identifiant fixe** (migration `task_sync_key`) : Contrat / MEV / VHR synchronisés avec la check-list par `syncKey`, plus par le libellé — renommer une tâche ne casse plus la synchro.
+- Bulles « ? » (glossaire production) : prod-exé, co-prod, accord avec le lieu, co-réa, suivi Contrat / MEV / VHR, CNM, SACD, DL Prod, VHR, frais généraux, quote-part, étapes d'une date.
+- « Pour démarrer cette production » (contrat → dates → frais généraux) sur une production sans contrat ou sans date.
+- « Enregistré ✓ » après chaque sauvegarde du bloc Paramètres & suivi.
+
+### Removed
+- Ancien « Mois complet » et champs payants / remplissage / ticket moyen / CA saisis sur la carte de la date : toutes les dates ont des séances (source de vérité), la dernière séance ne peut pas être supprimée.
+
+---
+
 ## [Production — retours de Stan : accueil en onglets, dates soldées, cycle de vie (portage KN)] — 2026-10-01
 
 ### Added

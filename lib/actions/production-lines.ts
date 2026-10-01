@@ -10,6 +10,7 @@ import { safeAction, type ActionResult } from "@/lib/errors";
 import { recomputeShowFinancials } from "@/lib/finance/show-financials";
 import { recomputeMfForDeal } from "@/lib/management-fees-recompute";
 import { PRODUCTION_LINE_KIND_OF } from "@/lib/production-line-labels";
+import { syncDealFromPerformances } from "@/lib/performances";
 
 /**
  * Server actions pour les lignes de production (Sprint 4, Prod Exécutive).
@@ -24,6 +25,46 @@ import { PRODUCTION_LINE_KIND_OF } from "@/lib/production-line-labels";
  *
  * Toutes les actions appellent `requireUser()` (multi-user audit).
  */
+
+// ──────────────────────────── Recette HT : auto / à la main ────────────────────────────
+
+/**
+ * Salle louée (Stan 2026-10-01, portage KN) : une Recette HT différente de la
+ * billetterie des séances est « saisie à la main » → la billetterie ne
+ * l'écrase plus. Retaper le montant de la billetterie repasse en auto.
+ */
+async function refreshRecetteManual(dealId: string) {
+  const deal = await prisma.deal.findUnique({
+    where: { id: dealId },
+    select: {
+      venueDealKind: true,
+      recetteManual: true,
+      coRealGrossCa: true,
+      productionLines: {
+        where: { label: "RECETTE_HT", deletedAt: null },
+        select: { amount: true },
+      },
+    },
+  });
+  if (!deal || deal.venueDealKind !== "PROD") return;
+  const recette = deal.productionLines.reduce((s, l) => s + Number(l.amount ?? 0), 0);
+  const ticketing = deal.coRealGrossCa != null ? Number(deal.coRealGrossCa) : 0;
+  const manual = deal.productionLines.length > 0 && Math.abs(recette - ticketing) >= 0.01;
+  if (manual !== deal.recetteManual) {
+    await prisma.deal.update({ where: { id: dealId }, data: { recetteManual: manual } });
+  }
+}
+
+/** « Reprendre la billetterie » : Recette HT = billetterie des séances. */
+export async function resetRecetteToTicketing(dealId: string): Promise<ActionResult> {
+  return safeAction("resetRecetteToTicketing", async () => {
+    await requireDealAccess(dealId);
+    await prisma.deal.update({ where: { id: dealId }, data: { recetteManual: false } });
+    await syncDealFromPerformances(dealId);
+    revalidatePath(`/shows/${dealId}`);
+    revalidatePath("/shows", "layout");
+  });
+}
 
 // ──────────────────────────── Add ────────────────────────────
 
@@ -73,6 +114,7 @@ export async function addProductionLine(
       select: { id: true },
     });
 
+    await refreshRecetteManual(dealId);
     await recomputeShowFinancials(dealId);
     await recomputeMfForDeal(dealId);
 
@@ -168,7 +210,9 @@ export async function updateProductionLine(
       isPaye !== undefined ||
       paidAt !== undefined;
     if (marginChanged || paymentChanged) {
-      await recomputeShowFinancials(line.dealId);
+      await refreshRecetteManual(line.dealId);
+      await refreshRecetteManual(line.dealId);
+    await recomputeShowFinancials(line.dealId);
     }
     if (marginChanged) {
       await recomputeMfForDeal(line.dealId);
@@ -193,6 +237,7 @@ export async function deleteProductionLine(id: string): Promise<ActionResult> {
       data: { deletedAt: new Date() },
       select: { dealId: true },
     });
+    await refreshRecetteManual(line.dealId);
     await recomputeShowFinancials(line.dealId);
     await recomputeMfForDeal(line.dealId);
     revalidatePath("/dashboard");
@@ -276,6 +321,7 @@ export async function upsertProductionLine(
       }
     }
 
+    await refreshRecetteManual(dealId);
     await recomputeShowFinancials(dealId);
     await recomputeMfForDeal(dealId);
     revalidatePath("/dashboard");

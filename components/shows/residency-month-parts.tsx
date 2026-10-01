@@ -2,14 +2,15 @@
 
 // Pièces interactives de la fiche Résidence (portage KN, étape 2) :
 // - relevé du mois (Recette HT nette versée par le théâtre) + encaissement,
-//   avec la billetterie des séances en comparaison ;
+//   avec la billetterie des séances en comparaison. Le montant se saisit à
+//   UN seul endroit : le bloc Financier du mois (Stan 2026-10-01) ;
 // - suivi Contrat / MEV / VHR appliqué à tous les mois.
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Trash2 } from "lucide-react";
 import type { PaymentStatus, VenueDealKind } from "@prisma/client";
-import { Input } from "@/components/ui/input";
 import { SensitiveAmount } from "@/components/dashboard/sensitive-amount";
 import { upsertProductionLine } from "@/lib/actions/production-lines";
 import { deleteResidency, setResidencyChecklist } from "@/lib/actions/residencies";
@@ -22,9 +23,12 @@ export function MonthReleve({
   recetteLines,
   status,
   ticketing,
+  manual = false,
 }: {
   dealId: string;
   venueDealKind: VenueDealKind | null;
+  /** Salle louée : Recette HT saisie à la main (sinon = billetterie). */
+  manual?: boolean;
   /** Somme des lignes RECETTE_HT du mois. */
   recetteHt: number;
   /** Nombre de lignes RECETTE_HT (sous-entrées → édition sur la fiche du mois). */
@@ -35,10 +39,8 @@ export function MonthReleve({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [value, setValue] = useState(recetteHt ? String(recetteHt) : "");
   const [error, setError] = useState<string | null>(null);
-  const auto = venueDealKind === "PROD";
-  const editable = !auto && recetteLines <= 1;
+  const auto = venueDealKind === "PROD" && !manual;
   const paid = status === "PAID";
 
   function save(amount: number, nextStatus: PaymentStatus) {
@@ -61,30 +63,25 @@ export function MonthReleve({
       <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {venueDealKind === "CO_REAL" ? "Relevé du mois (part nette)" : "Recette HT du mois"}
       </span>
-      {editable ? (
-        <div className="w-28">
-          <Input
-            type="text"
-            inputMode="decimal"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="€"
-            className="h-8 text-sm text-right tabular-nums"
-            onBlur={() => {
-              const n = parseFloat(value.replace(/\s/g, "").replace(",", ".")) || 0;
-              if (n !== recetteHt) save(n, status ?? "TO_INVOICE");
-            }}
-          />
-        </div>
-      ) : (
-        <span className="font-semibold tabular-nums">
-          <SensitiveAmount value={recetteHt} />
-          <span className="text-[11px] font-normal text-muted-foreground ml-1">
-            {auto ? "(= billetterie des séances)" : "(plusieurs lignes — voir la fiche du mois)"}
-          </span>
+      <span className="font-semibold tabular-nums">
+        <SensitiveAmount value={recetteHt} />
+        <span className="text-[11px] font-normal text-muted-foreground ml-1">
+          {auto
+            ? "(= billetterie des séances)"
+            : venueDealKind === "PROD"
+              ? "(saisie à la main)"
+              : recetteLines > 1
+                ? "(plusieurs lignes)"
+                : ""}
         </span>
-      )}
-      {recetteHt !== 0 && (
+      </span>
+      <Link
+        href={`/shows/${dealId}?tab=comptes`}
+        className="text-[11px] text-sky-700 dark:text-sky-400 hover:underline"
+      >
+        {recetteHt === 0 ? "Saisir dans Financier →" : "Modifier dans Financier →"}
+      </Link>
+      {recetteHt !== 0 && recetteLines <= 1 && (
         <button
           type="button"
           disabled={pending}
@@ -99,7 +96,7 @@ export function MonthReleve({
           {paid ? "✓ Encaissé" : "⏳ À encaisser"}
         </button>
       )}
-      {ticketing != null && !auto && (
+      {ticketing != null && !auto && ticketing !== recetteHt && (
         <span className="text-[11px] text-muted-foreground">
           Billetterie des séances : <SensitiveAmount value={ticketing} />
         </span>

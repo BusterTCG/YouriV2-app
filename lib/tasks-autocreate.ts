@@ -40,6 +40,7 @@ export async function autoCreateTasksForDeal(
       label: t.label,
       description: t.description,
       assigneeKey: t.defaultAssigneeKey,
+      syncKey: t.syncKey,
       dueAt: null,
     })),
   });

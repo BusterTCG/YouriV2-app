@@ -578,6 +578,10 @@ model Deal {
   /// Suivi opérationnel : VHR (voyage/hôtel/repas) booké.
   vhrBooked      Boolean @default(false)
 
+  /// Salle louée (PROD) : Recette HT saisie à la main (Stan 2026-10-01,
+  /// portage KN) — la billetterie des séances ne l'écrase plus.
+  recetteManual        Boolean   @default(false)
+
   /// Date soldée (Stan 2026-10-01, lot 3 — portage KN) : comptes clos, en
   /// général via un appel de quote-part (versement artiste). Null = pas soldée.
   settledAt            DateTime?
@@ -1143,6 +1147,11 @@ model TaskTemplate {
   /// null = "à attribuer" — l'user choisira au moment de prendre la tâche.
   defaultAssigneeKey String?
 
+  /// Lien fixe avec la check-list de la fiche date (Stan 2026-10-01) :
+  /// "contractSigned" | "ticketingReady" | "vhrBooked" — remplace la
+  /// reconnaissance par libellé (renommer la tâche ne casse plus la synchro).
+  syncKey String?
+
   /// Délai en jours par rapport à `Deal.date` pour calculer `Task.dueAt`.
   /// Positif = APRÈS la date du show (ex. encaissement J+15).
   /// Négatif = AVANT (ex. envoyer devis J−30).
@@ -1183,6 +1192,10 @@ model Task {
 
   /// Snapshot du label (modifiable au cas par cas sur le deal).
   label String
+
+  /// Lien fixe avec la check-list de la fiche date (copié du modèle) —
+  /// cf. TaskTemplate.syncKey.
+  syncKey String?
 
   description String?
 
