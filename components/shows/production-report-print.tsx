@@ -37,10 +37,9 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
     p.firstDate && p.lastDate
       ? `${format(p.firstDate, "d MMMM yyyy", { locale: fr })} → ${format(p.lastDate, "d MMMM yyyy", { locale: fr })}`
       : "Aucune date";
-  const dual = r.hasUpcoming;
-  const colLabels = dual ? ["Réalisé", "Estimé"] : ["Total"];
-  const aud = dual ? [r.audience.realized, r.audience.forecast] : [r.audience.forecast];
-  const fins = dual ? [r.finance.realized, r.finance.forecast] : [r.finance.forecast];
+  const colLabels = [r.upcomingCount > 0 ? "Réalisé à date" : "Total"];
+  const aud = [r.audience];
+  const fins = [r.finance];
   const n = (v: number | null) => (v ? v.toLocaleString("fr-FR") : "—");
   // Colonnes de fin selon le contrat : prod-exé (rémunération Pangee), co-prod (partage).
   // (y compris contrat « Résidences » distinct)
@@ -134,9 +133,9 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
               <td className="py-1 px-1" colSpan={2}>
                 Total
               </td>
-              <Num v={r.audience.forecast.performances} />
-              <Num v={r.audience.forecast.paying} />
-              <MoneyCells f={r.finance.forecast} prodExe={prodExe} coprod={coprod} />
+              <Num v={r.audience.performances} />
+              <Num v={r.audience.paying} />
+              <MoneyCells f={r.finance} prodExe={prodExe} coprod={coprod} />
             </tr>
           </tbody>
         </table>

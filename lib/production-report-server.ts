@@ -31,15 +31,18 @@ export type ProductionReport = {
   generatedAt: Date;
   /** Contrat de la production (structure du compte d'exploitation). */
   rates: ReportRates;
-  /** Des dates restent à jouer → on affiche Réalisé + Estimé ; sinon Total seul. */
-  hasUpcoming: boolean;
+  /** Dates à venir, non comptées dans le bilan (état à date — Stan 2026-10-01 :
+   *  plus d'« estimé », seulement le réalisé). */
+  upcomingCount: number;
   /** Frais généraux non répartis (aucune date active pour les porter). */
   unallocatedOverhead: number;
   contractLabel: string;
+  /** Dates jouées (et annulées) — les dates à venir ne figurent pas au bilan. */
   dates: Array<ProductionDealView & { finance: FinanceBlock }>;
-  audience: { realized: AudienceTotals; forecast: AudienceTotals };
-  finance: { realized: FinanceBlock; forecast: FinanceBlock };
-  /** Indicateurs visuels (dates jouées ; toute l'exploitation si rien de joué). */
+  /** Totaux des dates jouées. */
+  audience: AudienceTotals;
+  finance: FinanceBlock;
+  /** Indicateurs visuels (dates jouées). */
   kpis: ShowKpis;
   /** Compte artiste (quote-parts versées, solde). */
   account: ArtistAccountView;
@@ -52,28 +55,20 @@ export async function getProductionReport(
   const [production] = await getProductionSummaries({ id: productionId }, nowMs);
   if (!production) return null;
   const rates = productionRates(production);
-  const dates = production.deals.map((d) => ({ ...d, finance: financeOf([d]) }));
+  const played = production.deals.filter((d) => d.isPast || d.status === "ANNULE");
+  const dates = played.map((d) => ({ ...d, finance: financeOf([d]) }));
   return {
     production,
     generatedAt: new Date(nowMs),
     rates,
-    hasUpcoming: production.deals.some((d) => !d.isPast && d.status !== "ANNULE"),
+    upcomingCount: production.deals.length - played.length,
     unallocatedOverhead: production.unallocatedOverhead,
     contractLabel: contractLabel(production),
     dates,
-    audience: {
-      realized: audienceOf(production.deals.filter((d) => d.isPast)),
-      forecast: audienceOf(production.deals),
-    },
+    audience: audienceOf(production.deals.filter((d) => d.isPast)),
     account: await getArtistAccount(productionId, nowMs),
-    kpis: computeKpis(
-      production.deals,
-      production.deals.some((d) => d.isPast && d.status !== "ANNULE") ? "realized" : "all",
-    ),
-    finance: {
-      realized: financeOf(production.deals.filter((d) => d.isPast)),
-      forecast: financeOf(production.deals),
-    },
+    kpis: computeKpis(production.deals, "realized"),
+    finance: financeOf(production.deals.filter((d) => d.isPast)),
   };
 }
 

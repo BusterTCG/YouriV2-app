@@ -73,3 +73,20 @@ describe("computeArtistAccount", () => {
     expect(refunded.balance).toBe(0);
   });
 });
+
+describe("computeArtistAccount — dates soldées (lot 3, Stan 2026-10-01)", () => {
+  it("date soldée par un appel de quote-part : appelable et réglée même billetterie non reçue", () => {
+    const deals = [
+      d("sept", "2026-09-19", 1000, { collected: false, settled: true }),
+      d("oct", "2026-10-17", 1500, { collected: false, settled: true }),
+      d("nov", "2026-11-14", 800),
+    ];
+    const a = computeArtistAccount(deals, [{ kind: "PAYMENT", amount: 2500 }]);
+    expect(a.callable).toBe(3300);
+    expect(a.balance).toBe(800);
+    expect(a.statuses.get("sept")).toBe("PAID");
+    expect(a.statuses.get("oct")).toBe("PAID");
+    // Le versement a été absorbé par les dates soldées : novembre reste à régler.
+    expect(a.statuses.get("nov")).toBe("TO_INVOICE");
+  });
+});

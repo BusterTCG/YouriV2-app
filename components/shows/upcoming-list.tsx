@@ -8,6 +8,9 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { AlertCircle, MapPin } from "lucide-react";
 import type { ProductionDealView, ProductionSummary } from "@/lib/productions";
+import { FillRing } from "@/components/shows/kpi-visuals";
+import { StagePill } from "@/components/shows/stage-pill";
+import { nextPrepStep } from "@/lib/date-lifecycle";
 import { cn } from "@/lib/utils";
 
 export type UpcomingItem = {
@@ -16,6 +19,8 @@ export type UpcomingItem = {
   /** Jour "YYYY-MM-DD". */
   day: string;
   times: string[];
+  /** Remplissage du soir (payants ÷ jauge des séances du jour), null si non saisi. */
+  fillRate: number | null;
 };
 
 /** Jours de représentation à venir (≥ aujourd'hui, ≤ horizon si fourni). */
@@ -29,12 +34,22 @@ export function collectUpcoming(
       p.deals
         .filter((d) => d.status !== "ANNULE")
         .flatMap((d) => {
-          const byDay = new Map<string, string[]>();
+          const byDay = new Map<string, { times: string[]; paying: number; capacity: number }>();
           for (const s of d.sessions) {
             if (s.day < todayKey || (horizonKey && s.day > horizonKey)) continue;
-            byDay.set(s.day, [...(byDay.get(s.day) ?? []), ...(s.time ? [s.time] : [])]);
+            const cur = byDay.get(s.day) ?? { times: [], paying: 0, capacity: 0 };
+            if (s.time) cur.times.push(s.time);
+            cur.paying += s.paying ?? 0;
+            cur.capacity += s.capacity ?? 0;
+            byDay.set(s.day, cur);
           }
-          return [...byDay.entries()].map(([day, times]) => ({ d, p, day, times }));
+          return [...byDay.entries()].map(([day, v]) => ({
+            d,
+            p,
+            day,
+            times: v.times,
+            fillRate: v.capacity > 0 && v.paying > 0 ? Math.round((v.paying / v.capacity) * 100) : null,
+          }));
         }),
     )
     .sort((a, b) => a.day.localeCompare(b.day) || (a.times[0] ?? "").localeCompare(b.times[0] ?? ""));
@@ -81,10 +96,7 @@ export function UpcomingList({
 
 function UpcomingRow({ item, showArtist }: { item: UpcomingItem; showArtist: boolean }) {
   const { d, p, day, times } = item;
-  let nextOp: string | null = null;
-  if (!d.contractSigned) nextOp = "Contrat";
-  else if (!d.ticketingReady) nextOp = "MEV";
-  else if (!d.vhrBooked) nextOp = "VHR";
+  const nextOp = nextPrepStep(d);
   const fdrMissing = d.briefingStatus !== "COMPLETE" && d.briefingStatus !== "SENT";
   const place = [d.venueName, d.city].filter(Boolean).join(" · ") || "Lieu à définir";
 
@@ -100,6 +112,7 @@ function UpcomingRow({ item, showArtist }: { item: UpcomingItem; showArtist: boo
         </div>
         {times.length > 0 && <div className="text-[11px] text-muted-foreground">{times.join(" / ")}</div>}
       </div>
+      <FillRing percent={item.fillRate} />
       <div className="flex-1 min-w-[160px]">
         {showArtist ? (
           <>
@@ -127,7 +140,9 @@ function UpcomingRow({ item, showArtist }: { item: UpcomingItem; showArtist: boo
         )}
       </div>
       <div className="flex items-center gap-3 text-xs">
-        {nextOp ? (
+        {d.stage === "A_CONFIRMER" ? (
+          <StagePill stage="A_CONFIRMER" />
+        ) : nextOp ? (
           <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 font-semibold">
             <AlertCircle className="h-3 w-3" />
             {nextOp}

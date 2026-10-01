@@ -33,6 +33,8 @@ import {
   dealPnl,
   performanceCountOf,
 } from "@/lib/finance/production-overhead";
+import { frozenShareOf } from "@/lib/finance/settlement-rules";
+import { dateStage, type DateStage } from "@/lib/date-lifecycle";
 
 export type MoneyTotals = {
   revenue: number;
@@ -89,8 +91,12 @@ export type ProductionDealView = {
   /** Charges saisies non payées (€), cachets inclus. */
   openCost: number;
   artistStatus: PaymentStatus;
+  /** Date soldée (lot 3) — null sinon. */
+  settledAt: Date | null;
+  /** Étape du cycle de vie (lib/date-lifecycle.ts). */
+  stage: DateStage;
   /** Séances (jour "YYYY-MM-DD", horaire) — non annulées, triées. */
-  sessions: Array<{ day: string; time: string | null }>;
+  sessions: Array<{ day: string; time: string | null; paying: number | null; capacity: number | null }>;
   /** Montant par poste (recettes + charges saisies sur la date). */
   byLabel: Partial<Record<ProductionLineLabel, number>>;
   /** Cachets artistes de la date (charge — spécificité Youri). */
@@ -224,7 +230,7 @@ export async function getProductionSummaries(
       },
       performances: {
         where: { cancelled: false },
-        select: { date: true, time: true },
+        select: { date: true, time: true, paying: true, capacity: true },
         orderBy: [{ date: "asc" }, { time: "asc" }],
       },
     },
@@ -259,6 +265,7 @@ export async function getProductionSummaries(
         id: d.id,
         status: d.status,
         performances: performanceCountOf(d),
+        frozenShare: frozenShareOf(d),
       })),
       overheadTotal,
     );
@@ -317,10 +324,15 @@ export async function getProductionSummaries(
       const sessions = cancelled
         ? []
         : d.performances.length
-          ? d.performances.map((p) => ({ day: p.date.toISOString().slice(0, 10), time: p.time }))
+          ? d.performances.map((p) => ({
+              day: p.date.toISOString().slice(0, 10),
+              time: p.time,
+              paying: p.paying,
+              capacity: p.capacity ?? d.capacity,
+            }))
           : d.isMultiDate
-            ? multiDates.map((day) => ({ day, time: d.showTime }))
-            : [{ day: dayKey, time: d.showTime }];
+            ? multiDates.map((day) => ({ day, time: d.showTime, paying: null, capacity: null }))
+            : [{ day: dayKey, time: d.showTime, paying: d.paying, capacity: d.capacity }];
       const openCachets = d.dealArtistes
         .filter((a) => a.paymentStatus !== "PAID")
         .reduce((s, a) => s + (dec(a.cachetAmount) ?? 0), 0);
@@ -358,6 +370,15 @@ export async function getProductionSummaries(
             .filter((l) => l.kind === "COST" && l.paymentStatus !== "PAID")
             .reduce((s, l) => s + Number(l.amount), 0) + openCachets,
         artistStatus: d.artistStatus,
+        settledAt: d.settledAt,
+        stage: dateStage({
+          status: d.status,
+          isPast,
+          settled: d.settledAt != null,
+          contractSigned: d.contractSigned,
+          ticketingReady: d.ticketingReady,
+          vhrBooked: d.vhrBooked,
+        }),
         unpaidLines:
           lines.filter((l) => Number(l.amount) !== 0 && l.paymentStatus !== "PAID").length +
           d.dealArtistes.filter((a) => (dec(a.cachetAmount) ?? 0) !== 0 && a.paymentStatus !== "PAID")

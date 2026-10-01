@@ -13,6 +13,8 @@ import { syncDealProductionLink } from "@/lib/finance/production-link";
 import { revalidateAllDealRoutes } from "@/lib/revalidate-deals";
 import { syncDealFromPerformances } from "@/lib/performances";
 import { shareKindFor } from "@/lib/finance/production-overhead";
+import { isResidencySharedField } from "@/lib/residency-shared-fields";
+import { syncShowTaskToggle } from "@/lib/actions/sync-show-tasks";
 
 /**
  * Server actions spécifiques Prod Exécutive (Sprint 4).
@@ -62,6 +64,10 @@ const UpdateShowDetailsSchema = z.object({
   vhrBooked: z.boolean().optional(),
   // VenueRoom (snapshot)
   venueRoomId: z.string().nullable().optional(),
+  /** Mois de résidence : répercuter les champs partagés modifiés sur tous les
+   *  mois de la résidence (choix « Tous les mois », par défaut — Stan
+   *  2026-10-01, portage KN). */
+  applyToResidency: z.boolean().optional(),
 });
 
 export async function updateShowDetails(
@@ -71,12 +77,12 @@ export async function updateShowDetails(
     await requireUser();
     const parsedInput = UpdateShowDetailsSchema.parse(input);
     await requireDealAccess(parsedInput.id);
-    const { id, ...rest } = parsedInput;
+    const { id, applyToResidency, ...rest } = parsedInput;
     let { multiDateDates } = parsedInput;
 
     const current = await prisma.deal.findFirst({
       where: { id, deletedAt: null },
-      select: { productionId: true, coprodKnPct: true },
+      select: { productionId: true, coprodKnPct: true, residencyId: true },
     });
     if (!current) throw new Error("Date introuvable");
     // Date d'une production (portage KN) : le contrat artiste est celui de
@@ -161,8 +167,45 @@ export async function updateShowDetails(
       await recomputeMfForDeal(id);
     }
 
+    if (applyToResidency && current.residencyId) {
+      const keys = (Object.keys(rest) as Array<keyof typeof rest>).filter(
+        (k) => rest[k] !== undefined && isResidencySharedField(k),
+      );
+      await propagateToResidency(id, current.residencyId, keys);
+    }
+
     revalidatePath("/dashboard");
     revalidatePath("/shows", "layout");
     revalidateAllDealRoutes(id, financialChanged || rest.showName !== undefined);
   });
+}
+
+/**
+ * Répercute les champs partagés (cf. RESIDENCY_SHARED_FIELDS) du mois `id`
+ * sur les autres mois actifs de sa résidence : recalcul de chacun et, pour
+ * le suivi, synchro du pipeline de tâches (comme la check-list résidence).
+ */
+async function propagateToResidency(id: string, residencyId: string, keys: string[]) {
+  const shared = keys.filter(isResidencySharedField);
+  if (shared.length === 0) return;
+  const src = await prisma.deal.findUnique({ where: { id } });
+  if (!src) return;
+  const data = Object.fromEntries(shared.map((k) => [k, src[k]]));
+  const others = await prisma.deal.findMany({
+    where: { residencyId, deletedAt: null, id: { not: id } },
+    select: { id: true, _count: { select: { performances: true } } },
+  });
+  if (others.length === 0) return;
+  await prisma.deal.updateMany({ where: { id: { in: others.map((o) => o.id) } }, data });
+  const checklist = (["contractSigned", "ticketingReady", "vhrBooked"] as const).filter((k) =>
+    shared.includes(k),
+  );
+  const financial = shared.some((k) => k === "venueDealKind" || k === "capacity");
+  for (const o of others) {
+    for (const k of checklist) await syncShowTaskToggle(o.id, k, src[k]);
+    if (!financial) continue;
+    if (o._count.performances > 0) await syncDealFromPerformances(o.id);
+    await recomputeShowFinancials(o.id);
+    await recomputeMfForDeal(o.id);
+  }
 }

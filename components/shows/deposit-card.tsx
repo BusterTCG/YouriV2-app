@@ -93,7 +93,7 @@ export function DepositCard({
           <Landmark className="h-4 w-4" />
           Acompte versé à la salle
           <span className="text-xs font-normal text-muted-foreground">
-            — à récupérer en fin d&apos;exploitation, sans impact sur le résultat
+            — à récupérer en fin de production, sans impact sur le résultat
           </span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">

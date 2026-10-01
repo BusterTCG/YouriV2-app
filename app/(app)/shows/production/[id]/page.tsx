@@ -12,13 +12,12 @@ import {
   FileText,
   HandCoins,
   Landmark,
-  MapPin,
   StickyNote,
   Theater,
 } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { getProductionSummaries, type ProductionDealView } from "@/lib/productions";
-import { dealStatusLabel, formatEur } from "@/components/deals/deal-helpers";
+import { getProductionSummaries } from "@/lib/productions";
+import { formatEur } from "@/components/deals/deal-helpers";
 import { SensitiveAmount } from "@/components/dashboard/sensitive-amount";
 import { PrivacyToggle } from "@/components/dashboard/privacy-toggle";
 import { ProductionActions } from "@/components/shows/production-actions";
@@ -29,8 +28,9 @@ import { TourWizard } from "@/components/shows/tour-wizard";
 import { SectionTitle } from "@/components/shows/section-title";
 import { UpcomingList, collectUpcoming } from "@/components/shows/upcoming-list";
 import { FinanceSummary } from "@/components/shows/finance-summary";
-import { computeKpis, financeOf, productionRates } from "@/lib/production-report";
-import { KpiTiles } from "@/components/shows/kpi-visuals";
+import { audienceOf, computeKpis, financeOf, productionRates } from "@/lib/production-report";
+import { FillRing, KpiTiles } from "@/components/shows/kpi-visuals";
+import { DateRow, SettlementRow, pastDealsOf, toSettleOf } from "@/components/shows/date-rows";
 import { getArtistAccount } from "@/lib/finance/artist-account-server";
 import { ArtistAccountCard } from "@/components/shows/artist-account-card";
 import { contractRates, productionContractSummary } from "@/lib/finance/production-overhead";
@@ -43,15 +43,17 @@ interface Props {
   searchParams: Promise<{ tab?: string }>;
 }
 
-type TabKey = "suivi" | "dates" | "resultats" | "artiste" | "frais" | "contrat";
-const TAB_KEYS: TabKey[] = ["suivi", "dates", "resultats", "artiste", "frais", "contrat"];
+type TabKey = "suivi" | "resultats" | "artiste" | "frais" | "contrat";
+const TAB_KEYS: TabKey[] = ["suivi", "resultats", "artiste", "frais", "contrat"];
+/** Prochaines dates affichées d'office (le reste est replié). */
+const UPCOMING_VISIBLE = 4;
 
 /**
  * Fiche spectacle (production) — portage KN (Stan 2026-09-28 : un onglet = une
  * question, dans l'ordre du cycle de vie d'une exploitation).
- *   Suivi          : qu'est-ce que je dois faire ? (alertes, 3 prochaines
- *                    dates, à solder, solde artiste en une ligne)
- *   Dates          : le planning complet (résidences, à venir, passées)
+ *   Suivi          : alertes, résidences, prochaines dates (4 + dépliable),
+ *                    à solder, passées soldées — chaque date avec ses KPI
+ *                    (Stan 2026-10-01 : Suivi et Dates fusionnés ; ?tab=dates → Suivi)
  *   Résultats      : combien ça rapporte ? (KPI visuels, compte
  *                    d'exploitation, détail par date)
  *   Artiste        : le compte artiste (settlement)
@@ -83,10 +85,8 @@ export default async function ProductionPage({ params, searchParams }: Props) {
   const upcoming = collectUpcoming([prod], format(startOfToday, "yyyy-MM-dd"), null);
 
   // Dates passées : à solder / soldées.
-  const pastDeals = prod.deals.filter((d) => d.isPast || d.status === "ANNULE").reverse();
-  const toSettle = pastDeals
-    .map((d) => ({ d, items: openItems(d) }))
-    .filter((x) => x.items.length > 0);
+  const toSettle = toSettleOf(prod);
+  const settled = pastDealsOf(prod).filter((d) => !toSettle.some((x) => x.d.id === d.id));
   const depositsToRecover = prod.deposits.filter((dep) => !dep.recovered && dep.toRecover > 0);
   const suiviCount = toSettle.length + depositsToRecover.length;
 
@@ -99,13 +99,14 @@ export default async function ProductionPage({ params, searchParams }: Props) {
       planned: months.reduce((s, d) => s + d.performances, 0),
       played: months.reduce((s, d) => s + d.performancesPlayed, 0),
       paying: months.reduce((s, d) => s + (d.paying ?? 0), 0),
+      fillRate: audienceOf(months).fillRate,
       first: months[0]?.firstDate ?? null,
       last: months.length ? months[months.length - 1].lastDate : null,
     };
   });
   const rates = productionRates(prod);
-  const hasUpcoming = prod.deals.some((d) => !d.isPast && d.status !== "ANNULE");
   const balanceOpen = Math.round(account.balance) !== 0;
+  const playedDeals = prod.deals.filter((d) => d.isPast);
 
   const period =
     prod.firstDate && prod.lastDate
@@ -114,7 +115,6 @@ export default async function ProductionPage({ params, searchParams }: Props) {
 
   const tabs: Array<{ key: TabKey; label: string; badge?: string; tone?: "amber" | "muted" }> = [
     { key: "suivi", label: "Suivi", badge: suiviCount ? String(suiviCount) : undefined, tone: "amber" },
-    { key: "dates", label: "Dates", badge: String(prod.deals.length), tone: "muted" },
     { key: "resultats", label: "Résultats" },
     { key: "artiste", label: "Artiste", badge: balanceOpen ? "•" : undefined, tone: "amber" },
     {
@@ -224,7 +224,8 @@ export default async function ProductionPage({ params, searchParams }: Props) {
         ))}
       </div>
 
-      {/* ── SUIVI : ce qu'il faut faire ─────────────────────────────── */}
+      {/* ── SUIVI : alertes + toutes les dates (Stan 2026-10-01 : Suivi et
+          Dates fusionnés — dates avec KPI, lien vers les résidences). ── */}
       {view === "suivi" && (
         <>
           {depositsToRecover.length > 0 && (
@@ -246,7 +247,7 @@ export default async function ProductionPage({ params, searchParams }: Props) {
                   <span>· {dep.label}</span>
                   {dep.paidAt && <span>· versé le {format(dep.paidAt, "dd/MM/yyyy")}</span>}
                   <span className={dep.finished ? "font-semibold text-red-700 dark:text-red-400" : ""}>
-                    · {dep.finished ? "exploitation terminée — à récupérer maintenant" : "à récupérer en fin d'exploitation"}
+                    · {dep.finished ? "production terminée — à récupérer maintenant" : "à récupérer en fin de production"}
                   </span>
                 </Link>
               ))}
@@ -278,16 +279,39 @@ export default async function ProductionPage({ params, searchParams }: Props) {
             </Link>
           )}
 
+          {residencyCards.length > 0 && (
+            <section className="space-y-2">
+              <SectionTitle tone="gold">Résidences · {residencyCards.length}</SectionTitle>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {residencyCards.map((r) => (
+                  <Link
+                    key={r.id}
+                    href={`/shows/residence/${r.id}`}
+                    className="rounded-md border bg-card px-4 py-3 hover:bg-accent/30 transition-colors flex items-center gap-3"
+                  >
+                    <FillRing percent={r.fillRate} />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold truncate">{r.name}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {r.first && r.last
+                          ? `${format(r.first, "d MMM", { locale: fr })} → ${format(r.last, "d MMM yyyy", { locale: fr })} · `
+                          : ""}
+                        {r.months} mois · {r.played}/{r.planned} séances jouées
+                        {r.paying ? ` · ${r.paying} payants` : ""}
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
           <section className="space-y-2">
             <SectionTitle tone="blue" icon={<CalendarClock className="h-3.5 w-3.5" />}>
               Prochaines dates · {upcoming.length}
             </SectionTitle>
-            <UpcomingList items={upcoming.slice(0, 3)} visible={3} showArtist={false} emptyText="Aucune date à venir." />
-            {upcoming.length > 3 && (
-              <Link href={href("dates")} className="text-xs font-medium text-sky-700 dark:text-sky-400 hover:underline">
-                Voir tout le planning ({upcoming.length} dates à venir) →
-              </Link>
-            )}
+            <UpcomingList items={upcoming} visible={UPCOMING_VISIBLE} showArtist={false} emptyText="Aucune date à venir." />
           </section>
 
           <section className="space-y-2">
@@ -306,58 +330,25 @@ export default async function ProductionPage({ params, searchParams }: Props) {
               </div>
             )}
           </section>
-        </>
-      )}
 
-      {/* ── DATES : le planning complet ─────────────────────────────── */}
-      {view === "dates" && (
-        <>
-          {residencyCards.length > 0 && (
-            <section className="space-y-2">
-              <SectionTitle tone="gold">Résidences · {residencyCards.length}</SectionTitle>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {residencyCards.map((r) => (
-                  <Link
-                    key={r.id}
-                    href={`/shows/residence/${r.id}`}
-                    className="rounded-md border bg-card px-4 py-3 hover:bg-accent/30 transition-colors flex items-center gap-3"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold truncate">{r.name}</div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {r.first && r.last
-                          ? `${format(r.first, "d MMM", { locale: fr })} → ${format(r.last, "d MMM yyyy", { locale: fr })} · `
-                          : ""}
-                        {r.months} mois · {r.played}/{r.planned} séances jouées
-                        {r.paying ? ` · ${r.paying} payants` : ""}
-                      </div>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
-                  </Link>
-                ))}
-              </div>
-            </section>
-          )}
-          <section className="space-y-2">
-            <SectionTitle tone="blue" icon={<CalendarClock className="h-3.5 w-3.5" />}>
-              À venir · {upcoming.length}
-            </SectionTitle>
-            <UpcomingList items={upcoming} visible={20} showArtist={false} emptyText="Aucune date à venir." />
-          </section>
-          <section className="space-y-2">
-            <SectionTitle tone="slate">Passées · {pastDeals.length}</SectionTitle>
-            {pastDeals.length === 0 ? (
-              <p className="rounded-md border border-dashed py-4 text-center text-sm text-muted-foreground">
-                Aucune date passée.
-              </p>
-            ) : (
-              <div className="space-y-1.5">
-                {pastDeals.map((d) => (
+          {settled.length > 0 && (
+            <details className="group">
+              <summary className="cursor-pointer list-none">
+                <SectionTitle
+                  tone="slate"
+                  as="h3"
+                  icon={<ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />}
+                >
+                  Passées soldées · {settled.length}
+                </SectionTitle>
+              </summary>
+              <div className="space-y-1.5 mt-2">
+                {settled.map((d) => (
                   <DateRow key={d.id} d={d} />
                 ))}
               </div>
-            )}
-          </section>
+            </details>
+          )}
         </>
       )}
 
@@ -380,30 +371,23 @@ export default async function ProductionPage({ params, searchParams }: Props) {
               Bilan Excel
             </a>
             <span className="text-[11px] text-muted-foreground ml-auto">
-              Réalisé = dates jouées · Estimé = toute l&apos;exploitation (sur la base de ce qui est saisi)
+              État à date : dates déjà jouées uniquement
             </span>
           </div>
-          <KpiTiles
-            kpis={computeKpis(
-              prod.deals,
-              prod.deals.some((d) => d.isPast && d.status !== "ANNULE") ? "realized" : "all",
-            )}
-          />
+          <KpiTiles kpis={computeKpis(prod.deals, "realized")} />
           <FinanceSummary
             rates={rates}
-            columns={
-              hasUpcoming
-                ? [
-                    { label: "Réalisé", f: financeOf(prod.deals.filter((d) => d.isPast)) },
-                    { label: "Estimé", f: financeOf(prod.deals) },
-                  ]
-                : [{ label: "Total", f: financeOf(prod.deals) }]
-            }
+            columns={[
+              {
+                label: playedDeals.length < prod.deals.length ? "Réalisé à date" : "Total",
+                f: financeOf(playedDeals),
+              },
+            ]}
           />
           <section className="space-y-2">
-            <SectionTitle tone="violet">Détail par date · {prod.deals.length}</SectionTitle>
+            <SectionTitle tone="violet">Détail par date jouée · {playedDeals.length}</SectionTitle>
             <div className="space-y-1.5">
-              {prod.deals.map((d) => (
+              {playedDeals.map((d) => (
                 <DateRow key={d.id} d={d} />
               ))}
             </div>
@@ -416,6 +400,16 @@ export default async function ProductionPage({ params, searchParams }: Props) {
         <ArtistAccountCard
           productionId={prod.id}
           artistName={prod.artist.name}
+          settleable={prod.deals
+            .filter((d) => d.stage === "A_SOLDER")
+            .map((d) => ({
+              id: d.id,
+              label: `${
+                d.residencyId ? format(d.firstDate, "MMMM yyyy", { locale: fr }) : format(d.date, "dd/MM/yyyy")
+              } · ${d.venueName ?? d.title}`,
+              artistAmount: d.pnl.artistAmount ?? 0,
+              collected: Math.round(d.pnl.revenue) !== 0 && Math.round(d.openRevenue) === 0,
+            }))}
           account={{
             acquired: account.acquired,
             callable: account.callable,
@@ -486,159 +480,6 @@ export default async function ProductionPage({ params, searchParams }: Props) {
           </div>
         </>
       )}
-    </div>
-  );
-}
-
-// ─────────────────────────── À solder ───────────────────────────
-
-type OpenItem = { label: string; tone: "amber" | "red" | "slate" };
-
-/**
- * Ce qui reste à faire sur une date passée : recettes à encaisser, charges à
- * payer, données à saisir. Vide = date soldée.
- */
-function openItems(d: ProductionDealView): OpenItem[] {
-  const items: OpenItem[] = [];
-  const cancelled = d.status === "ANNULE";
-  if (!cancelled && d.pnl.revenue === 0) items.push({ label: "Recette à saisir", tone: "slate" });
-  if (!cancelled && (d.paying == null || d.paying === 0)) {
-    items.push({ label: "Payants à saisir", tone: "slate" });
-  }
-  if (Math.round(d.openRevenue) !== 0) {
-    items.push({ label: `${formatEur(d.openRevenue)} à encaisser`, tone: "amber" });
-  }
-  if (Math.round(d.openCost) !== 0) {
-    items.push({ label: `${formatEur(d.openCost)} de charges à payer`, tone: "red" });
-  }
-  return items;
-}
-
-function SettlementRow({ d, items }: { d: ProductionDealView; items: OpenItem[] }) {
-  return (
-    <Link
-      href={`/shows/${d.id}`}
-      className="flex items-center gap-3 rounded-md border bg-card px-3 py-2 hover:bg-accent/30 transition-colors flex-wrap sm:flex-nowrap"
-    >
-      <div className="w-28 shrink-0 leading-tight">
-        <div className="font-semibold tabular-nums capitalize">
-          {d.residencyId ? format(d.firstDate, "MMMM yyyy", { locale: fr }) : format(d.date, "dd/MM/yyyy")}
-        </div>
-        <div className="text-[11px] text-muted-foreground first-letter:uppercase">
-          {d.residencyId ? `${d.performances} séances` : format(d.date, "EEEE", { locale: fr })}
-        </div>
-      </div>
-      <div className="flex-1 min-w-[160px]">
-        <div className="text-sm font-medium truncate">{d.venueName ?? d.title}</div>
-        <div className="text-[11px] text-muted-foreground inline-flex items-center gap-1">
-          <MapPin className="h-3 w-3" />
-          {d.residencyId ? "Résidence · " : "Tournée · "}
-          {d.city ?? "—"}
-          {d.status === "ANNULE" && " · annulée"}
-        </div>
-      </div>
-      <div className="flex items-center gap-1.5 flex-wrap justify-end">
-        {items.map((it) => (
-          <span
-            key={it.label}
-            className={cn(
-              "rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap",
-              it.tone === "amber" && "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300",
-              it.tone === "red" && "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300",
-              it.tone === "slate" && "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300",
-            )}
-          >
-            {it.label}
-          </span>
-        ))}
-      </div>
-      <ChevronRight className="h-4 w-4 text-muted-foreground/50 shrink-0" />
-    </Link>
-  );
-}
-
-// ─────────────────────────── Lignes de date ───────────────────────────
-
-function DateRow({ d }: { d: ProductionDealView }) {
-  const status = dealStatusLabel(d.status);
-  let nextOp: string | null = null;
-  if (!d.contractSigned) nextOp = "Contrat";
-  else if (!d.ticketingReady) nextOp = "MEV";
-  else if (!d.vhrBooked) nextOp = "VHR";
-  const cancelled = d.status === "ANNULE";
-
-  return (
-    <Link
-      href={`/shows/${d.id}`}
-      className={cn(
-        "flex items-center gap-3 rounded-md border bg-card px-3 py-2 hover:bg-accent/30 transition-colors flex-wrap sm:flex-nowrap",
-        (cancelled || d.isPast) && "bg-slate-50 dark:bg-slate-900/40",
-        cancelled && "opacity-60",
-      )}
-    >
-      <div className="w-24 shrink-0">
-        {d.isMultiDate ? (
-          <div className="font-semibold capitalize leading-tight">
-            {format(d.firstDate, "MMM yyyy", { locale: fr })}
-            <div className="text-[11px] font-normal text-muted-foreground">{d.performances} repr.</div>
-          </div>
-        ) : (
-          <div className="leading-tight">
-            <div className="font-semibold tabular-nums">{format(d.date, "dd/MM/yyyy")}</div>
-            <div className="text-[11px] text-muted-foreground capitalize">
-              {format(d.date, "EEEE", { locale: fr })}
-              {d.showTime && ` · ${d.showTime}`}
-            </div>
-          </div>
-        )}
-      </div>
-      <div className="flex-1 min-w-[160px]">
-        <div className="text-sm font-medium truncate">{d.venueName ?? d.title}</div>
-        <div className="text-[11px] text-muted-foreground inline-flex items-center gap-2">
-          {d.residencyId && <span>Résidence</span>}
-          {d.city && (
-            <span className="inline-flex items-center gap-0.5">
-              <MapPin className="h-3 w-3" />
-              {d.city}
-            </span>
-          )}
-          <span>
-            {status.emoji} {status.label}
-          </span>
-        </div>
-      </div>
-      {!d.isPast && !cancelled && (
-        <div className="w-20 text-xs">
-          {nextOp ? (
-            <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 font-semibold">
-              <AlertCircle className="h-3 w-3" />
-              {nextOp}
-            </span>
-          ) : (
-            <span className="text-emerald-600 dark:text-emerald-400 font-medium">✓ Prêt</span>
-          )}
-        </div>
-      )}
-      <Money label="CA" value={d.pnl.revenue} />
-      <Money label="Résultat" value={d.pnl.margin} signed />
-      <Money label="Part artiste" value={d.pnl.artistAmount} signed />
-    </Link>
-  );
-}
-
-function Money({ label, value, signed }: { label: string; value: number | null; signed?: boolean }) {
-  return (
-    <div className="w-24 text-right">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div
-        className={cn(
-          "text-sm font-semibold tabular-nums",
-          signed && value != null && value > 0 && "text-emerald-600 dark:text-emerald-400",
-          signed && value != null && value < 0 && "text-red-600 dark:text-red-400",
-        )}
-      >
-        {value == null || value === 0 ? "—" : <SensitiveAmount value={value} />}
-      </div>
     </div>
   );
 }

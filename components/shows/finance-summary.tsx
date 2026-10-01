@@ -1,7 +1,7 @@
 // Compte d'exploitation compact de l'onglet Résultats (Stan 2026-09-28 :
 // remplace les 6 tuiles de montants). Même structure que le bilan :
 // recettes, charges (postes vides masqués, frais généraux, prod-exé Pangee), puis
-// bénéfice partagé (co-prod) ou net artiste. Colonnes Réalisé | Estimé.
+// bénéfice partagé (co-prod) ou net artiste. Colonnes : une par périmètre (Réalisé à date / Total).
 // Server-safe.
 
 import { SensitiveAmount } from "@/components/dashboard/sensitive-amount";

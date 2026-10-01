@@ -14,6 +14,7 @@ import { ResidencyWizard } from "@/components/shows/residency-wizard";
 import { DeleteResidencyButton, MonthReleve, ResidencyChecklist } from "@/components/shows/residency-month-parts";
 import { SectionTitle } from "@/components/shows/section-title";
 import { DepositCard } from "@/components/shows/deposit-card";
+import { FillRing } from "@/components/shows/kpi-visuals";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -164,7 +165,7 @@ export default async function ResidencyPage({ params }: Props) {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Kpi label="Séances" value={`${played}/${active.length}`} />
         <Kpi label="Payants" value={paying ? paying.toLocaleString("fr-FR") : "—"} />
-        <Kpi label="Remplissage" value={fill != null ? `${fill} %` : "—"} />
+        <Kpi label="Remplissage" value={<FillRing percent={fill} />} />
         <Kpi label="Billetterie HT" value={<SensitiveAmount value={ticketing} />} />
         <Kpi label={venueKind === "CO_REAL" ? "Recette (relevés)" : "Recette HT"} value={<SensitiveAmount value={recette} />} />
         <Kpi
@@ -209,6 +210,9 @@ export default async function ResidencyPage({ params }: Props) {
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <SectionTitle tone="gold">{format(month, "MMMM yyyy", { locale: fr })}</SectionTitle>
               <div className="flex items-center gap-4 text-sm flex-wrap">
+                <FillRing
+                  percent={t.paying && t.capacity ? Math.round((t.paying / t.capacity) * 100) : null}
+                />
                 <span className="text-muted-foreground">
                   Charges du mois{" "}
                   <span className="font-semibold text-foreground">
@@ -228,8 +232,10 @@ export default async function ResidencyPage({ params }: Props) {
                     <SensitiveAmount value={prodExe ? v?.pnl.artistAmount ?? 0 : v?.pnl.margin ?? 0} />
                   </span>
                 </span>
+                {/* Ouvre directement le bloc Financier du mois (Stan 2026-10-01 :
+                    la billetterie est déjà suivie ici, pas de doublon). */}
                 <Link
-                  href={`/shows/${d.id}`}
+                  href={`/shows/${d.id}?tab=comptes`}
                   className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground"
                 >
                   Charges &amp; détail du mois

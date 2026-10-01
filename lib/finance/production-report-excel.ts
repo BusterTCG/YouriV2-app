@@ -69,21 +69,20 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
 
   // 1. Synthèse
   sectionTitle(ws, row, "1. SYNTHÈSE", 5);
-  const dual = r.hasUpcoming;
-  const colLabels = dual ? ["Réalisé", "Estimé"] : ["Total"];
-  const aud = dual ? [r.audience.realized, r.audience.forecast] : [r.audience.forecast];
+  const colLabels = [r.upcomingCount > 0 ? "Réalisé à date" : "Total"];
+  const aud = [r.audience];
   row = writeStatTable(ws, row + 1, ["Public", ...colLabels], [
     { label: "Représentations", values: aud.map((a) => a.performances), fmt: INT },
     { label: "Payants", values: aud.map((a) => a.paying), fmt: INT },
     { label: "Invités", values: aud.map((a) => a.invited), fmt: INT },
     { label: "Remplissage", values: aud.map((a) => (a.fillRate != null ? a.fillRate / 100 : null)), fmt: "0%" },
   ]);
-  row = writeStatTable(ws, row + 2, ["Indicateurs", r.kpis.scope === "realized" ? "Dates jouées" : "Exploitation"], [
+  row = writeStatTable(ws, row + 2, ["Indicateurs", "Dates jouées"], [
     { label: "Ticket moyen (billetterie ÷ payants)", values: [r.kpis.ticketAvg], fmt: EUR },
     { label: "Résultat par représentation", values: [r.kpis.resultPerPerf], fmt: EUR },
     { label: "Représentations jouées", values: [r.kpis.played], fmt: INT },
   ]);
-  const fins = dual ? [r.finance.realized, r.finance.forecast] : [r.finance.forecast];
+  const fins = [r.finance];
   row = writeFinanceTable(
     ws,
     row + 2,
@@ -205,9 +204,9 @@ function addDates(ws: ExcelJS.Worksheet, r: ProductionReport) {
     row++;
   }
   text(ws, `A${row}`, "Total", { bold: true });
-  num(ws, `C${row}`, r.audience.forecast.performances, INT, true);
-  num(ws, `D${row}`, r.audience.forecast.paying, INT, true);
-  moneyCols(r.finance.forecast, true);
+  num(ws, `C${row}`, r.audience.performances, INT, true);
+  num(ws, `D${row}`, r.audience.paying, INT, true);
+  moneyCols(r.finance, true);
   fillRow(ws, row, SUBTOTAL_BG, heads.length);
 }
 

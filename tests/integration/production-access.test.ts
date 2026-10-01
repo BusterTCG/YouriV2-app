@@ -197,3 +197,21 @@ describe("profil « Production » (Nour) — gardes serveur", () => {
     expect(await prisma.artist.findFirst({ where: { name: "Nouvel artiste" } })).toBeTruthy();
   });
 });
+
+describe("« Nouvelle production » depuis l'accueil (Stan 2026-10-01)", () => {
+  it("crée un spectacle sans date (contrat facultatif), refuse un doublon pour le même artiste", async () => {
+    const P = await import("@/lib/actions/productions");
+    current = NOUR;
+    const { id } = ok<{ id: string }>(
+      await P.createProduction({ artistId: artist, name: "  Nouveau   Spectacle ", prodExePct: 15 }),
+    );
+    const prodRow = await prisma.production.findUnique({ where: { id }, include: { deals: true } });
+    expect(prodRow).toMatchObject({ name: "Nouveau Spectacle", artistShareKind: "PROD_EXE", status: "ACTIVE" });
+    expect(Number(prodRow.prodExePct)).toBe(15);
+    expect(prodRow.deals).toHaveLength(0);
+    const dup = await P.createProduction({ artistId: artist, name: "nouveau spectacle" });
+    expect(dup.ok).toBe(false);
+    if (!dup.ok) expect(dup.error).toMatch(/déjà une production/);
+    current = STAN;
+  });
+});

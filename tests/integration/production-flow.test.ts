@@ -338,6 +338,23 @@ describe("Étape 2 — séances et résidences", () => {
     }
   });
 
+  it("page d'un mois : « Tous les mois » répercute suivi / modèle salle / jauge, « Ce mois seulement » non (Stan 2026-10-01)", async () => {
+    const [first, ...rest] = await prisma.deal.findMany({ where: { residencyId }, orderBy: { date: "asc" } });
+    ok(await PE.updateShowDetails({ id: first.id, vhrBooked: true, venueDealKind: "CO_REAL", coRealKnPct: 60, capacity: 120, applyToResidency: true }));
+    for (const m of await prisma.deal.findMany({ where: { residencyId }, include: { tasks: true } })) {
+      expect(m).toMatchObject({ vhrBooked: true, venueDealKind: "CO_REAL", capacity: 120 });
+      expect(num(m.coRealKnPct)).toBe(60);
+      // Tâche du mois modifié : cochée par la carte (client) ; autres mois : serveur.
+      if (m.id !== first.id) expect(m.tasks.find((t: { label: string }) => /vhr/i.test(t.label)).status).toBe("DONE");
+    }
+    // Ce mois seulement : les autres mois gardent leur valeur.
+    ok(await PE.updateShowDetails({ id: first.id, venueDealKind: "CESSION", applyToResidency: false }));
+    expect((await prisma.deal.findUnique({ where: { id: first.id } })).venueDealKind).toBe("CESSION");
+    for (const m of rest) expect((await prisma.deal.findUnique({ where: { id: m.id } })).venueDealKind).toBe("CO_REAL");
+    // Remise en état pour la suite du scénario.
+    ok(await PE.updateShowDetails({ id: first.id, vhrBooked: false, venueDealKind: "PROD", coRealKnPct: null, applyToResidency: true }));
+  });
+
   it("acompte non récupéré → suppression refusée ; récupéré → mois en corbeille, liens conservés, restauration, suppression définitive", async () => {
     ok(await D.upsertVenueDeposit({ residencyId, amount: 1000, paidAt: new Date("2026-10-01T12:00:00Z") }));
     const refused = await R.deleteResidency(residencyId);
@@ -430,14 +447,21 @@ describe("Étape 5 — bilans et comptes (cohérence, sans management fees)", ()
       where: { productionId: prodId, deletedAt: null },
       select: { id: true, commissionAmount: true, artistAmount: true },
     });
+    // Toutes les dates (jouées ou non) = scalars ; frais généraux entièrement répartis.
+    const all = r.production.deals;
     for (const s of scalars) {
-      const v = r.dates.find((d: { id: string }) => d.id === s.id)!;
+      const v = all.find((d: { id: string }) => d.id === s.id)!;
       expect(v.pnl.knAmount).toBe(num(s.commissionAmount));
       expect(v.pnl.artistAmount).toBeCloseTo(num(s.artistAmount)!, 2);
     }
-    expect(r.finance.forecast.overhead).toBeCloseTo(300, 2);
-    expect(r.finance.forecast.kn).toBe(scalars.reduce((t: number, s: { commissionAmount: unknown }) => t + (num(s.commissionAmount) ?? 0), 0));
-    expect(r.finance.forecast.cachets).toBe(1000);
+    expect(all.reduce((t: number, d) => t + d.pnl.overheadShare, 0)).toBeCloseTo(300, 2);
+    expect(all.reduce((t: number, d) => t + d.cachets, 0)).toBe(1000);
+    // Bilan = état à date (Stan 2026-10-01) : dates jouées uniquement.
+    const played = all.filter((d) => d.isPast);
+    expect(r.dates.every((d) => d.isPast || d.status === "ANNULE")).toBe(true);
+    expect(r.upcomingCount).toBe(all.length - r.dates.length);
+    expect(r.finance.overhead).toBeCloseTo(played.reduce((t: number, d) => t + d.pnl.overheadShare, 0), 2);
+    expect(r.finance.kn).toBe(played.reduce((t: number, d) => t + (d.pnl.knAmount ?? 0), 0));
     expect(JSON.stringify(r)).not.toMatch(/managementFee|margeNette/i);
   });
 
@@ -525,12 +549,7 @@ describe("Correctifs de la revue pré-déploiement", () => {
 });
 
 describe("Écrans internes existants (non-régression)", () => {
-  it("liste Productions, Management fees, dashboard, reporting se calculent", async () => {
-    const { getProdExeDealsList } = await import("@/lib/prod-executive-list");
-    const list = await getProdExeDealsList({ period: "all", status: "all", artistSlug: null });
-    const row = list.deals.find((d: { id: string }) => d.id === d1)!;
-    expect(row.margeBrute).toBe(num((await deal(d1)).commissionAmount));
-    expect(row.productionId).toBe(prodId);
+  it("Management fees, dashboard, reporting se calculent", async () => {
     const { getManagementFeesList } = await import("@/lib/management-fees-list");
     const mf = await getManagementFeesList({ associateKey: null, status: "all", period: "all", category: null });
     expect(mf.rows.length).toBeGreaterThanOrEqual(3);
@@ -553,5 +572,80 @@ describe("Écrans internes existants (non-régression)", () => {
       await A.createDeal({ category: "CACHETS", title: "Cachets test", date: new Date("2026-10-01"), initialArtistId: artistB, budgetAmount: null }),
     );
     expect((await deal(c.id)).productionId).toBeNull();
+  });
+});
+
+describe("Lot 3 — solder par appel de quote-part, frais généraux figés (Stan 2026-10-01)", () => {
+  const ids: string[] = [];
+  let prod = "";
+  const share = async (dealId: string) =>
+    (await (await import("@/lib/finance/show-financials")).getProductionOverheadAllocation(prod)).byDeal.get(dealId);
+
+  it("3 dates jouées, 300 € de frais généraux → 100 € chacune", async () => {
+    for (const day of ["2025-03-01", "2025-03-08", "2025-03-15"]) {
+      const id = await newDate({ day, showName: "Soldes", artistId: artistB });
+      ok(await PL.upsertProductionLine({ dealId: id, kind: "REVENUE", label: "RECETTE_HT", amount: 1000, status: "PAID" }));
+      ids.push(id);
+    }
+    prod = (await deal(ids[0])).productionId;
+    ok(await P.createOverhead(prod, { label: "Affiches", amount: 300 }));
+    for (const id of ids) expect(await share(id)).toBe(100);
+  });
+
+  it("verser une quote-part en cochant la 1re date : soldée, quote-part figée, statut artiste réglé", async () => {
+    const before = await deal(ids[0]);
+    const due = num(before.artistAmount)!;
+    ok(await AM.settleDatesWithPayment({ productionId: prod, dealIds: [ids[0]], amount: due, date: new Date("2025-04-01T12:00:00Z") }));
+    const s = await deal(ids[0]);
+    expect(s.settledAt).not.toBeNull();
+    expect(num(s.settledOverheadShare)).toBe(100);
+    expect(s.settledMovementId).toBeTruthy();
+    expect(s.artistStatus).toBe("PAID");
+    const { getProductionSummaries } = await import("@/lib/productions");
+    const [summary] = await getProductionSummaries({ id: prod }, Date.now());
+    expect(summary.deals.find((d: { id: string }) => d.id === ids[0]).stage).toBe("SOLDEE");
+    expect(summary.deals.find((d: { id: string }) => d.id === ids[1]).stage).toBe("A_SOLDER");
+    // Déjà soldée → refusé.
+    const again = await AM.settleDatesWithPayment({ productionId: prod, dealIds: [ids[0]], amount: 0, date: new Date() });
+    expect(again.ok).toBe(false);
+  });
+
+  it("ajouter une date : la date soldée garde 100 €, le reste se répartit sur les autres", async () => {
+    const artistBefore = num((await deal(ids[0])).artistAmount);
+    ids.push(await newDate({ day: "2025-03-22", showName: "Soldes", artistId: artistB }));
+    expect(await share(ids[0])).toBe(100);
+    expect(await share(ids[1])).toBeCloseTo(66.67, 2);
+    expect(num((await deal(ids[0])).artistAmount)).toBe(artistBefore);
+  });
+
+  it("date à venir : on ne peut pas la solder", async () => {
+    const future = await newDate({ day: "2099-01-01", showName: "Soldes", artistId: artistB });
+    const r = await AM.settleDatesWithPayment({ productionId: prod, dealIds: [future], amount: 0, date: new Date() });
+    expect(r.ok).toBe(false);
+    ok(await A.permanentlyDeleteDeal(future));
+  });
+
+  it("solder sans versement puis rouvrir ; supprimer le versement rouvre la date qu'il soldait", async () => {
+    const movements = await prisma.artistMovement.count({ where: { productionId: prod } });
+    ok(await AM.settleDatesWithPayment({ productionId: prod, dealIds: [ids[1]], amount: 0, date: new Date("2025-04-02T12:00:00Z") }));
+    expect(await prisma.artistMovement.count({ where: { productionId: prod } })).toBe(movements);
+    expect((await deal(ids[1])).settledAt).not.toBeNull();
+    ok(await AM.reopenSettledDeal(ids[1]));
+    expect((await deal(ids[1])).settledAt).toBeNull();
+
+    const m = await prisma.artistMovement.findFirst({ where: { productionId: prod } });
+    ok(await AM.deleteArtistMovement(m.id));
+    const reopened = await deal(ids[0]);
+    expect(reopened.settledAt).toBeNull();
+    expect(reopened.settledOverheadShare).toBeNull();
+    // Plus rien de figé : 300 € sur 4 dates.
+    expect(await share(ids[0])).toBe(75);
+  });
+
+  it("reprise de l'existant : date soldée sans quote-part figée → figée à sa valeur actuelle", async () => {
+    await prisma.deal.update({ where: { id: ids[2] }, data: { settledAt: new Date() } });
+    const { freezeSettledOverheads } = await import("@/lib/finance/show-financials");
+    await freezeSettledOverheads(prod);
+    expect(num((await deal(ids[2])).settledOverheadShare)).toBe(75);
   });
 });

@@ -101,6 +101,8 @@ interface Props {
     performances: number;
     perPerformance: number;
     productionId: string;
+    /** Date soldée : quote-part figée (lot 3). */
+    frozen?: boolean;
   } | null;
   /** Date d'une production : statut « réglé » artiste DÉRIVÉ du compte
    *  artiste (portage KN) → lien vers l'onglet Artiste au lieu du toggle. */
@@ -170,12 +172,10 @@ export function ProductionLinesEditor({
       !manuallyShown.has(label),
   );
 
-  const displayedCosts = visibleCosts.filter(
-    (label) => hasLineContent(label) || manuallyShown.has(label),
-  );
-  const hiddenCosts = visibleCosts.filter(
-    (label) => !hasLineContent(label) && !manuallyShown.has(label),
-  );
+  // Charges : toujours toutes visibles, comme KN (Stan 2026-10-01 : « pour
+  // ne pas louper des infos »).
+  const displayedCosts = visibleCosts;
+  const hiddenCosts: ProductionLineLabel[] = [];
 
   function showHidden(label: ProductionLineLabel) {
     setManuallyShown((prev) => {
@@ -376,6 +376,7 @@ export function ProductionLinesEditor({
                 performances={overhead.performances}
                 perPerformance={overhead.perPerformance}
                 productionId={overhead.productionId}
+                frozen={overhead.frozen}
               />,
             );
           }
@@ -559,19 +560,28 @@ function VirtualOverheadLine({
   performances,
   perPerformance,
   productionId,
+  frozen = false,
 }: {
   amount: number;
   performances: number;
   perPerformance: number;
   productionId: string;
+  /** Date soldée : quote-part figée au solde (lot 3). */
+  frozen?: boolean;
 }) {
   return (
     <div className="flex items-center gap-3 px-3 py-2 hover:bg-accent/30 transition-colors flex-wrap sm:flex-nowrap">
       <div className="w-[200px] shrink-0 min-w-0">
         <div className="text-sm font-medium leading-tight">Frais généraux</div>
         <div className="text-[11px] text-muted-foreground leading-tight">
-          {performances} repr. ×{" "}
-          {perPerformance.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} €
+          {frozen ? (
+            "figée au solde de la date"
+          ) : (
+            <>
+              {performances} repr. ×{" "}
+              {perPerformance.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} €
+            </>
+          )}
         </div>
       </div>
       <div className="w-32 shrink-0">
@@ -1020,6 +1030,9 @@ function SubEntryRow({
 
 // ─────────────────────────── mono-entrée ───────────────────────────
 
+/** Taux proposés en un clic sur une charge (montant modifiable ensuite). */
+const AUTO_RATES: Partial<Record<ProductionLineLabel, number>> = { CNM: 3.5, SACD: 15 };
+
 function LineEditor({
   dealId,
   label,
@@ -1047,9 +1060,11 @@ function LineEditor({
   const isCost = PRODUCTION_LINE_KIND_OF[label] === "COST";
   const showVenueToggle = isCost && venueDealKind === "CO_REAL";
   const hint = productionLineHint(label, venueDealKind);
-  // Stan 2026-05-27 : bouton auto-calcul CNM = 3.5% du CA (taxe parafiscale).
-  const isCnm = label === "CNM";
-  const cnmAuto = isCnm && totalRevenue > 0 ? Math.round(totalRevenue * 0.035) : null;
+  // Boutons de calcul auto : CNM = 3,5 % du CA (taxe parafiscale, Stan
+  // 2026-05-27) ; SACD ≈ 15 % du CA, indicatif (Stan 2026-10-01).
+  const autoRate = AUTO_RATES[label];
+  const autoAmount =
+    autoRate != null && totalRevenue > 0 ? Math.round((totalRevenue * autoRate) / 100) : null;
 
   function persist(patch: {
     amount?: number;
@@ -1127,19 +1142,18 @@ function LineEditor({
       <div className="w-[200px] shrink-0 min-w-0">
         <div className="text-sm font-medium leading-tight flex items-center gap-1.5">
           {PRODUCTION_LINE_LABELS[label]}
-          {/* Bouton auto-calcul CNM = 3.5% du CA (Stan 2026-05-27) */}
-          {isCnm && cnmAuto != null && cnmAuto !== (line?.amount ?? 0) && (
+          {autoAmount != null && !isCovered && autoAmount !== (line?.amount ?? 0) && (
             <button
               type="button"
               onClick={() => {
-                setAmount(String(cnmAuto));
-                persist({ amount: cnmAuto, coveredByVenue: false });
+                setAmount(String(autoAmount));
+                persist({ amount: autoAmount, coveredByVenue: false });
               }}
               disabled={pending}
-              title={`Calcul auto : ${formatEur(totalRevenue)} × 3,5% = ${formatEur(cnmAuto)}`}
+              title={`Calcul auto : ${formatEur(totalRevenue)} × ${String(autoRate).replace(".", ",")} % = ${formatEur(autoAmount)}`}
               className="inline-flex items-center rounded border border-yr-gold/40 bg-yr-gold/10 px-1.5 py-0.5 text-[10px] font-medium text-yr-gold hover:bg-yr-gold/20 transition-colors"
             >
-              ✨ Auto 3,5%
+              ✨ Auto {String(autoRate).replace(".", ",")} %
             </button>
           )}
         </div>

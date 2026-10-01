@@ -6,6 +6,29 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [Production — retours de Stan : accueil en onglets, dates soldées, cycle de vie (portage KN)] — 2026-10-01
+
+### Added
+- **Accueil Productions en 3 onglets** : Prochaines dates (4 + dépliable), Spectacles (À clôturer avec « Clôturer », En cours, Dates à rattacher, Terminés), Retard / à solder (cautions + dates passées non soldées).
+- **« Nouvelle production »** (`createProduction`) : le spectacle se crée avant ses dates (nom unique par artiste).
+- **Dates soldées** (migration `deal_settlement`) : « Verser une quote-part » coche les dates qu'elle solde ; frais généraux figés au solde ; « Rouvrir » ; supprimer le versement rouvre ses dates ; reprise des dates déjà réglées (cachets compris).
+- **Cycle de vie unique d'une date** (`lib/date-lifecycle.ts`, identique à KN) : À confirmer → En préparation → Prête → À solder → Soldée.
+- Tâche **« Paiement taxes SACD CNM »** entre « Envoie Facture » et « Paiement Artiste » (migration `add_task_paiement_taxes` : modèle + dates dont le paiement artiste reste à faire).
+- **Export Excel de toutes les dates** sur l'accueil (porté de KN, sans management fees) ; `lib/excel-export.ts` aligné sur KN.
+- Rond de remplissage 3 couleurs sur les lignes de date et les résidences ; bouton « ✨ Auto 15 % » sur la SACD (avec CNM 3,5 %).
+- Mois de résidence : suivi, modèle salle, % co-réa et jauge répercutés sur tous les mois par défaut (+ tâches liées), choix « Ce mois seulement ».
+
+### Changed
+- Vocabulaire Production / Date ; fiche production Suivi + Dates fusionnés ; fiche date en 2 blocs (Paramètres & suivi / Financier).
+- Charges toujours toutes visibles dans les comptes d'une date (comme KN).
+- Plus d'« estimé » : bilans PDF/Excel, Résultats et compte artiste en réalisé à date.
+- Management fees du profil « Production » : statut « Encaissé » affiché en étiquette (plus d'apparence cliquable).
+
+### Removed
+- Vue « Toutes les dates » (`/shows?view=dates` et `/deals/prod-executive` redirigent vers l'accueil) — `prod-exe-deals-list.tsx`, `lib/prod-executive-list.ts`.
+
+---
+
 ## [Statuts artiste — resynchro quotidienne] — 2026-09-30
 
 ### Fixed

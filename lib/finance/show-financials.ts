@@ -1,5 +1,6 @@
 import "server-only";
 
+import { frozenShareOf } from "@/lib/finance/settlement-rules";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import {
@@ -57,6 +58,7 @@ export async function recomputeProductionFinancials(
   productionId: string,
 ): Promise<void> {
   await syncProductionContract(productionId);
+  await freezeSettledOverheads(productionId);
   const allocation = await getProductionOverheadAllocation(productionId);
   for (const [dealId, share] of allocation.byDeal) {
     await writeDealScalars(dealId, share);
@@ -104,6 +106,32 @@ async function syncProductionContract(productionId: string): Promise<void> {
 }
 
 /**
+ * Dates soldées sans quote-part figée (reprise de l'existant par migration) :
+ * on fige leur quote-part ACTUELLE de frais généraux. Idempotent (Stan
+ * 2026-10-01, lot 3 — portage KN).
+ */
+export async function freezeSettledOverheads(productionId: string): Promise<void> {
+  const pending = await prisma.deal.findMany({
+    where: {
+      productionId,
+      category: "PROD_EXE",
+      deletedAt: null,
+      settledAt: { not: null },
+      settledOverheadShare: null,
+    },
+    select: { id: true },
+  });
+  if (pending.length === 0) return;
+  const allocation = await getProductionOverheadAllocation(productionId);
+  for (const d of pending) {
+    await prisma.deal.update({
+      where: { id: d.id },
+      data: { settledOverheadShare: new Prisma.Decimal(allocation.byDeal.get(d.id) ?? 0) },
+    });
+  }
+}
+
+/**
  * Répartition des frais généraux d'une production sur ses dates (non
  * supprimées).
  */
@@ -119,6 +147,8 @@ export async function getProductionOverheadAllocation(
         isMultiDate: true,
         performanceCount: true,
         multiDateDates: true,
+        settledAt: true,
+        settledOverheadShare: true,
       },
       // Tiebreak id : même date → même ordre partout (reliquat d'arrondi).
       orderBy: [{ date: "asc" }, { id: "asc" }],
@@ -134,6 +164,7 @@ export async function getProductionOverheadAllocation(
       id: d.id,
       status: d.status,
       performances: performanceCountOf(d),
+      frozenShare: frozenShareOf(d),
     })),
     total,
   );

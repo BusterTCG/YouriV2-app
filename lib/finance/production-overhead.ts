@@ -49,32 +49,44 @@ export type OverheadAllocation = {
  * Répartit `total` au prorata des représentations. Arrondi au centime ; le
  * reliquat d'arrondi est porté par la dernière date active pour que la somme
  * des quotes-parts retombe exactement sur le total.
+ *
+ * Dates soldées (Stan 2026-10-01, lot 3) : `frozenShare` renseigné → la date
+ * garde sa quote-part figée au solde ; le reste (total − parts figées) est
+ * réparti sur les seules dates non soldées. Sans date non soldée pour le
+ * porter, ce reste est « non réparti ».
  */
 export function allocateOverhead(
-  deals: Array<{ id: string; status: DealStatus; performances: number }>,
+  deals: Array<{ id: string; status: DealStatus; performances: number; frozenShare?: number | null }>,
   total: number,
 ): OverheadAllocation {
-  const active = deals.filter((d) => d.status !== "ANNULE" && d.performances > 0);
-  const totalPerformances = active.reduce((s, d) => s + d.performances, 0);
   const byDeal = new Map<string, number>();
   for (const d of deals) byDeal.set(d.id, 0);
+  const frozen = deals.filter((d) => d.frozenShare != null);
+  for (const d of frozen) byDeal.set(d.id, d.frozenShare ?? 0);
+  const frozenTotal = round2(frozen.reduce((s, d) => s + (d.frozenShare ?? 0), 0));
+  const remaining = round2(total - frozenTotal);
 
-  if (totalPerformances === 0 || total === 0) {
+  const active = deals.filter(
+    (d) => d.frozenShare == null && d.status !== "ANNULE" && d.performances > 0,
+  );
+  const totalPerformances = active.reduce((s, d) => s + d.performances, 0);
+
+  if (totalPerformances === 0 || remaining === 0) {
     return {
       total,
       totalPerformances,
       perPerformance: 0,
       byDeal,
-      unallocated: totalPerformances === 0 ? total : 0,
+      unallocated: totalPerformances === 0 ? remaining : 0,
     };
   }
 
-  const perPerformance = total / totalPerformances;
+  const perPerformance = remaining / totalPerformances;
   let allocated = 0;
   active.forEach((d, i) => {
     const share =
       i === active.length - 1
-        ? round2(total - allocated)
+        ? round2(remaining - allocated)
         : round2(perPerformance * d.performances);
     allocated = round2(allocated + share);
     byDeal.set(d.id, share);

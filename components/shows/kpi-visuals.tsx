@@ -17,23 +17,50 @@ const COLORS: Record<Variant, { fill: string; track: string }> = {
   print: { fill: "text-[#a67c12]", track: "text-[#f3e7c4]" },
 };
 
-/** Anneau de progression (0-100 %), valeur au centre. */
+/**
+ * Couleurs du remplissage (Stan 2026-10-01) : rouge ≤ 25 %, orange de 26 à
+ * 74 %, vert à partir de 75 %.
+ */
+const FILL_TONES: Record<"low" | "mid" | "high", Record<Variant, { fill: string; track: string }>> = {
+  low: {
+    app: { fill: "text-red-600 dark:text-red-400", track: "text-red-100 dark:text-red-500/20" },
+    print: { fill: "text-[#dc2626]", track: "text-[#fee2e2]" },
+  },
+  mid: {
+    app: { fill: "text-amber-600 dark:text-amber-400", track: "text-amber-100 dark:text-amber-500/20" },
+    print: { fill: "text-[#d97706]", track: "text-[#fef3c7]" },
+  },
+  high: {
+    app: { fill: "text-emerald-600 dark:text-emerald-400", track: "text-emerald-100 dark:text-emerald-500/20" },
+    print: { fill: "text-[#059669]", track: "text-[#d1fae5]" },
+  },
+};
+
+function fillTone(percent: number | null, variant: Variant) {
+  if (percent == null) return COLORS[variant];
+  return FILL_TONES[percent <= 25 ? "low" : percent < 75 ? "mid" : "high"][variant];
+}
+
+/** Anneau de progression (0-100 %), valeur au centre. `fillColors` : teinte
+ *  rouge / orange / vert selon le taux (anneaux de remplissage). */
 export function RingMeter({
   percent,
   center,
   variant = "app",
   size = 72,
+  fillColors = false,
 }: {
   percent: number | null;
   center: string;
   variant?: Variant;
   size?: number;
+  fillColors?: boolean;
 }) {
-  const stroke = 8;
+  const stroke = Math.max(3, Math.round(size / 9));
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const p = percent == null ? 0 : Math.max(0, Math.min(100, percent));
-  const colors = COLORS[variant];
+  const colors = fillColors ? fillTone(percent, variant) : COLORS[variant];
   return (
     <svg
       width={size}
@@ -81,6 +108,19 @@ export function RingMeter({
 }
 
 /**
+ * Mini-anneau de remplissage pour les lignes de date (Stan 2026-10-01 :
+ * « le KPI avec le rond de remplissage sur les lignes de chaque date »).
+ * Anneau vide + « — » tant que payants / jauge ne sont pas saisis.
+ */
+export function FillRing({ percent, title }: { percent: number | null; title?: string }) {
+  return (
+    <span title={title ?? (percent != null ? `Remplissage ${percent} %` : "Remplissage : payants / jauge à saisir")} className="inline-flex">
+      <RingMeter percent={percent} center={percent != null ? `${percent}%` : "—"} size={42} fillColors />
+    </span>
+  );
+}
+
+/**
  * Rangée de KPI : remplissage (anneau), représentations jouées (anneau),
  * ticket moyen, résultat par représentation. `single` = une seule date
  * (compte de production) → pas d'anneau « représentations jouées ».
@@ -111,6 +151,7 @@ export function KpiTiles({
           percent={kpis.fillRate}
           center={kpis.fillRate != null ? `${kpis.fillRate}%` : "—"}
           variant={variant}
+          fillColors
         />
         <div className="min-w-0">
           <div className={label}>Remplissage</div>
@@ -127,7 +168,7 @@ export function KpiTiles({
           <RingMeter percent={playedPct} center={`${kpis.played}/${kpis.planned}`} variant={variant} />
           <div className="min-w-0">
             <div className={label}>Représentations</div>
-            <div className={sub}>jouées sur l&apos;exploitation</div>
+            <div className={sub}>jouées sur la production</div>
           </div>
         </div>
       )}
@@ -154,9 +195,7 @@ export function KpiTiles({
           >
             {result != null ? formatEur(result) : "—"}
           </div>
-          <div className={sub}>
-            {kpis.scope === "realized" ? "moyenne des dates jouées" : "estimation sur l'exploitation"}
-          </div>
+          <div className={sub}>moyenne des dates jouées</div>
         </div>
       </div>
     </div>

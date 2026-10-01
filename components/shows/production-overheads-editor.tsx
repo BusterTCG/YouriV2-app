@@ -92,7 +92,7 @@ export function ProductionOverheadsEditor({
             Frais généraux
           </SectionTitle>
           <p className="text-[11px] text-muted-foreground mt-0.5">
-            Charges communes à toute l&apos;exploitation, lissées au prorata des
+            Charges communes à toute la production, lissées au prorata des
             représentations.
           </p>
         </div>

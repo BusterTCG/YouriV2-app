@@ -307,13 +307,13 @@ function ratesText(r: { pe: number; cp: number }): string {
 /** Notes de méthode (bas de document) — communes bilan / compte de production. */
 export function reportNotes(o: {
   rates: ReportRates;
-  hasUpcoming?: boolean;
+  upcomingCount?: number;
   unallocatedOverhead?: number;
 }): string[] {
   const r = o.rates;
   const res = r?.residency;
   return [
-    "Frais généraux : charges communes à l'exploitation, réparties au prorata du nombre de représentations (dates à venir incluses, annulées exclues).",
+    "Frais généraux : charges communes à la production, réparties au prorata du nombre de représentations (dates à venir incluses, annulées exclues) ; une date soldée garde la quote-part figée à son solde.",
     !r
       ? "Contrat artiste non défini."
       : res
@@ -322,7 +322,7 @@ export function reportNotes(o: {
           r.pe > 0 &&
             `Prod-exé : Pangee perçoit ${r.pe} % du chiffre d'affaires, compté dans les charges.`,
           r.cp > 0
-            ? `Co-prod : le bénéfice restant (recettes − charges − frais généraux${r.pe > 0 ? " − prod-exé" : ""}) est partagé à ${r.cp} % Pangee / ${100 - r.cp} % artiste, sur le résultat global de l'exploitation.`
+            ? `Co-prod : le bénéfice restant (recettes − charges − frais généraux${r.pe > 0 ? " − prod-exé" : ""}) est partagé à ${r.cp} % Pangee / ${100 - r.cp} % artiste, sur le résultat global de la production.`
             : "Le bénéfice restant revient à l'artiste.",
         ]
           .filter(Boolean)
@@ -332,8 +332,8 @@ export function reportNotes(o: {
           `⚠️ ${Math.round(o.unallocatedOverhead ?? 0).toLocaleString("fr-FR")} € de frais généraux ne sont portés par aucune date (toutes annulées ou aucune date) : ils ne figurent pas dans le résultat ci-dessus.`,
         ]
       : []),
-    ...(o.hasUpcoming
-      ? ["Réalisé = dates déjà jouées. Estimé = toute l'exploitation, sur la base des montants saisis à date."]
+    ...((o.upcomingCount ?? 0) > 0
+      ? [`État à date : seules les dates déjà jouées sont comptées (${o.upcomingCount} date${(o.upcomingCount ?? 0) > 1 ? "s" : ""} à venir non comptée${(o.upcomingCount ?? 0) > 1 ? "s" : ""}).`]
       : []),
   ];
 }

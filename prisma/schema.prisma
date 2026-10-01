@@ -578,6 +578,16 @@ model Deal {
   /// Suivi opérationnel : VHR (voyage/hôtel/repas) booké.
   vhrBooked      Boolean @default(false)
 
+  /// Date soldée (Stan 2026-10-01, lot 3 — portage KN) : comptes clos, en
+  /// général via un appel de quote-part (versement artiste). Null = pas soldée.
+  settledAt            DateTime?
+  /// Quote-part de frais généraux FIGÉE au solde : ajouter / retirer des
+  /// dates ensuite ne change plus le compte d'une date soldée.
+  settledOverheadShare Decimal?
+  /// Versement de quote-part qui a soldé la date (le supprimer rouvre la date).
+  settledMovementId    String?
+  settledMovement      ArtistMovement? @relation("SettledByMovement", fields: [settledMovementId], references: [id], onDelete: SetNull)
+
   /// VenueRoom snapshot (depuis annuaire KN) — la salle peut avoir plusieurs
   /// configurations (grande salle, petite salle, etc.).
   venueRoomId String?
@@ -772,6 +782,8 @@ model ArtistMovement {
   note         String?
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
+  /// Dates soldées par ce versement (lot 3).
+  settledDeals Deal[]             @relation("SettledByMovement")
 
   @@index([productionId])
 }

@@ -1,11 +1,11 @@
-// Vue par défaut de /shows (portage de la refonte production KN — Stan 2026-09-29) :
-// prochaines dates toutes productions confondues, productions en cours,
-// dates à rattacher, productions terminées. Server component.
+// Accueil /shows (Stan 2026-10-01) : 3 onglets — Prochaines dates (4 +
+// dépliable), Spectacles (à clôturer, en cours, dates à rattacher, terminés),
+// Retard / à solder (cautions + dates passées non soldées). Server component.
 
 import Link from "next/link";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { AlertCircle, CalendarClock, ChevronRight, Theater } from "lucide-react";
+import { AlertCircle, Archive, ChevronRight, Landmark, Theater } from "lucide-react";
 import { prisma } from "@/lib/db";
 import {
   getProductionSummaries,
@@ -13,46 +13,32 @@ import {
 } from "@/lib/productions";
 import { SensitiveAmount } from "@/components/dashboard/sensitive-amount";
 import { PrivacyToggle } from "@/components/dashboard/privacy-toggle";
-import { NewDealButton } from "@/components/deals/new-deal-button";
+import { ProductionCreateButton } from "@/components/shows/production-create-button";
+import { ShowsExportButton } from "@/components/shows/shows-export-button";
+import { getShowsExportRows } from "@/lib/actions/shows-export";
 import { AttachDealToProduction } from "@/components/shows/attach-deal-to-production";
 import { SectionTitle } from "@/components/shows/section-title";
 import { UpcomingList, collectUpcoming } from "@/components/shows/upcoming-list";
+import { SettlementRow, toSettleOf } from "@/components/shows/date-rows";
+import { CloseProductionButton } from "@/components/shows/close-production-button";
 import { cn } from "@/lib/utils";
 import { productionContractSummary } from "@/lib/finance/production-overhead";
 
-const UPCOMING_WINDOW_DAYS = 30;
 /** Soirs affichés d'office dans « Prochaines dates » (le reste est replié). */
-const UPCOMING_VISIBLE = 8;
+const UPCOMING_VISIBLE = 4;
 
-export function ShowsTabs({ current }: { current: "productions" | "dates" }) {
-  const tabs = [
-    { key: "productions", label: "Productions", href: "/shows" },
-    { key: "dates", label: "Toutes les dates", href: "/shows?view=dates" },
-  ] as const;
-  return (
-    <div className="flex items-center gap-1 border-b">
-      {tabs.map((t) => (
-        <Link
-          key={t.key}
-          href={t.href}
-          className={cn(
-            "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
-            current === t.key
-              ? "border-yr-gold text-foreground"
-              : "border-transparent text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {t.label}
-        </Link>
-      ))}
-    </div>
-  );
-}
+/** Onglets de l'accueil (Stan 2026-10-01) — « Prochaines dates » par défaut. */
+const HOME_TABS = [
+  { key: "dates", label: "Prochaines dates" },
+  { key: "spectacles", label: "Spectacles" },
+  { key: "solder", label: "Retard / à solder" },
+] as const;
+type HomeTab = (typeof HOME_TABS)[number]["key"];
 
-export async function ProductionsView() {
+export async function ProductionsView({ tab }: { tab?: string }) {
   // eslint-disable-next-line react-hooks/purity -- server component, 1 exécution / requête
   const nowMs = Date.now();
-  const [summaries, unlinkedRaw] = await Promise.all([
+  const [summaries, unlinkedRaw, artists] = await Promise.all([
     // Artistes en corbeille : leurs productions sont masquées.
     getProductionSummaries({ artist: { deletedAt: null } }, nowMs),
     prisma.deal.findMany({
@@ -72,6 +58,12 @@ export async function ProductionsView() {
         },
       },
     }),
+    // Artistes proposés dans « Nouvelle production ».
+    prisma.artist.findMany({
+      where: { deletedAt: null, active: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
   ]);
   const unlinked = unlinkedRaw.map((d) => ({
     id: d.id,
@@ -81,8 +73,16 @@ export async function ProductionsView() {
     artist: d.dealArtistes[0]?.artist ?? null,
   }));
 
+  // Spectacles : en cours / à clôturer (tout joué et soldé) / terminés.
+  const isToClose = (p: ProductionSummary) =>
+    p.status === "ACTIVE" &&
+    p.deals.some((d) => d.status !== "ANNULE") &&
+    !p.deals.some((d) => !d.isPast && d.status !== "ANNULE") &&
+    toSettleOf(p).length === 0 &&
+    !p.deposits.some((dep) => !dep.recovered && dep.toRecover > 0);
+  const toClose = summaries.filter(isToClose);
   const active = summaries
-    .filter((p) => p.status === "ACTIVE")
+    .filter((p) => p.status === "ACTIVE" && !isToClose(p))
     .sort((a, b) => {
       // Productions avec une prochaine date d'abord (la plus proche en tête).
       const na = a.nextDeal?.date.getTime() ?? Infinity;
@@ -90,15 +90,33 @@ export async function ProductionsView() {
       return na - nb || a.name.localeCompare(b.name);
     });
   const closed = summaries.filter((p) => p.status === "CLOSED");
+  // Dates passées non soldées, toutes productions, la plus ancienne d'abord.
+  const toSettle = summaries
+    .flatMap((p) => toSettleOf(p).map((x) => ({ ...x, p })))
+    .sort((a, b) => a.d.date.getTime() - b.d.date.getTime());
+  // Cautions des engagements terminés, pas encore récupérées.
+  const depositsDue = summaries.flatMap((p) =>
+    p.deposits.filter((dep) => !dep.recovered && dep.toRecover > 0).map((dep) => ({ dep, p })),
+  );
 
-  const horizon = nowMs + UPCOMING_WINDOW_DAYS * 24 * 3600 * 1000;
   const startOfToday = new Date(nowMs);
   startOfToday.setHours(0, 0, 0, 0);
-  const upcoming = collectUpcoming(
-    summaries,
-    format(startOfToday, "yyyy-MM-dd"),
-    format(new Date(horizon), "yyyy-MM-dd"),
-  );
+  const upcoming = collectUpcoming(summaries, format(startOfToday, "yyyy-MM-dd"), null);
+
+  const view: HomeTab = HOME_TABS.some((t) => t.key === tab) ? (tab as HomeTab) : "dates";
+  const badges: Record<HomeTab, { text: string; tone: "amber" | "muted" } | null> = {
+    dates: upcoming.length ? { text: String(upcoming.length), tone: "muted" } : null,
+    spectacles:
+      toClose.length + unlinked.length > 0
+        ? { text: String(toClose.length + unlinked.length), tone: "amber" }
+        : active.length
+          ? { text: String(active.length), tone: "muted" }
+          : null,
+    solder:
+      toSettle.length + depositsDue.length > 0
+        ? { text: String(toSettle.length + depositsDue.length), tone: "amber" }
+        : null,
+  };
 
   return (
     <div className="max-w-6xl space-y-5">
@@ -110,45 +128,97 @@ export async function ProductionsView() {
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">Productions & Tournées</h1>
           <p className="text-muted-foreground">
-            Un spectacle = une production, suivie sur toute son exploitation.
+            Un spectacle = une production, avec toutes ses dates.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <NewDealButton category="PROD_EXE" />
+          <ProductionCreateButton artists={artists} />
+          <ShowsExportButton load={getShowsExportRows} />
           <PrivacyToggle />
         </div>
       </div>
 
-      <ShowsTabs current="productions" />
+      {/* Onglets (Stan 2026-10-01) */}
+      <div className="flex items-center gap-1 border-b overflow-x-auto">
+        {HOME_TABS.map((t) => {
+          const b = badges[t.key];
+          return (
+            <Link
+              key={t.key}
+              href={t.key === "dates" ? "/shows" : `/shows?tab=${t.key}`}
+              className={cn(
+                "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap",
+                view === t.key
+                  ? "border-yr-gold text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t.label}
+              {b && (
+                <span
+                  className={cn(
+                    "ml-1.5 rounded-full px-1.5 text-[11px] font-semibold",
+                    b.tone === "amber"
+                      ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                      : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {b.text}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </div>
 
-      {/* Prochaines dates — toutes productions */}
-      <section className="space-y-2">
-        <SectionTitle tone="blue" icon={<CalendarClock className="h-3.5 w-3.5" />}>
-          Prochaines dates · {UPCOMING_WINDOW_DAYS} jours
-        </SectionTitle>
+      {/* ── PROCHAINES DATES ── */}
+      {view === "dates" && (
         <UpcomingList
           items={upcoming}
           visible={UPCOMING_VISIBLE}
-          emptyText={`Aucune date dans les ${UPCOMING_WINDOW_DAYS} prochains jours.`}
+          emptyText="Aucune date à venir."
         />
-      </section>
+      )}
 
-      {/* Productions en cours */}
-      <section className="space-y-2">
-        <SectionTitle tone="gold">En cours</SectionTitle>
-        {active.length === 0 ? (
-          <p className="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">
-            Aucune production en cours. Crée une date de production : la production est créée
-            automatiquement à partir de l&apos;artiste et du nom du spectacle.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {active.map((p) => (
-              <ProductionCard key={p.id} p={p} />
-            ))}
-          </div>
-        )}
-      </section>
+      {/* ── SPECTACLES ── */}
+      {view === "spectacles" && (
+        <>
+          {toClose.length > 0 && (
+            <section className="space-y-2">
+              <SectionTitle tone="amber" icon={<Archive className="h-3.5 w-3.5" />}>
+                À clôturer · {toClose.length}
+              </SectionTitle>
+              <p className="text-[11px] text-muted-foreground">
+                Toutes les dates sont jouées et soldées : il ne reste qu&apos;à clôturer.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {toClose.map((p) => (
+                  <div key={p.id} className="space-y-1.5">
+                    <ProductionCard p={p} />
+                    <div className="flex justify-end">
+                      <CloseProductionButton productionId={p.id} name={p.name} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section className="space-y-2">
+            <SectionTitle tone="gold">En cours · {active.length}</SectionTitle>
+            {active.length === 0 ? (
+              <p className="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">
+                Aucune production en cours. « Nouvelle production » pour créer un spectacle,
+                puis ajoute-lui ses dates, tournées et résidences.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {active.map((p) => (
+                  <ProductionCard key={p.id} p={p} />
+                ))}
+              </div>
+            )}
+          </section>
 
       {/* Dates sans production */}
       {unlinked.length > 0 && (
@@ -190,20 +260,82 @@ export async function ProductionsView() {
         </section>
       )}
 
-      {/* Productions terminées */}
-      {closed.length > 0 && (
-        <details className="group">
-          <summary className="cursor-pointer list-none">
-            <SectionTitle tone="slate" as="h3" icon={<ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />}>
-              Terminées · {closed.length}
+          {closed.length > 0 && (
+            <details className="group">
+              <summary className="cursor-pointer list-none">
+                <SectionTitle
+                  tone="slate"
+                  as="h3"
+                  icon={<ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />}
+                >
+                  Terminés · {closed.length}
+                </SectionTitle>
+              </summary>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                {closed.map((p) => (
+                  <ProductionCard key={p.id} p={p} />
+                ))}
+              </div>
+            </details>
+          )}
+        </>
+      )}
+
+      {/* ── RETARD / À SOLDER ── */}
+      {view === "solder" && (
+        <>
+          {depositsDue.length > 0 && (
+            <section className="space-y-2">
+              <SectionTitle tone="amber" icon={<Landmark className="h-3.5 w-3.5" />}>
+                Cautions à récupérer · {depositsDue.length}
+              </SectionTitle>
+              <div className="rounded-md border divide-y bg-card">
+                {depositsDue.map(({ dep, p }) => (
+                  <Link
+                    key={dep.id}
+                    href={dep.href}
+                    className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-accent/30 flex-wrap"
+                  >
+                    <span className="font-semibold tabular-nums w-24">
+                      <SensitiveAmount value={dep.toRecover} />
+                    </span>
+                    <span className="flex-1 min-w-[160px]">
+                      <span className="font-medium" style={{ color: p.artist.color }}>
+                        {p.artist.name}
+                      </span>{" "}
+                      · {p.name} · {dep.label}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-xs",
+                        dep.finished ? "font-semibold text-red-700 dark:text-red-400" : "text-muted-foreground",
+                      )}
+                    >
+                      {dep.finished ? "à récupérer maintenant" : "en fin de production"}
+                    </span>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+          <section className="space-y-2">
+            <SectionTitle tone="amber" icon={<AlertCircle className="h-3.5 w-3.5" />}>
+              Dates en retard / à solder · {toSettle.length}
             </SectionTitle>
-          </summary>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
-            {closed.map((p) => (
-              <ProductionCard key={p.id} p={p} />
-            ))}
-          </div>
-        </details>
+            {toSettle.length === 0 ? (
+              <p className="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">
+                Toutes les dates passées sont soldées.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {toSettle.map(({ d, items, p }) => (
+                  <SettlementRow key={d.id} d={d} items={items} production={p} />
+                ))}
+              </div>
+            )}
+          </section>
+        </>
       )}
     </div>
   );
@@ -263,9 +395,9 @@ function ProductionCard({ p }: { p: ProductionSummary }) {
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <CardKpi label="Résultat" realized={p.realized.margin} forecast={p.forecast.margin} signed />
-        <CardKpi label="Part Pangee" realized={p.realized.kn} forecast={p.forecast.kn} />
-        <CardKpi label="Part artiste" realized={p.realized.artist} forecast={p.forecast.artist} signed />
+        <CardKpi label="Résultat" realized={p.realized.margin} signed />
+        <CardKpi label="Part Pangee" realized={p.realized.kn} />
+        <CardKpi label="Part artiste" realized={p.realized.artist} signed />
       </div>
 
       {p.deposits.some((dep) => !dep.recovered && dep.toRecover > 0) && (
@@ -304,12 +436,10 @@ function placesLabel(p: ProductionSummary): string {
 function CardKpi({
   label,
   realized,
-  forecast,
   signed,
 }: {
   label: string;
   realized: number;
-  forecast: number;
   signed?: boolean;
 }) {
   const color = (n: number) =>
@@ -322,9 +452,6 @@ function CardKpi({
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className={cn("text-sm font-semibold tabular-nums", color(realized))}>
         <SensitiveAmount value={realized} />
-      </div>
-      <div className="text-[10px] text-muted-foreground tabular-nums">
-        estimé <span className={color(forecast)}><SensitiveAmount value={forecast} /></span>
       </div>
     </div>
   );

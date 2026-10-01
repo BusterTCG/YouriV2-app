@@ -100,6 +100,12 @@ interface Props {
    * check-list + jauge ; « contrat » = modèle salle + contrat artiste.
    */
   section?: "all" | "suivi" | "contrat";
+  /**
+   * Mois d'une résidence : nombre de mois actifs. Si > 1, choix « Tous les
+   * mois (défaut) / Ce mois seulement » pour le suivi, le modèle salle et la
+   * jauge (Stan 2026-10-01, portage KN).
+   */
+  residencyMonths?: number;
 }
 
 export function ShowSummaryCard({
@@ -124,7 +130,10 @@ export function ShowSummaryCard({
   productionContract,
   hasPerformances = false,
   section = "all",
+  residencyMonths = 0,
 }: Props) {
+  const isResidencyMonth = residencyMonths > 1;
+  const [applyToAllMonths, setApplyToAllMonths] = useState(true);
   const showContract = section !== "suivi";
   const showSuivi = section !== "contrat";
   const eur = useEur();
@@ -145,7 +154,11 @@ export function ShowSummaryCard({
   function persist(patch: Omit<Parameters<typeof updateShowDetails>[0], "id">) {
     setPersistError(null);
     startTransition(async () => {
-      const res = await updateShowDetails({ id: dealId, ...patch });
+      const res = await updateShowDetails({
+        id: dealId,
+        ...patch,
+        applyToResidency: isResidencyMonth && applyToAllMonths,
+      });
       if (!res.ok) {
         const details =
           "fieldErrors" in res && res.fieldErrors
@@ -254,12 +267,41 @@ export function ShowSummaryCard({
             ? "Contrat de la date"
             : section === "suivi"
               ? "Suivi de la date"
-              : "Données show"}
+              : "Paramètres & suivi"}
         </h3>
         {pending && (
           <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
         )}
       </div>
+
+      {isResidencyMonth && (
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          <span className="text-muted-foreground">Mois de résidence — appliquer les modifications à :</span>
+          <div className="inline-flex rounded-md border overflow-hidden">
+            {[
+              { all: true, label: `Tous les mois (${residencyMonths})` },
+              { all: false, label: "Ce mois seulement" },
+            ].map((o) => (
+              <button
+                key={o.label}
+                type="button"
+                onClick={() => setApplyToAllMonths(o.all)}
+                className={cn(
+                  "px-2.5 py-1 font-medium transition-colors",
+                  applyToAllMonths === o.all
+                    ? "bg-yr-gold/20 text-foreground"
+                    : "text-muted-foreground hover:bg-muted",
+                )}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <span className="text-[11px] text-muted-foreground">
+            (suivi, modèle salle, % co-réa, jauge — séances et comptes restent par mois)
+          </span>
+        </div>
+      )}
 
       {persistError && (
         <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
@@ -267,132 +309,10 @@ export function ShowSummaryCard({
         </div>
       )}
 
-      {/* Modèle salle + % commission Pangee */}
-      {showContract && (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field
-          icon={<Building2 className="h-3.5 w-3.5" />}
-          label="Modèle salle"
-          hint={
-            venueDealKind
-              ? VENUE_DESCRIPTIONS[venueDealKind]
-              : "Détermine quelles charges sont visibles."
-          }
-        >
-          <Select value={venueDealKind ?? NONE} onValueChange={onChangeVenueDealKind}>
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Choisir…" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>— Pas défini —</SelectItem>
-              {(Object.keys(VENUE_LABELS) as VenueDealKind[]).map((k) => (
-                <SelectItem key={k} value={k}>
-                  {VENUE_LABELS[k]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-
-        {productionContract ? (
-          <Field
-            label="Contrat artiste"
-            hint="Hérité de la production — modifiable dans son onglet Contrat."
-          >
-            <Link
-              href={`/shows/production/${productionContract.productionId}?tab=contrat`}
-              className="inline-flex h-9 items-center text-sm font-medium hover:underline"
-            >
-              {productionContract.summary}
-            </Link>
-          </Field>
-        ) : (
-        <Field
-          label="Commission Pangee (%)"
-          hint={`Pangee prend ${formProdExe || prodExePct || 0} % du CA billetterie.`}
-        >
-          <div className="flex items-center gap-2">
-            <Input
-              type="number"
-              value={formProdExe}
-              onChange={(e) => setFormProdExe(e.target.value)}
-              onBlur={() => {
-                const n = formProdExe === "" ? null : Number(formProdExe);
-                if (n !== prodExePct) persist({ prodExePct: n });
-              }}
-              placeholder="15"
-              className="h-9 w-20 text-sm text-center tabular-nums"
-              min={0}
-              max={100}
-            />
-            <span className="text-sm text-muted-foreground">%</span>
-          </div>
-        </Field>
-        )}
-
-        {/* Champs CO_REAL */}
-        {venueDealKind === "CO_REAL" && (
-          <>
-            <Field
-              label="Co-réa avec la salle (%)"
-              hint="Part Pangee sur la billetterie totale. Le reste → salle."
-            >
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  value={formCoRealKnPct}
-                  onChange={(e) => setFormCoRealKnPct(e.target.value)}
-                  onBlur={() => {
-                    const n = formCoRealKnPct === "" ? null : Number(formCoRealKnPct);
-                    if (n !== coRealKnPct) persist({ coRealKnPct: n });
-                  }}
-                  placeholder="ex. 50"
-                  className="h-9 w-20 text-sm text-center tabular-nums"
-                  min={0}
-                  max={100}
-                />
-                <span className="text-sm text-muted-foreground">%</span>
-              </div>
-            </Field>
-            {hasPerformances ? (
-              <ReadOnlyStat
-                label="CA global billetterie"
-                value={coRealGrossCa != null ? eur(coRealGrossCa) : "—"}
-                hint="Somme de la billetterie HT des séances."
-              />
-            ) : (
-            <Field
-              label="CA global billetterie (€)"
-              hint="Total billetterie HT avant partage. Sert au ticket moyen."
-              className="sm:col-start-2"
-            >
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  value={formCoRealGrossCa}
-                  onChange={(e) => setFormCoRealGrossCa(e.target.value)}
-                  onBlur={() => {
-                    const n =
-                      formCoRealGrossCa === "" ? null : Number(formCoRealGrossCa);
-                    if (n !== coRealGrossCa) persist({ coRealGrossCa: n });
-                  }}
-                  placeholder="ex. 8 000"
-                  className="h-9 text-sm"
-                  min={0}
-                />
-                <span className="text-sm text-muted-foreground">€</span>
-              </div>
-            </Field>
-            )}
-          </>
-        )}
-      </div>
-      )}
-
       {showSuivi && (
       <>
       {/* Suivi opérationnel — Signature contrat / MEV billetterie + URL / VHR */}
-      <div className={cn("space-y-2", showContract && "pt-3 border-t")}>
+      <div className="space-y-2">
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
           Suivi
         </div>
@@ -603,6 +523,128 @@ export function ShowSummaryCard({
       </div>
       </>
       )}
+      {/* Modèle salle + % commission Pangee */}
+      {showContract && (
+      <div className={cn("grid grid-cols-1 sm:grid-cols-2 gap-3", showSuivi && "pt-3 border-t")}>
+        <Field
+          icon={<Building2 className="h-3.5 w-3.5" />}
+          label="Modèle salle"
+          hint={
+            venueDealKind
+              ? VENUE_DESCRIPTIONS[venueDealKind]
+              : "Détermine quelles charges sont visibles."
+          }
+        >
+          <Select value={venueDealKind ?? NONE} onValueChange={onChangeVenueDealKind}>
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Choisir…" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE}>— Pas défini —</SelectItem>
+              {(Object.keys(VENUE_LABELS) as VenueDealKind[]).map((k) => (
+                <SelectItem key={k} value={k}>
+                  {VENUE_LABELS[k]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
+        {productionContract ? (
+          <Field
+            label="Contrat artiste"
+            hint="Hérité de la production — modifiable dans son onglet Contrat."
+          >
+            <Link
+              href={`/shows/production/${productionContract.productionId}?tab=contrat`}
+              className="inline-flex h-9 items-center text-sm font-medium hover:underline"
+            >
+              {productionContract.summary}
+            </Link>
+          </Field>
+        ) : (
+        <Field
+          label="Commission Pangee (%)"
+          hint={`Pangee prend ${formProdExe || prodExePct || 0} % du CA billetterie.`}
+        >
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              value={formProdExe}
+              onChange={(e) => setFormProdExe(e.target.value)}
+              onBlur={() => {
+                const n = formProdExe === "" ? null : Number(formProdExe);
+                if (n !== prodExePct) persist({ prodExePct: n });
+              }}
+              placeholder="15"
+              className="h-9 w-20 text-sm text-center tabular-nums"
+              min={0}
+              max={100}
+            />
+            <span className="text-sm text-muted-foreground">%</span>
+          </div>
+        </Field>
+        )}
+
+        {/* Champs CO_REAL */}
+        {venueDealKind === "CO_REAL" && (
+          <>
+            <Field
+              label="Co-réa avec la salle (%)"
+              hint="Part Pangee sur la billetterie totale. Le reste → salle."
+            >
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={formCoRealKnPct}
+                  onChange={(e) => setFormCoRealKnPct(e.target.value)}
+                  onBlur={() => {
+                    const n = formCoRealKnPct === "" ? null : Number(formCoRealKnPct);
+                    if (n !== coRealKnPct) persist({ coRealKnPct: n });
+                  }}
+                  placeholder="ex. 50"
+                  className="h-9 w-20 text-sm text-center tabular-nums"
+                  min={0}
+                  max={100}
+                />
+                <span className="text-sm text-muted-foreground">%</span>
+              </div>
+            </Field>
+            {hasPerformances ? (
+              <ReadOnlyStat
+                label="CA global billetterie"
+                value={coRealGrossCa != null ? eur(coRealGrossCa) : "—"}
+                hint="Somme de la billetterie HT des séances."
+              />
+            ) : (
+            <Field
+              label="CA global billetterie (€)"
+              hint="Total billetterie HT avant partage. Sert au ticket moyen."
+              className="sm:col-start-2"
+            >
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={formCoRealGrossCa}
+                  onChange={(e) => setFormCoRealGrossCa(e.target.value)}
+                  onBlur={() => {
+                    const n =
+                      formCoRealGrossCa === "" ? null : Number(formCoRealGrossCa);
+                    if (n !== coRealGrossCa) persist({ coRealGrossCa: n });
+                  }}
+                  placeholder="ex. 8 000"
+                  className="h-9 text-sm"
+                  min={0}
+                />
+                <span className="text-sm text-muted-foreground">€</span>
+              </div>
+            </Field>
+            )}
+          </>
+        )}
+      </div>
+      )}
+
     </div>
   );
 }

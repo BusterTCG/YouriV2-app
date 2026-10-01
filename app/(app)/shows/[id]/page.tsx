@@ -36,14 +36,16 @@ import {
 import { ShowSummaryCard } from "@/components/deals/show-summary-card";
 import { PerformancesCard } from "@/components/shows/performances-card";
 import { DepositCard } from "@/components/shows/deposit-card";
+import { StagePill } from "@/components/shows/stage-pill";
+import { SettledBanner } from "@/components/shows/settled-banner";
+import { dateStage, nextPrepStep } from "@/lib/date-lifecycle";
 import type { BookingDealArtistRow } from "@/lib/deals-list-types";
 import { cn } from "@/lib/utils";
 
-type TabKey = "suivi" | "comptes" | "contrat";
+type TabKey = "suivi" | "comptes";
 const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: "suivi", label: "Suivi" },
-  { key: "comptes", label: "Comptes" },
-  { key: "contrat", label: "Contrat" },
+  { key: "suivi", label: "Paramètres & suivi" },
+  { key: "comptes", label: "Financier" },
 ];
 
 export const dynamic = "force-dynamic";
@@ -58,11 +60,12 @@ interface PageProps {
  * Refonte Production 2026-09-29 : route /shows/[id] (KN), rattachée à sa
  * production (contrat hérité, quote-part des frais généraux).
  *
- * 3 onglets (KN, Stan 2026-09-28) :
- *   Suivi   : check-list, jauge, séances, acompte salle
- *   Comptes : recettes, charges, part artiste / part Pangee, management fees
- *             (écran interne Pangee)
- *   Contrat : modèle salle, contrat artiste de la date, notes
+ * 2 blocs (KN, Stan 2026-10-01) :
+ *   Paramètres & suivi : check-list, contrat (salle + artiste), jauge, notes
+ *   Financier          : billetterie des séances, recettes, charges, part
+ *                        artiste / part Pangee, management fees (écran interne
+ *                        Pangee), acompte salle, exports
+ * (?tab=contrat, ancien 3e onglet, retombe sur Paramètres & suivi.)
  *
  * Layout :
  *   1. Back link + eyebrow ("PROD EXÉ · {organisateur}")
@@ -82,7 +85,8 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
   const restricted = isRestrictedRole((await getCurrentUser())?.role);
   const { id } = await params;
   const { tab } = await searchParams;
-  const view: TabKey = tab === "comptes" || tab === "contrat" ? tab : "suivi";
+  // ?tab=contrat (ancien onglet) → Paramètres & suivi.
+  const view: TabKey = tab === "comptes" ? "comptes" : "suivi";
 
   const deal = await prisma.deal.findFirst({
     where: { id, deletedAt: null, category: "PROD_EXE" },
@@ -106,7 +110,13 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
       },
       createdBy: { select: { name: true } },
       performances: { orderBy: [{ date: "asc" }, { time: "asc" }] },
-      residency: { select: { id: true, name: true } },
+      residency: {
+        select: {
+          id: true,
+          name: true,
+          _count: { select: { deals: { where: { deletedAt: null } } } },
+        },
+      },
       venueDeposit: true,
       production: {
         select: {
@@ -124,6 +134,21 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
   // Aujourd'hui "YYYY-MM-DD" (séances passées grisées).
   // eslint-disable-next-line react-hooks/purity -- server component, 1 exécution / requête
   const todayKey = format(new Date(Date.now()), "yyyy-MM-dd");
+  // Étape du cycle de vie (lot 3) — même calcul que les listes.
+  const activePerfDays = deal.performances
+    .filter((p) => !p.cancelled)
+    .map((p) => p.date.toISOString().slice(0, 10));
+  const lastDayKey = activePerfDays.length
+    ? activePerfDays[activePerfDays.length - 1]
+    : format(deal.date, "yyyy-MM-dd");
+  const stage = dateStage({
+    status: deal.status,
+    isPast: lastDayKey < todayKey,
+    settled: deal.settledAt != null,
+    contractSigned: deal.contractSigned,
+    ticketingReady: deal.ticketingReady,
+    vhrBooked: deal.vhrBooked,
+  });
 
   // Quote-part des frais généraux de la production (ligne virtuelle).
   const overheadAllocation = deal.production
@@ -237,7 +262,7 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
               ? `/shows/residence/${deal.residency.id}`
               : deal.production
                 ? `/shows/production/${deal.production.id}`
-                : "/shows?view=dates"
+                : "/shows"
           }
           className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
         >
@@ -304,6 +329,7 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
               </span>
             )}
             <DealStatusInline dealId={deal.id} value={deal.status} />
+            <StagePill stage={stage} detail={stage === "EN_PREPARATION" ? nextPrepStep(deal) : null} />
             <DealPipelineBar dealId={deal.id} tasks={tasks} />
           </div>
         </div>
@@ -349,6 +375,14 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
         </div>
       </div>
 
+      {deal.settledAt && (
+        <SettledBanner
+          dealId={deal.id}
+          settledOn={format(deal.settledAt, "dd/MM/yyyy")}
+          overheadShare={deal.settledOverheadShare != null ? Number(deal.settledOverheadShare) : null}
+        />
+      )}
+
       {/* Onglets */}
       <div className="flex items-center gap-1 border-b overflow-x-auto">
         {TABS.map((t) => (
@@ -363,7 +397,7 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
             )}
           >
             {t.label}
-            {t.key === "contrat" && !deal.artistShareKind && (
+            {t.key === "suivi" && !deal.artistShareKind && (
               <span className="ml-1.5 rounded-full px-1.5 text-[11px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-400">
                 !
               </span>
@@ -375,7 +409,8 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
       {view === "suivi" && (
         <>
       <ShowSummaryCard
-        section="suivi"
+        section="all"
+        residencyMonths={deal.residency?._count.deals ?? 0}
         dealId={deal.id}
         dealDate={deal.date}
         capacity={deal.capacity}
@@ -410,6 +445,23 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
         hasPerformances={deal.performances.length > 0}
       />
 
+      {/* Notes libres — éditables via « Modifier » (formulaire deal). */}
+      {deal.notes && deal.notes.trim().length > 0 && (
+        <div className="rounded-md border bg-card p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <StickyNote className="h-4 w-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold">Notes</h3>
+          </div>
+          <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">
+            {deal.notes}
+          </p>
+        </div>
+      )}
+        </>
+      )}
+
+      {view === "comptes" && (
+        <>
       {/* Séances — source de vérité des jours, horaires, payants, invités et
           billetterie (portage KN, étape 2). */}
       <PerformancesCard
@@ -434,35 +486,6 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
         todayKey={todayKey}
       />
 
-      {/* Acompte (caution) versé à la salle — date de tournée uniquement (les
-          mois de résidence l'ont sur la fiche résidence). */}
-      {deal.production && !deal.residency && (
-        <DepositCard
-          key={
-            deal.venueDeposit
-              ? `${deal.venueDeposit.amount}-${deal.venueDeposit.paidAt?.getTime()}-${deal.venueDeposit.refundedAt?.getTime()}-${deal.venueDeposit.note}`
-              : "none"
-          }
-          target={{ dealId: deal.id }}
-          deposit={
-            deal.venueDeposit
-              ? {
-                  id: deal.venueDeposit.id,
-                  amount: Number(deal.venueDeposit.amount),
-                  paidAt: deal.venueDeposit.paidAt?.toISOString().slice(0, 10) ?? null,
-                  refundedAt: deal.venueDeposit.refundedAt?.toISOString().slice(0, 10) ?? null,
-                  note: deal.venueDeposit.note,
-                }
-              : null
-          }
-        />
-      )}
-
-        </>
-      )}
-
-      {view === "comptes" && (
-        <>
       {/* Compte de production de la date — même design que le bilan
           d'exploitation (Excel + PDF). Liens <a> simples : pas de prefetch
           Next qui déclencherait la génération. Sans management fees. */}
@@ -514,6 +537,7 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
                 amount: overheadShare,
                 performances: deal.status === "ANNULE" ? 0 : performanceCountOf(deal),
                 perPerformance: overheadAllocation.perPerformance,
+                frozen: deal.settledAt != null && deal.settledOverheadShare != null,
                 productionId: deal.production.id,
               }
             : null
@@ -563,61 +587,33 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
         allChargesPaid={allCostPaid}
       />}
 
+      {/* Acompte (caution) versé à la salle — date de tournée uniquement (les
+          mois de résidence l'ont sur la fiche résidence). */}
+      {deal.production && !deal.residency && (
+        <DepositCard
+          key={
+            deal.venueDeposit
+              ? `${deal.venueDeposit.amount}-${deal.venueDeposit.paidAt?.getTime()}-${deal.venueDeposit.refundedAt?.getTime()}-${deal.venueDeposit.note}`
+              : "none"
+          }
+          target={{ dealId: deal.id }}
+          deposit={
+            deal.venueDeposit
+              ? {
+                  id: deal.venueDeposit.id,
+                  amount: Number(deal.venueDeposit.amount),
+                  paidAt: deal.venueDeposit.paidAt?.toISOString().slice(0, 10) ?? null,
+                  refundedAt: deal.venueDeposit.refundedAt?.toISOString().slice(0, 10) ?? null,
+                  note: deal.venueDeposit.note,
+                }
+              : null
+          }
+        />
+      )}
+
         </>
       )}
 
-      {view === "contrat" && (
-        <>
-      <ShowSummaryCard
-        section="contrat"
-        dealId={deal.id}
-        dealDate={deal.date}
-        capacity={deal.capacity}
-        paying={deal.paying}
-        venue={venue}
-        venueRoomId={deal.venueRoomId}
-        venueDealKind={deal.venueDealKind}
-        prodExePct={deal.prodExePct != null ? Number(deal.prodExePct) : null}
-        coRealKnPct={deal.coRealKnPct != null ? Number(deal.coRealKnPct) : null}
-        coRealGrossCa={
-          deal.coRealGrossCa != null ? Number(deal.coRealGrossCa) : null
-        }
-        isMultiDate={deal.isMultiDate}
-        performanceCount={deal.performanceCount}
-        multiDateDates={
-          Array.isArray(deal.multiDateDates)
-            ? (deal.multiDateDates as string[]).filter(
-                (d): d is string => typeof d === "string",
-              )
-            : []
-        }
-        contractSigned={deal.contractSigned}
-        ticketingReady={deal.ticketingReady}
-        vhrBooked={deal.vhrBooked}
-        ticketingUrl={deal.ticketingUrl}
-        totalRevenue={totalRevenue}
-        productionContract={
-          deal.production
-            ? { productionId: deal.production.id, summary: contractSummary(contract) }
-            : null
-        }
-        hasPerformances={deal.performances.length > 0}
-      />
-
-      {/* Notes libres — éditables via « Modifier » (formulaire deal). */}
-      {deal.notes && deal.notes.trim().length > 0 && (
-        <div className="rounded-md border bg-card p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <StickyNote className="h-4 w-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold">Notes</h3>
-          </div>
-          <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">
-            {deal.notes}
-          </p>
-        </div>
-      )}
-        </>
-      )}
     </div>
   );
 }

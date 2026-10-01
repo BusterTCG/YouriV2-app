@@ -48,7 +48,9 @@ const TEMPLATES: Record<DealCategory, TemplateSeed[]> = {
     { order: 3, label: "Gestion VHR" },
     { order: 4, label: "Envoie FDR" },
     { order: 5, label: "Envoie Facture" },
-    { order: 6, label: "Paiement Artiste", defaultAssigneeKey: "angath" },
+    // Stan 2026-10-01 (migration 20261001120000_add_task_paiement_taxes).
+    { order: 6, label: "Paiement taxes SACD CNM", defaultAssigneeKey: "angath" },
+    { order: 7, label: "Paiement Artiste", defaultAssigneeKey: "angath" },
   ],
   CACHETS: [
     { order: 0, label: "Validation du montant Artiste", defaultAssigneeKey: "angath" },

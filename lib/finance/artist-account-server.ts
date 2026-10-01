@@ -33,6 +33,7 @@ async function accountDeals(productionId: string, nowMs: number): Promise<Accoun
       date: true,
       status: true,
       artistAmount: true,
+      settledAt: true,
       productionLines: {
         where: { kind: "REVENUE", deletedAt: null, coveredByVenue: false },
         select: { amount: true, paymentStatus: true },
@@ -53,6 +54,7 @@ async function accountDeals(productionId: string, nowMs: number): Promise<Accoun
       artistAmount: d.artistAmount != null ? Number(d.artistAmount) : 0,
       // Billetterie reçue = recettes saisies, toutes encaissées.
       collected: revenue.length > 0 && revenue.every((l) => l.paymentStatus === "PAID"),
+      settled: d.settledAt != null,
     };
   });
 }
@@ -117,7 +119,13 @@ export async function syncArtistStatusesDaily(now: Date = new Date()): Promise<v
   lastDailySync = day; // posé avant les await : pas de double passage concurrent
   try {
     const productions = await prisma.production.findMany({ select: { id: true } });
-    for (const p of productions) await syncArtistStatuses(p.id, now.getTime());
+    // Dates soldées reprises par migration : quote-part de frais figée dès la
+    // 1re page ouverte (avant toute modification des dates).
+    const { freezeSettledOverheads } = await import("@/lib/finance/show-financials");
+    for (const p of productions) {
+      await freezeSettledOverheads(p.id);
+      await syncArtistStatuses(p.id, now.getTime());
+    }
   } catch (e) {
     lastDailySync = null; // réessai à la prochaine page
     console.error("[syncArtistStatusesDaily]", e);

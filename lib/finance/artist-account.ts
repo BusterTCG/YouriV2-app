@@ -21,6 +21,8 @@ export type AccountDeal = {
   artistAmount: number;
   /** Toutes les recettes saisies sont encaissées (billetterie reçue). */
   collected: boolean;
+  /** Date soldée (lot 3 — comptes clos, en général via un appel de quote-part). */
+  settled?: boolean;
 };
 
 export type AccountMovement = { kind: "PAYMENT" | "REFUND"; amount: number };
@@ -53,8 +55,9 @@ export function computeArtistAccount(
   const active = deals.filter((d) => !d.cancelled || Math.round(d.artistAmount) !== 0);
   const played = active.filter((d) => d.isPast);
   const callableDeals = played
-    .filter((d) => d.collected)
+    .filter((d) => d.collected || d.settled)
     .sort((a, b) => a.date.getTime() - b.date.getTime());
+  const settledDeals = callableDeals.filter((d) => d.settled);
   const sum = (xs: AccountDeal[]) => xs.reduce((s, d) => s + d.artistAmount, 0);
 
   const paid = movements.filter((m) => m.kind === "PAYMENT").reduce((s, m) => s + m.amount, 0);
@@ -67,14 +70,18 @@ export function computeArtistAccount(
   // jusqu'à elle (incluse) est couvert par les versements nets. Date en perte
   // (part négative) : réglée seulement quand l'artiste a remboursé (le net
   // versé est descendu jusqu'au cumul dû).
+  // Date soldée : réglée d'office (le versement qui l'a soldée la couvre) ; le
+  // cumul chronologique porte sur les dates non soldées (lot 3, Stan 2026-10-01).
+  for (const d of settledDeals) statuses.set(d.id, "PAID");
+  const netLeft = round2(net - settledDeals.reduce((s, d) => s + d.artistAmount, 0));
   let cumulative = 0;
-  for (const d of callableDeals) {
+  for (const d of callableDeals.filter((x) => !x.settled)) {
     cumulative = round2(cumulative + d.artistAmount);
     const settled =
       Math.round(d.artistAmount) === 0 ||
       (d.artistAmount > 0
-        ? cumulative <= round2(net) + 0.005
-        : round2(net) <= cumulative + 0.005);
+        ? cumulative <= netLeft + 0.005
+        : netLeft <= cumulative + 0.005);
     if (settled) statuses.set(d.id, "PAID");
   }
 

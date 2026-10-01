@@ -470,14 +470,14 @@ export function DealFormDialog({
                     ? "Modifier la date"
                     : "Modifier le deal"
                   : isProdExe
-                    ? "Nouvelle date de production"
+                    ? "Nouvelle date"
                     : `Nouveau deal ${CATEGORY_LABEL[category]}`}
               </DialogTitle>
               <DialogDescription>
                 {isEdit
                   ? "Met à jour le titre, la date, le lieu, l'organisateur ou les notes."
                   : isProdExe
-                    ? "Crée une date de production. Tu pourras ajouter les détails après création."
+                    ? "Crée une date. Tu pourras ajouter les détails après création."
                     : `Crée un nouveau deal ${CATEGORY_LABEL[category]}. Tu pourras ajouter les détails après création.`}
               </DialogDescription>
             </DialogHeader>

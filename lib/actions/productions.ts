@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma, ArtistShareKind, PaymentStatus, ProductionStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth/users";
+import { requireDealCategoryAccess } from "@/lib/auth/access";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
 import { recomputeProductionFinancials } from "@/lib/finance/show-financials";
@@ -45,6 +46,62 @@ function fieldErrorsOf(e: z.ZodError): ActionResult<never> {
     error: "Validation",
     fieldErrors: z.flattenError(e).fieldErrors as Record<string, string[]>,
   };
+}
+
+// ────────── Création (Stan 2026-10-01, portage KN) ──────────
+
+const ProductionCreateSchema = z.object({
+  artistId: z.string().min(1, "Artiste requis"),
+  name: z.string().trim().min(1, "Nom du spectacle requis").max(200),
+  prodExePct: z.coerce.number().min(0).max(100).nullable().optional(),
+  coprodKnPct: z.coerce.number().min(0).max(100).nullable().optional(),
+});
+
+/**
+ * Crée un spectacle (production) sans date : l'accueil crée d'abord le
+ * spectacle, puis on y ajoute dates, tournées, résidences. Nom unique par
+ * artiste (rattachement automatique des dates sur le nom).
+ */
+export async function createProduction(input: unknown): Promise<ActionResult<{ id: string }>> {
+  const parsed = ProductionCreateSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Validation",
+      fieldErrors: z.flattenError(parsed.error).fieldErrors as Record<string, string[]>,
+    };
+  }
+  const d = parsed.data;
+  return safeAction("createProduction", async () => {
+    await requireDealCategoryAccess("PROD_EXE");
+    const existing = await prisma.production.findMany({
+      where: { artistId: d.artistId },
+      select: { name: true },
+    });
+    if (existing.some((p) => normalizeProductionName(p.name) === normalizeProductionName(d.name))) {
+      throw new UserError(`Cet artiste a déjà une production « ${d.name} ».`);
+    }
+    const pe = d.prodExePct ?? null;
+    const cp = d.coprodKnPct ?? null;
+    const created = await prisma.production.create({
+      data: {
+        artistId: d.artistId,
+        name: d.name.replace(/\s+/g, " "),
+        prodExePct: pe != null ? new Prisma.Decimal(pe) : null,
+        coprodKnPct: cp != null ? new Prisma.Decimal(cp) : null,
+        artistShareKind: pe != null || cp != null ? shareKindFor(pe, cp) : null,
+      },
+      include: { artist: { select: { slug: true } } },
+    });
+    await logAudit({
+      entity: "Production",
+      entityId: created.id,
+      action: "create",
+      summary: `Production « ${created.name} » créée`,
+    });
+    revalidateProduction(created.artist.slug);
+    return { id: created.id };
+  });
 }
 
 // ────────── Lecture (formulaire deal) ──────────

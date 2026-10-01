@@ -77,6 +77,41 @@ describe("allocateOverhead — prorata des représentations", () => {
     expect(Math.round(sum * 100) / 100).toBe(100);
   });
 
+  it("date soldée : quote-part figée, ajout de dates sans effet sur elle (Stan 2026-10-01)", () => {
+    // Sept soldée à 320 € (1 200 € sur 30 repr.) ; on ajoute déc 10 repr.
+    const a = allocateOverhead(
+      [
+        { id: "sept", status: "CONFIRME", performances: 8, frozenShare: 320 },
+        { id: "oct", status: "CONFIRME", performances: 10 },
+        { id: "nov", status: "CONFIRME", performances: 12 },
+        { id: "dec", status: "CONFIRME", performances: 10 },
+      ],
+      1200,
+    );
+    expect(a.byDeal.get("sept")).toBe(320);
+    // 880 € restants sur 32 repr. non soldées.
+    expect(a.perPerformance).toBe(27.5);
+    expect(a.byDeal.get("oct")).toBe(275);
+    expect(a.byDeal.get("dec")).toBe(275);
+    const sum = [...a.byDeal.values()].reduce((s, v) => s + v, 0);
+    expect(Math.round(sum * 100) / 100).toBe(1200);
+  });
+
+  it("frais ajouté après coup : seules les dates non soldées le portent ; toutes soldées → non réparti", () => {
+    const a = allocateOverhead(
+      [
+        { id: "sept", status: "CONFIRME", performances: 8, frozenShare: 320 },
+        { id: "oct", status: "CONFIRME", performances: 10 },
+      ],
+      1500,
+    );
+    expect(a.byDeal.get("sept")).toBe(320);
+    expect(a.byDeal.get("oct")).toBe(1180);
+    const all = allocateOverhead([{ id: "sept", status: "CONFIRME", performances: 8, frozenShare: 320 }], 500);
+    expect(all.byDeal.get("sept")).toBe(320);
+    expect(all.unallocated).toBe(180);
+  });
+
   it("aucune représentation active → frais non répartis", () => {
     const a = allocateOverhead([{ id: "a", status: "ANNULE", performances: 1 }], 500);
     expect(a.unallocated).toBe(500);
