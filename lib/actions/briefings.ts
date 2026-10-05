@@ -17,6 +17,7 @@ import { requireDealAccess } from "@/lib/auth/access";
 import { safeAction, type ActionResult } from "@/lib/errors";
 import { generateFdrPdf } from "@/lib/fdr-pdf";
 import { sendMail } from "@/lib/mailer";
+import { getContact, type KnContact } from "@/lib/kn-client";
 
 
 /** FDR servie sur 2 routes : Booking (/deals/booking/[id]/fdr) et date de
@@ -145,11 +146,13 @@ export async function ensureBriefingWithPrefill(
         return false;
       });
       if (!alreadyPresent) {
-        // Split firstName/lastName depuis organizerName (best-effort —
-        // l'user pourra ajuster côté éditeur Lot B).
+        // Stan 2026-10-05 : coordonnées complètes (tél, société, email)
+        // reprises de l'annuaire KN — le deal ne garde que nom + société.
+        const kn = deal.organizerId ? await fetchKnContact(deal.organizerId) : null;
+        // Sans annuaire : split firstName/lastName depuis organizerName.
         const parts = organizerName.split(/\s+/);
-        const firstName = parts.length > 1 ? parts[0] : null;
-        const lastName = parts.length > 1 ? parts.slice(1).join(" ") : parts[0];
+        const firstName = kn ? kn.firstName || null : parts.length > 1 ? parts[0] : null;
+        const lastName = kn ? kn.lastName : parts.length > 1 ? parts.slice(1).join(" ") : parts[0];
 
         await prisma.briefingContact.create({
           data: {
@@ -157,15 +160,51 @@ export async function ensureBriefingWithPrefill(
             contactId: deal.organizerId ?? null,
             firstName,
             lastName,
-            company: deal.organizerCompany ?? null,
+            company: kn?.company ?? deal.organizerCompany ?? null,
+            phone: kn?.phone ?? null,
+            email: kn?.email ?? null,
             role: BriefingRole.ORGANISATEUR,
           },
         });
       }
     }
 
+    // 5. Rattrapage : contacts annuaire enregistrés sans coordonnées
+    //    (organisateur pré-rempli avant Stan 2026-10-05) → complétés depuis KN.
+    //    Limité aux lignes antérieures au correctif : un tél/email vidé à la
+    //    main depuis l'éditeur n'est pas re-rempli.
+    const incomplete = await prisma.briefingContact.findMany({
+      where: {
+        briefingId: briefing.id,
+        contactId: { not: null },
+        phone: null,
+        email: null,
+        createdAt: { lt: new Date("2026-10-06T00:00:00Z") },
+      },
+      select: { id: true, contactId: true, company: true },
+    });
+    for (const c of incomplete) {
+      const kn = await fetchKnContact(c.contactId!);
+      if (!kn || (!kn.phone && !kn.email)) continue;
+      await prisma.briefingContact.update({
+        where: { id: c.id },
+        data: { phone: kn.phone, email: kn.email, company: c.company ?? kn.company },
+      });
+    }
+
     return { briefingId: briefing.id, created };
   });
+}
+
+/** Contact KN, ou null si l'annuaire est injoignable / le contact supprimé
+ *  (le pré-remplissage FDR ne doit jamais bloquer l'ouverture de la page). */
+async function fetchKnContact(id: string): Promise<KnContact | null> {
+  try {
+    return await getContact(id);
+  } catch (e) {
+    console.warn("[fdr] contact KN indisponible", id, e);
+    return null;
+  }
 }
 
 // ──────────────────────── Update champs simples (Lot B1) ────────────────────────
@@ -248,9 +287,17 @@ export async function updateBriefing(
 //   - Sémantique selon direction : OUTBOUND = pickups après arrivée,
 //     RETURN = pickups avant départ, INTER = transferts libres
 
-const TravelRunSchema = z.object({
-  location: z.string().min(1).max(200),
-  time: z.string().max(10),
+const TravelRunSchema = z
+  .object({
+    from: z.string().max(200),
+    to: z.string().max(200),
+    time: z.string().max(10),
+  })
+  .refine((r) => r.from.trim() || r.to.trim(), "Départ ou arrivée requis");
+
+const TravelerSchema = z.object({
+  artistId: z.string().min(1).optional(),
+  name: z.string().trim().min(1).max(80),
 });
 
 const TravelInputSchema = z.object({
@@ -263,6 +310,7 @@ const TravelInputSchema = z.object({
   toTime: z.string().max(10),
   comment: z.string().max(500).nullable().optional(),
   runs: z.array(TravelRunSchema).nullable().optional(),
+  travelers: z.array(TravelerSchema).nullable().optional(),
 });
 
 export async function createTravel(
@@ -286,6 +334,10 @@ export async function createTravel(
         // distinguer "pas de valeur" de "valeur JSON null").
         runs:
           data.runs && data.runs.length > 0 ? data.runs : Prisma.DbNull,
+        travelers:
+          data.travelers && data.travelers.length > 0
+            ? data.travelers
+            : Prisma.DbNull,
       },
       select: { id: true, briefing: { select: { dealId: true } } },
     });
@@ -310,12 +362,16 @@ export async function updateTravel(
     if (!id) throw new Error("id manquant");
 
     // `runs` (Json) ne peut pas être typé via cast direct — séparer le traitement.
-    const { runs, ...rest } = patch;
+    const { runs, travelers, ...rest } = patch;
     const data: Prisma.BriefingTravelUncheckedUpdateInput = {
       ...(rest as Prisma.BriefingTravelUncheckedUpdateInput),
     };
     if (runs !== undefined) {
       data.runs = runs && runs.length > 0 ? runs : Prisma.DbNull;
+    }
+    if (travelers !== undefined) {
+      data.travelers =
+        travelers && travelers.length > 0 ? travelers : Prisma.DbNull;
     }
     const travel = await prisma.briefingTravel.update({
       where: { id },
@@ -425,6 +481,74 @@ export async function addBriefingInlineContact(
       select: { briefing: { select: { dealId: true } } },
     });
     revalidateFdr(bc.briefing.dealId);
+  });
+}
+
+const UpdateBriefingContactSchema = z.object({
+  id: z.string().min(1),
+  patch: z.object({
+    role: z.nativeEnum(BriefingRole).optional(),
+    firstName: z.string().max(80).nullable().optional(),
+    lastName: z.string().max(80).nullable().optional(),
+    company: z.string().max(120).nullable().optional(),
+    phone: z.string().max(40).nullable().optional(),
+    email: z.string().max(120).nullable().optional(),
+  }),
+});
+
+/**
+ * Modifie un contact de la FDR (Stan 2026-10-05), y compris un contact pris
+ * dans l'annuaire : la modif reste propre à cette FDR, l'annuaire KN n'est
+ * pas touché (ex. « Florian — régie plateau » juste pour cette date).
+ */
+export async function updateBriefingContact(
+  input: z.infer<typeof UpdateBriefingContactSchema>,
+): Promise<ActionResult> {
+  return safeAction("updateBriefingContact", async () => {
+    await requireUser();
+    const { id, patch } = UpdateBriefingContactSchema.parse(input);
+    const scope = await prisma.briefingContact.findUnique({ where: { id }, select: { briefingId: true } });
+    if (!scope) throw new Error("Contact introuvable");
+    await requireDealAccess(await dealIdOfBriefing(scope.briefingId));
+    const clean = (v: string | null | undefined) =>
+      v === undefined ? undefined : v?.trim() || null;
+    const bc = await prisma.briefingContact.update({
+      where: { id },
+      data: {
+        role: patch.role,
+        firstName: clean(patch.firstName),
+        lastName: clean(patch.lastName),
+        company: clean(patch.company),
+        phone: clean(patch.phone),
+        email: clean(patch.email),
+      },
+      select: { briefing: { select: { dealId: true } } },
+    });
+    revalidateFdr(bc.briefing.dealId);
+  });
+}
+
+/** Coordonnées actuelles d'un contact de l'annuaire KN — bouton « Recharger
+ *  depuis l'annuaire » du formulaire d'édition d'un contact FDR. */
+export async function getKnContactForBriefing(contactId: string): Promise<
+  ActionResult<{
+    firstName: string | null;
+    lastName: string | null;
+    company: string | null;
+    phone: string | null;
+    email: string | null;
+  }>
+> {
+  return safeAction("getKnContactForBriefing", async () => {
+    await requireUser();
+    const kn = await getContact(contactId);
+    return {
+      firstName: kn.firstName || null,
+      lastName: kn.lastName,
+      company: kn.company,
+      phone: kn.phone,
+      email: kn.email,
+    };
   });
 }
 

@@ -91,7 +91,15 @@ interface Props {
    * Appelé UNIQUEMENT après une création réussie. Permet aux consumers
    * (formulaire deal à venir) d'auto-sélectionner le lieu fraîchement créé.
    */
-  onCreated?: (venue: { id: string; name: string; city: string }) => void;
+  onCreated?: (venue: {
+    id: string;
+    name: string;
+    city: string;
+    address: string | null;
+    capacity: number | null;
+  }) => void;
+  /** Nom pré-rempli en création (ex. texte tapé dans le VenuePicker). */
+  defaultName?: string;
 }
 
 /**
@@ -111,6 +119,7 @@ export function VenueFormDialog({
   venue,
   onSaved,
   onCreated,
+  defaultName,
 }: Props) {
   const isEdit = Boolean(venue?.id);
   const [pending, startTransition] = useTransition();
@@ -119,7 +128,7 @@ export function VenueFormDialog({
   const form = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
     values: {
-      name: venue?.name ?? "",
+      name: venue?.name ?? defaultName ?? "",
       city: venue?.city ?? "",
       address: venue?.address ?? "",
       capacity: venue?.capacity != null ? String(venue.capacity) : "",
@@ -177,6 +186,8 @@ export function VenueFormDialog({
           id: res.data.id,
           name: res.data.name,
           city: res.data.city,
+          address: res.data.address,
+          capacity: res.data.capacity,
         });
       }
       onSaved?.();

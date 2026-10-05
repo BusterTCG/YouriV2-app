@@ -26,7 +26,11 @@ import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { VenuePicker, type VenueSnapshot } from "@/components/deals/venue-picker";
 import { cn } from "@/lib/utils";
 import { updateBriefing } from "@/lib/actions/briefings";
-import { TravelsSection, type TravelRow } from "./travels-section";
+import {
+  TravelsSection,
+  type TravelArtist,
+  type TravelRow,
+} from "./travels-section";
 import {
   ContactsSection,
   type BriefingContactRow,
@@ -112,6 +116,8 @@ interface Props {
   artistName: string;
   /** Trajets rattachés à la FDR (Lot B2) — passés en props pour rendu inline. */
   travels: TravelRow[];
+  /** Artistes du deal — cases « Voyageurs » des trajets. */
+  dealArtists: TravelArtist[];
   /** Date du deal — défaut pour les trajets neufs. */
   eventDate: Date;
   /** Ville du show — sert au pré-remplissage GARE DE {ville}. */
@@ -133,6 +139,7 @@ export function BriefingEditor({
   // sous-composants (Notes placeholder retiré) mais pas directement ici.
   artistName: _artistName,
   travels,
+  dealArtists,
   eventDate,
   showCity,
   contacts,
@@ -143,12 +150,13 @@ export function BriefingEditor({
 
   // ─ Master fields (autoSave au blur) ─
   const [balanceTime, setBalanceTime] = useState(briefing.balanceTime ?? "");
+  // venueId vide + venueName = lieu saisi librement (hors annuaire).
   const [venue, setVenue] = useState<VenueSnapshot | null>(
-    briefing.venueId
+    briefing.venueId || briefing.venueName
       ? {
-          id: briefing.venueId,
+          id: briefing.venueId ?? "",
           name: briefing.venueName ?? "",
-          city: briefing.venueCity ?? "",
+          city: briefing.venueId ? (briefing.venueCity ?? "") : "",
         }
       : null,
   );
@@ -209,6 +217,12 @@ export function BriefingEditor({
 
   function handleVenueChange(next: VenueSnapshot | null) {
     setVenue(next);
+    // Stan 2026-10-05 : nom de lieu libre (pas dans l'annuaire) — on garde
+    // la ville / l'adresse / la jauge déjà saisies, à compléter à la main.
+    if (next && !next.id) {
+      autoSave({ venueId: null, venueName: next.name });
+      return;
+    }
     // Stan 2026-05-26 : au pick d'un lieu KN, on copie l'adresse + la
     // jauge dans la FDR. **Override systématique** — choisir un lieu KN
     // est un signal explicite "remplace par cette donnée KN" (sinon
@@ -345,6 +359,8 @@ export function BriefingEditor({
               value={venue}
               onChange={handleVenueChange}
               className="h-8 text-sm"
+              allowCreate
+              allowFreeText
             />
           </Field>
           <Field label="Heure du show">
@@ -391,18 +407,18 @@ export function BriefingEditor({
             {/* Indice si un lieu KN est choisi mais qu'il n'a pas d'adresse
                 renseignée côté annuaire. Permet à Stan de comprendre pourquoi
                 rien n'a remonté quand il a sélectionné le lieu. */}
-            {venue && !venueAddress && (
+            {venue?.id && !venueAddress && (
               <p className="text-[11px] text-amber-700 dark:text-amber-400 italic mt-1">
                 ⚠ Ce lieu n&apos;a pas d&apos;adresse renseignée dans
                 l&apos;annuaire KN. Saisis-la ci-dessus, ou complète-la
                 directement depuis{" "}
                 <a
-                  href="http://localhost:3000/lieux"
+                  href="/lieux"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline hover:text-amber-900"
                 >
-                  /lieux KN
+                  Lieux
                 </a>
                 .
               </p>
@@ -540,6 +556,7 @@ export function BriefingEditor({
           travels={travels}
           eventDate={eventDate}
           showCity={showCity}
+          dealArtists={dealArtists}
         />
       </Section>
 

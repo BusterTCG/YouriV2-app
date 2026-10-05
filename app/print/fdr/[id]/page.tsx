@@ -5,6 +5,7 @@ import { fr } from "date-fns/locale";
 import { prisma } from "@/lib/db";
 import { BriefingPrintView } from "@/components/briefings/briefing-print-view";
 import { canAccessDeal } from "@/lib/auth/access";
+import { parseRuns, parseTravelers } from "@/lib/briefing-travel";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -126,16 +127,8 @@ export default async function BriefingPrintPage({
                 toStation: t.toStation,
                 toTime: t.toTime,
                 comment: t.comment,
-                runs: Array.isArray(t.runs)
-                  ? (t.runs as unknown[]).filter(
-                      (r): r is { location: string; time: string } =>
-                        typeof r === "object" &&
-                        r !== null &&
-                        typeof (r as Record<string, unknown>).location ===
-                          "string" &&
-                        typeof (r as Record<string, unknown>).time === "string",
-                    )
-                  : [],
+                runs: parseRuns(t.runs, t.direction),
+                travelers: parseTravelers(t.travelers),
               })),
               // Email retiré (Stan 2026-05-26 : "Enlever le mail de la FDR")
               contacts: deal.briefing.contacts.map((c) => ({

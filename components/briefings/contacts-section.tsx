@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import {
   Loader2,
+  Pencil,
+  RefreshCw,
   Trash2,
   UserPlus,
   UserSearch,
@@ -25,7 +27,9 @@ import { formatPhone, phoneHref } from "@/lib/format-phone";
 import {
   addBriefingContact,
   addBriefingInlineContact,
+  getKnContactForBriefing,
   removeBriefingContact,
+  updateBriefingContact,
 } from "@/lib/actions/briefings";
 
 /**
@@ -77,6 +81,7 @@ export function ContactsSection({ briefingId, rows }: Props) {
   const [addingMode, setAddingMode] = useState<
     null | "linked" | "inline" | "pangee"
   >(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   function remove(id: string) {
@@ -104,6 +109,15 @@ export function ContactsSection({ briefingId, rows }: Props) {
       )}
 
       {sortedRows.map((r) => {
+        if (editingId === r.id) {
+          return (
+            <EditContactRow
+              key={r.id}
+              row={r}
+              onDone={() => setEditingId(null)}
+            />
+          );
+        }
         const displayName = [r.firstName, r.lastName].filter(Boolean).join(" ").trim() || r.company || "—";
         const isInline = r.contactId == null;
         return (
@@ -141,7 +155,16 @@ export function ContactsSection({ briefingId, rows }: Props) {
             <Button
               variant="ghost"
               size="sm"
-              className="ml-auto h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+              className="ml-auto h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+              onClick={() => setEditingId(r.id)}
+              title="Modifier ce contact (pour cette FDR uniquement)"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
               onClick={() => remove(r.id)}
               title="Supprimer ce contact"
             >
@@ -229,6 +252,26 @@ function NewKnContactRow({
   const [pending, startTransition] = useTransition();
   const [role, setRole] = useState<BriefingRole>("PRODUCTION");
   const [contact, setContact] = useState<ContactSnapshot | null>(null);
+  // Coordonnées modifiables avant ajout (Stan 2026-10-05) — copie propre à
+  // la FDR, l'annuaire KN n'est pas modifié.
+  const [fields, setFields] = useState<ContactFieldsValue>(EMPTY_FIELDS);
+
+  function pick(next: ContactSnapshot | null) {
+    setContact(next);
+    if (!next) {
+      setFields(EMPTY_FIELDS);
+      return;
+    }
+    // Décompose le name complet en firstName / lastName (best-effort).
+    // Le ContactPicker assemble déjà via "firstName + lastName".
+    const parts = next.name.trim().split(/\s+/);
+    setFields({
+      firstName: parts.length > 1 ? parts[0] : "",
+      lastName: parts.length > 1 ? parts.slice(1).join(" ") : parts[0],
+      company: next.company ?? "",
+      phone: next.phone ?? "",
+    });
+  }
 
   function submit() {
     if (!contact) return;
@@ -237,20 +280,13 @@ function NewKnContactRow({
       return;
     }
     startTransition(async () => {
-      // Décompose le name complet en firstName / lastName (best-effort).
-      // Le ContactPicker assemble déjà via "firstName + lastName".
-      const parts = contact.name.trim().split(/\s+/);
-      const firstName = parts.length > 1 ? parts[0] : null;
-      const lastName = parts.length > 1 ? parts.slice(1).join(" ") : parts[0];
-
       const res = await addBriefingContact({
         briefingId,
         contactId: contact.id,
-        firstName,
-        lastName,
-        company: contact.company,
-        // Phone/email snapshottés depuis le ContactPicker (Stan 2026-05-26)
-        phone: contact.phone ?? null,
+        firstName: fields.firstName.trim() || null,
+        lastName: fields.lastName.trim() || null,
+        company: fields.company.trim() || null,
+        phone: fields.phone.trim() || null,
         email: contact.email ?? null,
         role,
       });
@@ -282,9 +318,18 @@ function NewKnContactRow({
           </Select>
         </Field>
         <Field label="Contact">
-          <ContactPicker value={contact} onChange={setContact} />
+          <ContactPicker value={contact} onChange={pick} />
         </Field>
       </div>
+      {contact && (
+        <>
+          <ContactFields value={fields} onChange={setFields} />
+          <p className="text-[11px] text-muted-foreground italic">
+            Modifiable pour cette FDR (ex. ajouter une précision au nom) —
+            l&apos;annuaire n&apos;est pas modifié.
+          </p>
+        </>
+      )}
       <div className="flex justify-end gap-2">
         <Button
           variant="outline"
@@ -537,6 +582,171 @@ function NewPangeeContactRow({
         <Button size="sm" onClick={submit} disabled={pending || !member}>
           {pending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
           Ajouter
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────── Coordonnées (ajout annuaire + édition) ────────────────────────────
+
+type ContactFieldsValue = {
+  firstName: string;
+  lastName: string;
+  company: string;
+  phone: string;
+};
+
+const EMPTY_FIELDS: ContactFieldsValue = {
+  firstName: "",
+  lastName: "",
+  company: "",
+  phone: "",
+};
+
+function ContactFields({
+  value,
+  onChange,
+}: {
+  value: ContactFieldsValue;
+  onChange: (next: ContactFieldsValue) => void;
+}) {
+  const set = (k: keyof ContactFieldsValue) =>
+    (e: React.ChangeEvent<HTMLInputElement>) =>
+      onChange({ ...value, [k]: e.target.value });
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+      <Field label="Prénom">
+        <Input value={value.firstName} onChange={set("firstName")} className="h-8 text-sm" />
+      </Field>
+      <Field label="Nom">
+        <Input value={value.lastName} onChange={set("lastName")} className="h-8 text-sm" />
+      </Field>
+      <Field label="Société">
+        <Input value={value.company} onChange={set("company")} className="h-8 text-sm" />
+      </Field>
+      <Field label="Téléphone">
+        <Input
+          type="tel"
+          value={value.phone}
+          onChange={set("phone")}
+          placeholder="06 xx xx xx xx"
+          className="h-8 text-sm"
+        />
+      </Field>
+    </div>
+  );
+}
+
+// ──────────────────────────── EditContactRow (édition) ────────────────────────────
+
+/**
+ * Édition d'un contact déjà sur la FDR (Stan 2026-10-05) — rôle, nom,
+ * société, téléphone. Propre à cette FDR : l'annuaire KN n'est pas modifié.
+ * « Recharger depuis l'annuaire » reprend les coordonnées KN actuelles.
+ */
+function EditContactRow({
+  row,
+  onDone,
+}: {
+  row: BriefingContactRow;
+  onDone: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [role, setRole] = useState<BriefingRole>(row.role);
+  const [fields, setFields] = useState<ContactFieldsValue>({
+    firstName: row.firstName ?? "",
+    lastName: row.lastName ?? "",
+    company: row.company ?? "",
+    phone: row.phone ?? "",
+  });
+  const [email, setEmail] = useState<string | null>(row.email);
+
+  function reloadFromKn() {
+    if (!row.contactId) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await getKnContactForBriefing(row.contactId!);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      const kn = res.data!;
+      setFields({
+        firstName: kn.firstName ?? "",
+        lastName: kn.lastName ?? "",
+        company: kn.company ?? "",
+        phone: kn.phone ?? "",
+      });
+      setEmail(kn.email);
+    });
+  }
+
+  function submit() {
+    setError(null);
+    startTransition(async () => {
+      const res = await updateBriefingContact({
+        id: row.id,
+        patch: { role, ...fields, email },
+      });
+      if (res.ok) onDone();
+      else setError(res.error);
+    });
+  }
+
+  return (
+    <div className="rounded-md border-2 border-yr-gold/30 bg-yr-gold/5 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="text-[10px] uppercase tracking-wider text-yr-gold font-semibold flex items-center gap-1.5">
+          <Pencil className="h-3 w-3" />
+          Modifier le contact
+          <span className="text-muted-foreground/80 normal-case font-normal italic">
+            — pour cette FDR uniquement
+          </span>
+        </div>
+        {row.contactId && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={reloadFromKn}
+            disabled={pending}
+            title="Reprendre nom, société et téléphone actuels de l'annuaire"
+          >
+            <RefreshCw className="h-3 w-3 mr-1" />
+            Recharger depuis l&apos;annuaire
+          </Button>
+        )}
+      </div>
+      <Field label="Rôle" className="sm:w-1/4">
+        <Select value={role} onValueChange={(v) => setRole(v as BriefingRole)}>
+          <SelectTrigger className="h-8 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(ROLE_LABELS) as BriefingRole[]).map((r) => (
+              <SelectItem key={r} value={r}>
+                {ROLE_LABELS[r]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <ContactFields value={fields} onChange={setFields} />
+      {error && <p className="text-xs text-destructive">⚠ {error}</p>}
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={onDone} disabled={pending}>
+          Annuler
+        </Button>
+        <Button
+          size="sm"
+          onClick={submit}
+          disabled={pending || !(fields.firstName.trim() || fields.lastName.trim() || fields.company.trim())}
+        >
+          {pending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+          Enregistrer
         </Button>
       </div>
     </div>

@@ -6,6 +6,20 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [FDR Booking — retours de Stan] — 2026-10-05
+
+### Added
+- **Salle libre ou nouvelle** : dans le choix du lieu, « Utiliser « X » » (nom gardé sur la FDR sans l'enregistrer dans l'annuaire) ou « Créer « X » dans l'annuaire… » (fiche lieu pré-remplie, sélectionnée à la création).
+- **Voyageurs par trajet** (migration `briefing_travel_travelers`) : artistes du deal à cocher + noms libres, affichés dans le titre du trajet (éditeur + FDR imprimée). Rien de coché = tout le monde.
+- **Runs départ → arrivée** : point de départ + point d'arrivée par run (enchaînement pré-rempli). Anciens runs repris automatiquement.
+- **Modifier un contact de la FDR** (rôle, nom, société, téléphone) sans toucher l'annuaire, avec « Recharger depuis l'annuaire » ; coordonnées modifiables dès l'ajout depuis l'annuaire.
+
+### Fixed
+- Organisateur pré-rempli sur la FDR sans téléphone ni société : coordonnées désormais reprises de l'annuaire KN (rattrapage des FDR existantes à l'ouverture).
+- Lien « complète l'adresse depuis Lieux » qui pointait vers localhost.
+
+---
+
 ## [Production — analyse d'architecture, points 2 à 5] — 2026-10-01
 
 ### Changed

@@ -1327,14 +1327,22 @@ model BriefingTravel {
 
   /// "Runs" (transferts) optionnels — voiture / VTC.
   ///
-  /// Stocké en JSON : `Array<{ location: string, time: string }>` — plusieurs
-  /// runs par trajet (ex. gare → hôtel puis hôtel → salle).
+  /// Stocké en JSON : `Array<{ from: string, to: string, time: string }>` —
+  /// plusieurs runs par trajet (ex. gare → hôtel puis hôtel → salle). Point
+  /// de départ + point d'arrivée depuis Stan 2026-10-05.
   ///
-  /// Sémantique selon `direction` :
-  ///   - OUTBOUND : suite de pickups APRÈS l'arrivée
-  ///   - RETURN   : suite de pickups AVANT le départ
-  ///   - INTER    : transferts libres entre étapes
+  /// Ancien format `{ location, time }` toujours lu (lib/briefing-travel.ts) :
+  ///   - OUTBOUND : `location` = destination (pickup APRÈS l'arrivée)
+  ///   - RETURN   : `location` = lieu de pickup (AVANT le départ)
+  ///   - INTER    : `location` = destination
   runs Json?
+
+  /// Voyageurs concernés (Stan 2026-10-05) — quand les artistes ne prennent
+  /// pas tous le même train. JSON : `Array<{ artistId?: string, name: string }>`
+  ///   - `artistId` présent = artiste du deal (coché dans la liste)
+  ///   - `artistId` absent  = nom libre (accompagnateur, tourneur…)
+  /// Null / vide = tout le monde (pas de noms dans le titre du trajet).
+  travelers Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -12,6 +12,7 @@ import {
 import { prisma } from "@/lib/db";
 import { ensureBriefingWithPrefill } from "@/lib/actions/briefings";
 import { artistInitials } from "@/lib/artists";
+import { parseRuns, parseTravelers } from "@/lib/briefing-travel";
 import { formatShowTime } from "@/components/deals/deal-helpers";
 import { BriefingEditor } from "@/components/briefings/briefing-editor";
 
@@ -201,16 +202,12 @@ export default async function FdrPage({ params }: PageProps) {
           toStation: t.toStation,
           toTime: t.toTime,
           comment: t.comment,
-          // runs : JSON → array {location, time} filtré (sécurité côté lecture).
-          runs: Array.isArray(t.runs)
-            ? (t.runs as unknown[]).filter(
-                (r): r is { location: string; time: string } =>
-                  typeof r === "object" &&
-                  r !== null &&
-                  typeof (r as Record<string, unknown>).location === "string" &&
-                  typeof (r as Record<string, unknown>).time === "string",
-              )
-            : [],
+          runs: parseRuns(t.runs, t.direction),
+          travelers: parseTravelers(t.travelers),
+        }))}
+        dealArtists={deal.dealArtistes.map((da) => ({
+          id: da.artist.id,
+          name: da.artist.name,
         }))}
         eventDate={deal.date}
         showCity={briefing.venueCity ?? deal.venueCity ?? ""}

@@ -8,6 +8,11 @@ import Link from "next/link";
 import { BriefingRole, TravelDirection } from "@prisma/client";
 import { formatPhone, phoneHref } from "@/lib/format-phone";
 import { formatShowTime } from "@/components/deals/deal-helpers";
+import {
+  travelersLabel,
+  type TravelRun,
+  type TravelTraveler,
+} from "@/lib/briefing-travel";
 
 /**
  * Vue HTML print-ready de la FDR — Sprint 3.7 Lot C1.
@@ -65,7 +70,8 @@ interface BriefingDataPrint {
     toStation: string;
     toTime: string;
     comment: string | null;
-    runs: Array<{ location: string; time: string }>;
+    runs: TravelRun[];
+    travelers: TravelTraveler[];
   }>;
   // Email retiré de la print-view (Stan 2026-05-26) — on garde le champ
   // côté contacts pour usage UI mais pas de colonne dans le table FDR.
@@ -272,8 +278,13 @@ export function BriefingPrintView({
                         >
                           <span aria-hidden>{s.emoji}</span>
                           {s.label}
+                          {t.travelers.length > 0 && (
+                            <span className="normal-case tracking-normal font-semibold text-slate-800">
+                              · {travelersLabel(t.travelers)}
+                            </span>
+                          )}
                         </div>
-                        <div className="text-xs text-slate-600 tabular-nums">
+                        <div className="text-xs text-slate-600 tabular-nums shrink-0 pl-2">
                           {format(t.date, "EEEE d MMMM", { locale: fr })}
                         </div>
                       </div>
@@ -313,7 +324,7 @@ export function BriefingPrintView({
                                 Run {t.runs.length > 1 ? idx + 1 : ""}
                               </span>
                               <span className="font-semibold uppercase text-slate-700">
-                                {r.location || "—"}
+                                {runRoute(r)}
                               </span>
                               <span className="text-slate-600 tabular-nums">
                                 <span className="text-slate-500">Heure :</span>{" "}
@@ -566,6 +577,11 @@ function PrintSection({
       {children}
     </section>
   );
+}
+
+/** « GARE DE LYON → HÔTEL IBIS » (un seul côté renseigné → affiché seul). */
+function runRoute(r: TravelRun): string {
+  return [r.from, r.to].filter((x) => x.trim()).join(" → ") || "—";
 }
 
 /** Lien Google Maps depuis une adresse texte libre. */

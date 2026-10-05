@@ -11,6 +11,8 @@ import {
   Plus,
   Trash2,
   Train,
+  Users,
+  X,
 } from "lucide-react";
 import type { TravelDirection } from "@prisma/client";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,11 @@ import {
 } from "@/components/ui/select";
 import { DatePickerField } from "@/components/tasks/date-picker-field";
 import { cn } from "@/lib/utils";
+import {
+  travelersLabel,
+  type TravelRun,
+  type TravelTraveler,
+} from "@/lib/briefing-travel";
 import {
   createTravel,
   deleteTravel,
@@ -46,7 +53,10 @@ import {
  *     l'user n'a pas déjà saisi.
  */
 
-export type TravelRun = { location: string; time: string };
+export type { TravelRun, TravelTraveler };
+
+/** Artiste du deal proposé dans « Voyageurs » (case à cocher). */
+export type TravelArtist = { id: string; name: string };
 
 export type TravelRow = {
   id: string;
@@ -58,6 +68,8 @@ export type TravelRow = {
   toTime: string;
   comment: string | null;
   runs: TravelRun[];
+  /** Voyageurs concernés — vide = tout le monde. */
+  travelers: TravelTraveler[];
 };
 
 const DIRECTION_LABELS: Record<TravelDirection, string> = {
@@ -73,6 +85,8 @@ interface Props {
   eventDate: Date;
   /** Ville du show — sert à pré-remplir GARE DE {ville} sur aller/retour. */
   showCity: string;
+  /** Artistes du deal — cases « Voyageurs » de chaque trajet. */
+  dealArtists: TravelArtist[];
 }
 
 export function TravelsSection({
@@ -80,6 +94,7 @@ export function TravelsSection({
   travels,
   eventDate,
   showCity,
+  dealArtists,
 }: Props) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -106,6 +121,7 @@ export function TravelsSection({
             <EditTravelRow
               key={t.id}
               travel={t}
+              dealArtists={dealArtists}
               onCancel={() => setEditingId(null)}
               onSaved={() => setEditingId(null)}
             />
@@ -125,6 +141,7 @@ export function TravelsSection({
           briefingId={briefingId}
           eventDate={eventDate}
           showCity={showCity}
+          dealArtists={dealArtists}
           existingTravels={travels}
           onCancel={() => setAdding(false)}
           onCreated={() => setAdding(false)}
@@ -188,13 +205,18 @@ function TravelCard({
       >
         <div
           className={cn(
-            "flex items-center gap-2 text-xs uppercase tracking-wider font-bold",
+            "flex items-center gap-2 text-xs uppercase tracking-wider font-bold min-w-0",
             style.text,
           )}
         >
-          <Train className="h-3.5 w-3.5" />
+          <Train className="h-3.5 w-3.5 shrink-0" />
           {style.label}
-          <span className="text-muted-foreground/70 font-normal normal-case">
+          {travel.travelers.length > 0 && (
+            <span className="normal-case tracking-normal text-foreground truncate">
+              · {travelersLabel(travel.travelers)}
+            </span>
+          )}
+          <span className="text-muted-foreground/70 font-normal normal-case shrink-0">
             · {format(travel.date, "EEEE d MMMM", { locale: fr })}
           </span>
         </div>
@@ -260,7 +282,9 @@ function TravelCard({
               <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground border rounded px-1.5 py-0.5">
                 Run {travel.runs.length > 1 ? idx + 1 : ""}
               </span>
-              <span className="font-medium uppercase">{r.location || "—"}</span>
+              <span className="font-medium uppercase">
+                {[r.from, r.to].filter((x) => x.trim()).join(" → ") || "—"}
+              </span>
               <span className="text-muted-foreground tabular-nums">
                 <span>Heure :</span> {r.time}
               </span>
@@ -285,6 +309,7 @@ function NewTravelRow({
   briefingId,
   eventDate,
   showCity,
+  dealArtists,
   existingTravels,
   onCancel,
   onCreated,
@@ -292,6 +317,7 @@ function NewTravelRow({
   briefingId: string;
   eventDate: Date;
   showCity: string;
+  dealArtists: TravelArtist[];
   existingTravels: TravelRow[];
   onCancel: () => void;
   onCreated: () => void;
@@ -315,6 +341,7 @@ function NewTravelRow({
   const [toTime, setToTime] = useState("");
   const [comment, setComment] = useState("");
   const [runs, setRuns] = useState<TravelRun[]>([]);
+  const [travelers, setTravelers] = useState<TravelTraveler[]>([]);
 
   function onChangeDirection(next: TravelDirection) {
     setDirection(next);
@@ -347,7 +374,8 @@ function NewTravelRow({
         toStation,
         toTime,
         comment: comment || null,
-        runs: runs.filter((r) => r.location.trim() && r.time.trim()),
+        runs: cleanRuns(runs),
+        travelers,
       });
       if (res.ok) onCreated();
     });
@@ -372,6 +400,9 @@ function NewTravelRow({
       setComment={setComment}
       runs={runs}
       setRuns={setRuns}
+      travelers={travelers}
+      setTravelers={setTravelers}
+      dealArtists={dealArtists}
       pending={pending}
       onCancel={onCancel}
       onSubmit={submit}
@@ -384,10 +415,12 @@ function NewTravelRow({
 
 function EditTravelRow({
   travel,
+  dealArtists,
   onCancel,
   onSaved,
 }: {
   travel: TravelRow;
+  dealArtists: TravelArtist[];
   onCancel: () => void;
   onSaved: () => void;
 }) {
@@ -402,6 +435,9 @@ function EditTravelRow({
   const [toTime, setToTime] = useState(travel.toTime || "");
   const [comment, setComment] = useState(travel.comment ?? "");
   const [runs, setRuns] = useState<TravelRun[]>(travel.runs ?? []);
+  const [travelers, setTravelers] = useState<TravelTraveler[]>(
+    travel.travelers ?? [],
+  );
 
   function submit() {
     startTransition(async () => {
@@ -415,7 +451,8 @@ function EditTravelRow({
           toStation: upper(toStation),
           toTime,
           comment: comment || null,
-          runs: runs.filter((r) => r.location.trim() && r.time.trim()),
+          runs: cleanRuns(runs),
+          travelers,
         },
       });
       if (res.ok) onSaved();
@@ -442,6 +479,9 @@ function EditTravelRow({
       setComment={setComment}
       runs={runs}
       setRuns={setRuns}
+      travelers={travelers}
+      setTravelers={setTravelers}
+      dealArtists={dealArtists}
       pending={pending}
       onCancel={onCancel}
       onSubmit={submit}
@@ -475,6 +515,9 @@ function TravelFormShell({
   setComment,
   runs,
   setRuns,
+  travelers,
+  setTravelers,
+  dealArtists,
   pending,
   onCancel,
   onSubmit,
@@ -498,6 +541,9 @@ function TravelFormShell({
   setComment: (v: string) => void;
   runs: TravelRun[];
   setRuns: (next: TravelRun[]) => void;
+  travelers: TravelTraveler[];
+  setTravelers: (next: TravelTraveler[]) => void;
+  dealArtists: TravelArtist[];
   pending: boolean;
   onCancel: () => void;
   onSubmit: () => void;
@@ -578,8 +624,20 @@ function TravelFormShell({
         </Field>
       </div>
 
+      <TravelersPicker
+        dealArtists={dealArtists}
+        travelers={travelers}
+        onChange={setTravelers}
+      />
+
       {/* Runs / transferts (liste dynamique) — AVANT le commentaire */}
-      <RunsSection direction={direction} runs={runs} onChange={setRuns} />
+      <RunsSection
+        direction={direction}
+        fromStation={fromStation}
+        toStation={toStation}
+        runs={runs}
+        onChange={setRuns}
+      />
 
       <Field label="Commentaire">
         <Input
@@ -614,17 +672,28 @@ function TravelFormShell({
 
 // ──────────────────────────── RunsSection (runs imbriqués) ────────────────────────────
 
+/** Runs vides (ni départ ni arrivée) retirés avant envoi. */
+function cleanRuns(runs: TravelRun[]): TravelRun[] {
+  return runs
+    .map((r) => ({ from: r.from.trim(), to: r.to.trim(), time: r.time }))
+    .filter((r) => r.from || r.to);
+}
+
 function RunsSection({
   direction,
+  fromStation,
+  toStation,
   runs,
   onChange,
 }: {
   direction: TravelDirection;
+  /** Gare de départ du trajet — arrivée par défaut du 1er run au retour. */
+  fromStation: string;
+  /** Gare d'arrivée du trajet — départ par défaut du 1er run à l'aller. */
+  toStation: string;
   runs: TravelRun[];
   onChange: (next: TravelRun[]) => void;
 }) {
-  const locationLabel =
-    direction === "OUTBOUND" ? "Destination" : "Lieu de pickup";
   const hint =
     direction === "OUTBOUND"
       ? "Voiture qui prend à l'arrivée et amène ailleurs (hôtel, salle, restau…)"
@@ -640,8 +709,20 @@ function RunsSection({
   function remove(idx: number) {
     onChange(runs.filter((_, i) => i !== idx));
   }
+  // Pré-remplissage (Stan 2026-10-05) : chaque run part de l'arrivée du
+  // précédent ; le 1er part de la gare d'arrivée à l'aller, et le 1er run
+  // du retour amène à la gare de départ.
   function add() {
-    onChange([...runs, { location: "", time: "" }]);
+    const last = runs[runs.length - 1];
+    const run: TravelRun =
+      direction === "RETURN" && runs.length === 0
+        ? { from: "", to: fromStation, time: "" }
+        : {
+            from: last?.to ?? (direction === "OUTBOUND" ? toStation : ""),
+            to: "",
+            time: "",
+          };
+    onChange([...runs, run]);
   }
 
   return (
@@ -672,13 +753,28 @@ function RunsSection({
           {runs.map((run, idx) => (
             <div
               key={idx}
-              className="grid grid-cols-[1fr_120px_auto] gap-2 items-end bg-muted/30 rounded-md p-2"
+              className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_1fr_110px_auto] gap-2 items-end bg-muted/30 rounded-md p-2"
             >
-              <Field label={`${locationLabel} ${idx + 1}`}>
+              <Field
+                label={`Départ run ${runs.length > 1 ? idx + 1 : ""}`.trim()}
+                className="col-span-2 sm:col-span-1"
+              >
                 <Input
-                  value={run.location}
-                  onChange={(e) => update(idx, { location: e.target.value })}
-                  placeholder=""
+                  value={run.from}
+                  onChange={(e) =>
+                    update(idx, { from: e.target.value.toUpperCase() })
+                  }
+                  placeholder="GARE, HÔTEL…"
+                  className="h-8 text-sm"
+                />
+              </Field>
+              <Field label="Arrivée" className="col-span-2 sm:col-span-1">
+                <Input
+                  value={run.to}
+                  onChange={(e) =>
+                    update(idx, { to: e.target.value.toUpperCase() })
+                  }
+                  placeholder="SALLE, HÔTEL…"
                   className="h-8 text-sm"
                 />
               </Field>
@@ -704,6 +800,130 @@ function RunsSection({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ──────────────────────────── TravelersPicker (voyageurs) ────────────────────────────
+
+/**
+ * Voyageurs du trajet (Stan 2026-10-05) — les artistes ne prennent pas
+ * toujours le même train. Cases à cocher pour les artistes du deal + noms
+ * libres (accompagnateur, tourneur…). Rien de coché = tout le monde : le
+ * titre du trajet n'affiche alors aucun nom.
+ */
+function TravelersPicker({
+  dealArtists,
+  travelers,
+  onChange,
+}: {
+  dealArtists: TravelArtist[];
+  travelers: TravelTraveler[];
+  onChange: (next: TravelTraveler[]) => void;
+}) {
+  const [extra, setExtra] = useState("");
+  const checked = new Set(travelers.map((t) => t.artistId).filter(Boolean));
+  const extras = travelers.filter((t) => !t.artistId);
+
+  // Ordre stable : artistes dans l'ordre du deal, puis noms libres.
+  function rebuild(ids: Set<string | undefined>, names: TravelTraveler[]) {
+    onChange([
+      ...dealArtists
+        .filter((a) => ids.has(a.id))
+        .map((a) => ({ artistId: a.id, name: a.name })),
+      ...names,
+    ]);
+  }
+  function toggle(id: string) {
+    const next = new Set(checked);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    rebuild(next, extras);
+  }
+  function addExtra() {
+    const name = extra.trim();
+    if (!name) return;
+    if (!extras.some((t) => t.name.toLowerCase() === name.toLowerCase())) {
+      rebuild(checked, [...extras, { name }]);
+    }
+    setExtra("");
+  }
+  function removeExtra(name: string) {
+    rebuild(
+      checked,
+      extras.filter((t) => t.name !== name),
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-dashed border-muted-foreground/30 bg-background p-2 space-y-2">
+      <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+        <span className="font-medium inline-flex items-center gap-1">
+          <Users className="h-3.5 w-3.5" />
+          Voyageurs
+        </span>
+        <span className="text-[10px] italic">
+          — rien de coché = tout le monde (les noms cochés apparaissent dans
+          le titre du trajet)
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {dealArtists.map((a) => (
+          <label
+            key={a.id}
+            className="flex items-center gap-1.5 text-sm cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              checked={checked.has(a.id)}
+              onChange={() => toggle(a.id)}
+              className="h-4 w-4 accent-yr-gold"
+            />
+            {a.name}
+          </label>
+        ))}
+        {extras.map((t) => (
+          <span
+            key={t.name}
+            className="inline-flex items-center gap-1 rounded-full border bg-muted/40 pl-2.5 pr-1 py-0.5 text-sm"
+          >
+            {t.name}
+            <button
+              type="button"
+              onClick={() => removeExtra(t.name)}
+              className="rounded-full p-0.5 hover:bg-muted"
+              aria-label={`Retirer ${t.name}`}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <Input
+          value={extra}
+          onChange={(e) => setExtra(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addExtra();
+            }
+          }}
+          placeholder="Autre personne (hors liste)…"
+          className="h-8 text-sm max-w-xs"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={addExtra}
+          disabled={!extra.trim()}
+          className="h-8"
+        >
+          <Plus className="h-3 w-3 mr-1" />
+          Ajouter
+        </Button>
+      </div>
     </div>
   );
 }
