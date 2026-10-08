@@ -45,8 +45,8 @@ import { cn } from "@/lib/utils";
 
 type TabKey = "suivi" | "comptes";
 const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: "suivi", label: "Paramètres & suivi" },
   { key: "comptes", label: "Financier" },
+  { key: "suivi", label: "Paramètres & suivi" },
 ];
 
 export const dynamic = "force-dynamic";
@@ -61,11 +61,11 @@ interface PageProps {
  * Refonte Production 2026-09-29 : route /shows/[id] (KN), rattachée à sa
  * production (contrat hérité, quote-part des frais généraux).
  *
- * 2 blocs (KN, Stan 2026-10-01) :
- *   Paramètres & suivi : check-list, contrat (salle + artiste), jauge, notes
+ * 2 blocs (KN, Stan 2026-10-01), Financier en premier (2026-10-08) :
  *   Financier          : billetterie des séances, recettes, charges, part
  *                        artiste / part Pangee, management fees (écran interne
  *                        Pangee), acompte salle, exports
+ *   Paramètres & suivi : check-list, contrat (salle + artiste), jauge, notes
  * (?tab=contrat, ancien 3e onglet, retombe sur Paramètres & suivi.)
  *
  * Layout :
@@ -86,8 +86,8 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
   const restricted = isRestrictedRole((await getCurrentUser())?.role);
   const { id } = await params;
   const { tab } = await searchParams;
-  // ?tab=contrat (ancien onglet) → Paramètres & suivi.
-  const view: TabKey = tab === "comptes" ? "comptes" : "suivi";
+  // Défaut = Financier ; ?tab=contrat (ancien onglet) → Paramètres & suivi.
+  const view: TabKey = tab === "suivi" || tab === "contrat" ? "suivi" : "comptes";
 
   const deal = await prisma.deal.findFirst({
     where: { id, deletedAt: null, category: "PROD_EXE" },
@@ -390,7 +390,7 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
         {TABS.map((t) => (
           <Link
             key={t.key}
-            href={t.key === "suivi" ? `/shows/${deal.id}` : `/shows/${deal.id}?tab=${t.key}`}
+            href={t.key === "comptes" ? `/shows/${deal.id}` : `/shows/${deal.id}?tab=${t.key}`}
             className={cn(
               "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap",
               view === t.key
