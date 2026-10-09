@@ -586,7 +586,6 @@ function TravelFormShell({
             type="time"
             value={fromTime}
             onChange={(e) => setFromTime(e.target.value)}
-            placeholder="08:30"
             className="h-8 text-sm"
           />
         </Field>
@@ -595,7 +594,6 @@ function TravelFormShell({
             type="time"
             value={toTime}
             onChange={(e) => setToTime(e.target.value)}
-            placeholder="10:45"
             className="h-8 text-sm"
           />
         </Field>

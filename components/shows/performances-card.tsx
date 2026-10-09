@@ -186,7 +186,6 @@ export function PerformancesCard({
           <Input type="date" className="h-8 w-40 text-sm" value={newDay} onChange={(e) => setNewDay(e.target.value)} />
           <Input
             className="h-8 w-24 text-sm"
-            placeholder="19:30"
             value={newTime}
             onChange={(e) => setNewTime(e.target.value)}
           />
@@ -292,7 +291,7 @@ function PerfRow({
           inputMode="numeric" onChange={(e) => setInvited(e.target.value)} onBlur={() => save("invited", invited, p.invited)} />
       </td>
       <td className="px-2 py-1">
-        <Input className={cell} value={gross} placeholder="€" disabled={disabled || p.cancelled}
+        <Input className={cell} value={gross} disabled={disabled || p.cancelled}
           inputMode="decimal" onChange={(e) => setGross(e.target.value)}
           onBlur={() => save("grossTicketing", gross, p.grossTicketing)} />
       </td>

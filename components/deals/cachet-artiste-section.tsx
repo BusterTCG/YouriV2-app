@@ -134,7 +134,6 @@ export function CachetArtisteSection({ artiste }: Props) {
               value={manualBrut}
               onChange={(e) => setManualBrut(e.target.value)}
               onBlur={persistManualBrut}
-              placeholder="0"
               min={0}
               step="0.01"
               className="h-8 text-sm text-right tabular-nums pr-6"

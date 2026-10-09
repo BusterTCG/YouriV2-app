@@ -191,7 +191,6 @@ function PrestationRow({ line }: { line: CachetPrestationRow }) {
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           onBlur={onAmountBlur}
-          placeholder="0,00"
           min={0}
           step="0.01"
           className="h-8 text-sm text-right tabular-nums pr-6"

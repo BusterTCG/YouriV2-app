@@ -657,7 +657,7 @@ export function DealFormDialog({
                         Nouveau
                       </button>
                     </div>
-                    <VenuePicker value={venue} onChange={setVenue} />
+                    <VenuePicker value={venue} onChange={setVenue} allowCreate />
                   </div>
                 </div>
               ) : (
@@ -699,7 +699,7 @@ export function DealFormDialog({
                               Nouveau
                             </button>
                           </div>
-                          <VenuePicker value={venue} onChange={setVenue} />
+                          <VenuePicker value={venue} onChange={setVenue} allowCreate />
                         </div>
                       </div>
 
@@ -804,7 +804,6 @@ export function DealFormDialog({
                                       amount: e.target.value,
                                     })
                                   }
-                                  placeholder="0,00"
                                   min={0}
                                   step="0.01"
                                   className="h-9 text-sm text-right tabular-nums pr-7"
@@ -914,7 +913,6 @@ export function DealFormDialog({
                         inputMode="decimal"
                         value={prodExePct}
                         onChange={(e) => setProdExePct(e.target.value)}
-                        placeholder="0"
                         className="h-9 text-sm text-right tabular-nums"
                         disabled={pending}
                       />
@@ -926,7 +924,6 @@ export function DealFormDialog({
                         inputMode="decimal"
                         value={coprodKnPct}
                         onChange={(e) => setCoprodKnPct(e.target.value)}
-                        placeholder="0"
                         className="h-9 text-sm text-right tabular-nums"
                         disabled={pending || isEdit}
                       />

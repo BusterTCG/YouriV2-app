@@ -229,7 +229,6 @@ function RateRow({
           inputMode="decimal"
           className="h-9 w-20 pr-6 text-right tabular-nums"
           value={value}
-          placeholder="0"
           min={0}
           max={100}
           onChange={(e) => onChange(e.target.value)}

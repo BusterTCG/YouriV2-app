@@ -6,6 +6,19 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [Champs chiffrés, création de lieu depuis un deal] — 2026-10-09
+
+### Fixed
+- **Champs montant / %** (MoneyInput, PctInput) : la valeur est sélectionnée APRÈS le passage de l'affichage formaté à la valeur brute → la frappe remplace le « 0 » au lieu de s'y ajouter. Tout champ chiffré sélectionne sa valeur au clic (components/ui/input.tsx) — même correctif que KN.
+- Plus de valeurs d'exemple (0, 0,00, 0 €, %, €, heures…) dans les champs.
+- Valider un nouveau lieu / contact depuis un deal n'enregistre / ne ferme plus le deal (submit qui remontait à travers le portail du dialog).
+
+### Added
+- Formulaire de deal : « Créer un nouveau lieu… » dans le choix du lieu (comme le « + » de KN).
+- Recherche de lieux / contacts sans accents ni majuscules, multi-mots, lieux triés par nom — via l'API annuaire KN (déployée côté KN).
+
+---
+
 ## [FDR Booking — retours de Stan] — 2026-10-05
 
 ### Added

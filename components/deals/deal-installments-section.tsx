@@ -289,7 +289,10 @@ function PctInput({
       onFocus={(e) => {
         setEditing(true);
         setDraft(value != null ? String(Math.round(value)) : "");
-        e.target.select();
+        // L'affichage change (formaté → brut) au re-render : on sélectionne
+        // APRÈS, sinon la sélection est perdue et la frappe s'ajoute au « 0 ».
+        const el = e.target;
+        requestAnimationFrame(() => el.select());
       }}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
@@ -301,7 +304,6 @@ function PctInput({
           setEditing(false);
         }
       }}
-      placeholder="%"
       title="Part du budget (%) — recalcule le montant"
       className="h-8 w-full rounded border-0 bg-transparent px-2 text-xs tabular-nums text-right text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/20 focus:bg-background focus:text-foreground"
     />

@@ -437,7 +437,6 @@ export function ShowSummaryCard({
                 const n = formProdExe === "" ? null : Number(formProdExe);
                 if (n !== prodExePct) persist({ prodExePct: n });
               }}
-              placeholder="15"
               className="h-9 w-20 text-sm text-center tabular-nums"
               min={0}
               max={100}

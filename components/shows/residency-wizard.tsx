@@ -168,7 +168,6 @@ export function ResidencyWizard({ productionId, residency, label, variant = "def
                   <Input
                     className="h-9 w-20"
                     value={t}
-                    placeholder="19:30"
                     onChange={(e) => setTimes((cur) => cur.map((x, j) => (j === i ? e.target.value : x)))}
                   />
                   {times.length > 1 && (
@@ -203,7 +202,7 @@ export function ResidencyWizard({ productionId, residency, label, variant = "def
                   </Select>
                   {venueDealKind === "CO_REAL" && (
                     <div className="flex items-center gap-1">
-                      <Input className="h-9 w-16" inputMode="numeric" value={coRealKnPct} placeholder="50" onChange={(e) => setCoRealKnPct(e.target.value)} />
+                      <Input className="h-9 w-16" inputMode="numeric" value={coRealKnPct} onChange={(e) => setCoRealKnPct(e.target.value)} />
                       <span className="text-muted-foreground">% Pangee</span>
                     </div>
                   )}

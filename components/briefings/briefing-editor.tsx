@@ -388,7 +388,6 @@ export function BriefingEditor({
               value={balanceTime}
               onChange={(e) => setBalanceTime(e.target.value)}
               onBlur={() => autoSave({ balanceTime: balanceTime || null })}
-              placeholder="18:00"
               className="text-sm"
             />
           </Field>
@@ -539,7 +538,6 @@ export function BriefingEditor({
                       : null,
                   })
                 }
-                placeholder="€ par jour"
                 disabled={!perDiemFlag}
                 className="w-40 text-sm"
               />

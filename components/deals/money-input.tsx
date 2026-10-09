@@ -61,7 +61,10 @@ export function MoneyInput({ value, onCommit, placeholder, className, disabled }
         if (disabled) return;
         setEditing(true);
         setDraft(value != null ? String(Math.round(value)) : "");
-        e.target.select();
+        // L'affichage change (formaté → brut) au re-render : on sélectionne
+        // APRÈS, sinon la sélection est perdue et la frappe s'ajoute au « 0 ».
+        const el = e.target;
+        requestAnimationFrame(() => el.select());
       }}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
@@ -73,7 +76,7 @@ export function MoneyInput({ value, onCommit, placeholder, className, disabled }
           setEditing(false);
         }
       }}
-      placeholder={placeholder ?? "0 €"}
+      placeholder={placeholder}
       disabled={disabled}
       className={cn(
         "h-8 w-full rounded-md border bg-background px-2 text-sm tabular-nums text-right",

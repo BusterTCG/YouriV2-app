@@ -85,7 +85,7 @@ export function DealBudgetSection({
           {/* Wrapper inputs : grid 2-col mobile, contents en desktop. */}
           <div className="grid grid-cols-2 gap-2 sm:contents">
             <div className="sm:w-32 sm:shrink-0">
-              <MoneyInput value={budgetAmount} onCommit={commitAmount} placeholder="0 €" />
+              <MoneyInput value={budgetAmount} onCommit={commitAmount} />
             </div>
             <div className="hidden sm:block sm:w-16 sm:shrink-0" />
             {hasInstallments ? (

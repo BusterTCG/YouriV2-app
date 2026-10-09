@@ -230,7 +230,16 @@ export function VenueFormDialog({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form
+            // stopPropagation : ce dialog peut s'ouvrir depuis le formulaire
+            // d'un deal — sans ça le submit remonte à travers le portail et
+            // enregistre / ferme aussi le deal (même correctif que KN).
+            onSubmit={(e) => {
+              e.stopPropagation();
+              return form.handleSubmit(onSubmit)(e);
+            }}
+            className="space-y-4"
+          >
             <FormField
               control={form.control}
               name="name"
@@ -305,7 +314,6 @@ export function VenueFormDialog({
                       type="number"
                       min={0}
                       max={100000}
-                      placeholder="800"
                       onWheel={(e) => (e.target as HTMLInputElement).blur()}
                       {...field}
                     />

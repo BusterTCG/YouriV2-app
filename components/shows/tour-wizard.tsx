@@ -152,7 +152,7 @@ export function TourWizard({ productionId }: { productionId: string }) {
                         <Input type="date" className="h-8 w-full text-sm" value={r.day} onChange={(e) => update(r.key, { day: e.target.value })} />
                       </td>
                       <td className="px-2 py-1">
-                        <Input className="h-8 w-full text-sm" placeholder="20:00 / 22:00" value={r.showTime} onChange={(e) => update(r.key, { showTime: e.target.value })} />
+                        <Input className="h-8 w-full text-sm" value={r.showTime} onChange={(e) => update(r.key, { showTime: e.target.value })} />
                       </td>
                       <td className="px-2 py-1">
                         <VenuePicker value={r.venue} onChange={(v) => onVenue(r, v)} className="h-8 text-sm" />

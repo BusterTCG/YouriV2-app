@@ -225,7 +225,16 @@ export function ContactFormDialog({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form
+            // stopPropagation : ce dialog peut s'ouvrir depuis le formulaire
+            // d'un deal — sans ça le submit remonte à travers le portail et
+            // enregistre / ferme aussi le deal (même correctif que KN).
+            onSubmit={(e) => {
+              e.stopPropagation();
+              return form.handleSubmit(onSubmit)(e);
+            }}
+            className="space-y-4"
+          >
             {/* Identité */}
             <div className="grid grid-cols-2 gap-3">
               <FormField

@@ -701,7 +701,6 @@ function ArtisteCachetRow({ artiste }: { artiste: ArtisteLineRow }) {
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           onBlur={onAmountBlur}
-          placeholder="0 €"
           className="h-8 text-sm text-right tabular-nums"
         />
       </div>
@@ -1023,7 +1022,6 @@ function SubEntryRow({
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           onBlur={onAmountBlur}
-          placeholder="0 €"
           className="h-8 text-sm text-right tabular-nums"
         />
       </div>
@@ -1228,7 +1226,6 @@ function LineEditor({
           disabled={isCovered}
           onChange={(e) => setAmount(e.target.value)}
           onBlur={onAmountBlur}
-          placeholder="0 €"
           className={cn(
             "h-8 text-sm text-right tabular-nums",
             isCovered && "bg-muted/50",

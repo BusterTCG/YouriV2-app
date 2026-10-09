@@ -277,7 +277,10 @@ function PctInput({
       onFocus={(e) => {
         setEditing(true);
         setDraft(value != null ? String(Math.round(value * 10) / 10) : "");
-        e.target.select();
+        // L'affichage change (formaté → brut) au re-render : on sélectionne
+        // APRÈS, sinon la sélection est perdue et la frappe s'ajoute au « 0 ».
+        const el = e.target;
+        requestAnimationFrame(() => el.select());
       }}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
