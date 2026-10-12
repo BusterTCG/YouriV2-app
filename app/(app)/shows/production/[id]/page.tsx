@@ -196,7 +196,7 @@ export default async function ProductionPage({ params, searchParams }: Props) {
       </div>
 
       {/* Onglets */}
-      <div className="flex items-center gap-1 border-b overflow-x-auto">
+      <div className="flex items-center gap-1 border-b overflow-x-auto overflow-y-hidden">
         {tabs.map((t) => (
           <Link
             key={t.key}
@@ -448,14 +448,21 @@ export default async function ProductionPage({ params, searchParams }: Props) {
             forecast: account.forecast,
             paid: account.paid,
             refunded: account.refunded,
+            upcoming: account.upcoming,
+            advances: account.advances,
+            advancesPaid: account.advancesPaid,
+            advancesDue: account.advancesDue,
+            quotePartBalance: account.quotePartBalance,
             balance: account.balance,
             movements: account.movements.map((m) => ({
               id: m.id,
               kind: m.kind,
               amount: m.amount,
+              advanceAmount: m.advanceAmount,
               date: m.date.toISOString().slice(0, 10),
               note: m.note,
             })),
+            advanceItems: account.advanceItems,
           }}
         />
       )}

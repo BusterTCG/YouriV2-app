@@ -46,7 +46,11 @@ export const GLOSSARY = {
   },
   quotePart: {
     title: "Quote-part artiste",
-    text: "Part acquise = part artiste des dates jouées. Appelable = celle des dates dont la billetterie est encaissée (ou soldées). On verse la quote-part sur appel de l'artiste, en cochant les dates qu'elle solde.",
+    text: "Part acquise = part artiste des dates jouées. Appelable = celle des dates dont la billetterie est encaissée (ou soldées). On verse la quote-part sur appel de l'artiste, en cochant les dates qu'elle solde. Une date en déficit se compense d'abord avec les dates positives ; si le total reste négatif en fin d'exploitation, l'artiste rembourse.",
+  },
+  artistAdvance: {
+    title: "Frais et avances de l'artiste",
+    text: "Frais avancés : une dépense payée par l'artiste (« Payé par l'artiste » sur la charge) ; elle reste une charge de la production. Avance de trésorerie : de l'argent que l'artiste nous envoie, à lui rendre. Les deux lui sont dus tout de suite, sans attendre la billetterie. En cas de déficit d'exploitation, ils le comblent d'abord : on ne rend que l'excédent (avec une quote-part ou par un versement séparé).",
   },
   stage: {
     title: "Étapes d'une date",

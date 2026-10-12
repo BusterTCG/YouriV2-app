@@ -325,7 +325,13 @@ const OverheadSchema = z.object({
   date: z.coerce.date().nullable().optional(),
   status: z.nativeEnum(PaymentStatus).optional(),
   comment: z.string().max(500).nullable().optional(),
+  /** Avancé par l'artiste (Stan 2026-10-12) → dû à l'artiste (compte artiste). */
+  paidByArtist: z.boolean().optional(),
 });
+
+/** Frais avancé déjà remboursé : montant / statut figés, suppression bloquée. */
+const REFUNDED_OVERHEAD_ERROR =
+  "Frais déjà remboursé à l'artiste : supprime d'abord le versement (onglet Artiste)";
 
 async function afterOverheadMutation(productionId: string) {
   await recomputeProductionFinancials(productionId);
@@ -346,9 +352,10 @@ export async function createOverhead(
         label: parsed.data.label,
         amount: new Prisma.Decimal(parsed.data.amount),
         date: parsed.data.date ?? null,
-        status: parsed.data.status ?? "TO_INVOICE",
-        paidAt: parsed.data.status === "PAID" ? new Date() : null,
+        status: parsed.data.paidByArtist ? "TO_INVOICE" : (parsed.data.status ?? "TO_INVOICE"),
+        paidAt: !parsed.data.paidByArtist && parsed.data.status === "PAID" ? new Date() : null,
         comment: parsed.data.comment || null,
+        paidByArtist: parsed.data.paidByArtist ?? false,
       },
     });
     await afterOverheadMutation(productionId);
@@ -367,9 +374,17 @@ export async function updateOverhead(
     const d = parsed.data;
     const before = await prisma.productionOverhead.findUnique({
       where: { id },
-      select: { status: true, paidAt: true },
+      select: { status: true, paidAt: true, amount: true, artistRefundId: true },
     });
     if (!before) throw new UserError("Frais introuvable");
+    if (
+      before.artistRefundId &&
+      (d.status !== undefined ||
+        d.paidByArtist !== undefined ||
+        (d.amount !== undefined && Math.abs(d.amount - Number(before.amount)) >= 0.005))
+    ) {
+      throw new UserError(REFUNDED_OVERHEAD_ERROR);
+    }
     const row = await prisma.productionOverhead.update({
       where: { id },
       data: {
@@ -385,6 +400,10 @@ export async function updateOverhead(
               paidAt: d.status === "PAID" ? (before.status === "PAID" ? before.paidAt : new Date()) : null,
             }
           : {}),
+        // Avancé par l'artiste : « à rembourser » jusqu'au versement.
+        ...(d.paidByArtist !== undefined
+          ? { paidByArtist: d.paidByArtist, status: "TO_INVOICE" as const, paidAt: null }
+          : {}),
       },
     });
     await afterOverheadMutation(row.productionId);
@@ -396,6 +415,7 @@ export async function deleteOverhead(id: string): Promise<ActionResult> {
     await requireUser();
     const before = await prisma.productionOverhead.findUnique({ where: { id } });
     if (!before) throw new UserError("Frais introuvable");
+    if (before.artistRefundId) throw new UserError(REFUNDED_OVERHEAD_ERROR);
     await prisma.productionOverhead.delete({ where: { id } });
     await logAudit({
       entity: "ProductionOverhead",

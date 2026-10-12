@@ -386,7 +386,7 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
       )}
 
       {/* Onglets */}
-      <div className="flex items-center gap-1 border-b overflow-x-auto">
+      <div className="flex items-center gap-1 border-b overflow-x-auto overflow-y-hidden">
         {TABS.map((t) => (
           <Link
             key={t.key}
@@ -507,6 +507,8 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
           paidAt: l.paidAt,
           comment: l.comment,
           coveredByVenue: l.coveredByVenue,
+          paidByArtist: l.paidByArtist,
+          artistRefunded: l.artistRefundId != null,
         }))}
         venueDealKind={deal.venueDealKind}
         prodExePct={deal.prodExePct != null ? Number(deal.prodExePct) : null}

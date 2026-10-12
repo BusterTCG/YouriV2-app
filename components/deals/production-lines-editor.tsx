@@ -10,6 +10,7 @@ import {
   Building,
   ChevronDown,
   ChevronRight,
+  HandCoins,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -68,6 +69,10 @@ export type ProductionLineRow = {
   paidAt: Date | null;
   comment: string | null;
   coveredByVenue: boolean;
+  /** Frais avancé par l'artiste (Stan 2026-10-12, dates d'une production). */
+  paidByArtist: boolean;
+  /** Remboursé à l'artiste (compte artiste de la production). */
+  artistRefunded: boolean;
 };
 
 /** Ligne artiste affichée comme "Cachet Art." dans le tableau de prod
@@ -119,6 +124,68 @@ interface Props {
 /** Origine de la Recette HT (cf. Props.recette) pour la ligne RECETTE_HT. */
 const RecetteContext = createContext<{ dealId: string; manual: boolean; ticketing: number | null } | null>(null);
 
+/**
+ * Date d'une production (Stan 2026-10-12) : une charge peut être « payée par
+ * l'artiste » → due à l'artiste, remboursée depuis l'onglet Artiste.
+ * `href` = onglet Artiste de la production ; null hors production.
+ */
+const ArtistAdvanceContext = createContext<{ href: string } | null>(null);
+
+/** Bouton « Artiste ? » : la charge a été avancée par l'artiste. */
+function AdvanceToggle({ line, disabled }: { line: ProductionLineRow; disabled?: boolean }) {
+  const ctx = useContext(ArtistAdvanceContext);
+  const [pending, startTransition] = useTransition();
+  if (!ctx) return null;
+  const on = line.paidByArtist;
+  return (
+    <button
+      type="button"
+      disabled={disabled || pending || line.artistRefunded}
+      onClick={() =>
+        startTransition(async () => {
+          const res = await updateProductionLineById(line.id, { paidByArtist: !on });
+          if (!res.ok) alert(res.error);
+        })
+      }
+      title={
+        line.artistRefunded
+          ? "Remboursé à l'artiste : supprimer d'abord le versement"
+          : on
+            ? "Payé par l'artiste — cliquer pour annuler"
+            : "Payé par l'artiste ? (à lui rembourser)"
+      }
+      className={cn(
+        "shrink-0 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium transition-colors border whitespace-nowrap",
+        on
+          ? "bg-violet-500/15 border-violet-500/40 text-violet-700 dark:text-violet-300"
+          : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted",
+      )}
+    >
+      <HandCoins className="h-3 w-3" />
+      {on ? "Payé par l'artiste" : "Payé par l'artiste ?"}
+    </button>
+  );
+}
+
+/** Statut d'une charge avancée par l'artiste (piloté par le compte artiste). */
+function AdvancePill({ refunded }: { refunded: boolean }) {
+  const ctx = useContext(ArtistAdvanceContext);
+  return (
+    <a
+      href={ctx?.href ?? "#"}
+      title="Payé par l'artiste — remboursement dans l'onglet Artiste de la production"
+      className={cn(
+        "w-full h-7 inline-flex items-center justify-center rounded-md px-1 text-[10px] font-medium border transition-colors whitespace-nowrap",
+        refunded
+          ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-400"
+          : "bg-amber-500/10 border-amber-500/40 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20",
+      )}
+    >
+      {refunded ? "✓ Rendu" : "À rendre"}
+    </a>
+  );
+}
+
 function RecetteSource() {
   const ctx = useContext(RecetteContext);
   const [pending, startTransition] = useTransition();
@@ -161,6 +228,8 @@ export function ProductionLinesEditor({
   artistAccountHref,
   recette = null,
 }: Props) {
+  // Onglet Artiste de la production (frais avancés), sans pré-ouverture du versement.
+  const artistAdvanceHref = artistAccountHref ? artistAccountHref.split("&verser=")[0] : null;
   void dealId; // utilisé via les actions importées dans les sous-composants
   // Index par label : plusieurs lignes possibles par catégorie (sous-entrées).
   const byLabel = useMemo(() => {
@@ -270,6 +339,7 @@ export function ProductionLinesEditor({
 
   return (
     <RecetteContext.Provider value={recette ? { dealId, ...recette } : null}>
+    <ArtistAdvanceContext.Provider value={artistAdvanceHref ? { href: artistAdvanceHref } : null}>
     <div className="space-y-5">
       {/* Section Recettes — RECETTE_HT toujours visible, DL_PROD masquable */}
       <Section
@@ -529,6 +599,7 @@ export function ProductionLinesEditor({
         </div>
       </div>
     </div>
+    </ArtistAdvanceContext.Provider>
     </RecetteContext.Provider>
   );
 }
@@ -1022,18 +1093,24 @@ function SubEntryRow({
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           onBlur={onAmountBlur}
+          disabled={line.artistRefunded}
           className="h-8 text-sm text-right tabular-nums"
         />
       </div>
       <div className="w-20 shrink-0">
-        <PaidPill
-          paid={isPaid}
-          onToggle={togglePaid}
-          disabled={pending}
-          label={isRevenue ? "Encaissé" : "Payé"}
-        />
+        {line.paidByArtist ? (
+          <AdvancePill refunded={line.artistRefunded} />
+        ) : (
+          <PaidPill
+            paid={isPaid}
+            onToggle={togglePaid}
+            disabled={pending}
+            label={isRevenue ? "Encaissé" : "Payé"}
+          />
+        )}
       </div>
-      <div className="w-[110px] shrink-0">
+      <div className="min-w-[110px] shrink-0 flex items-center gap-1">
+        {!isRevenue && line.amount !== 0 && <AdvanceToggle line={line} disabled={pending} />}
         {isPaid && label === "RECETTE_HT" && (
           <MonthPickerField
             value={line.paidAt}
@@ -1058,7 +1135,7 @@ function SubEntryRow({
       <button
         type="button"
         onClick={remove}
-        disabled={pending}
+        disabled={pending || line.artistRefunded}
         title="Supprimer cette sous-entrée"
         className="shrink-0 h-7 w-7 inline-flex items-center justify-center rounded-md text-destructive hover:bg-destructive/10"
       >
@@ -1223,7 +1300,7 @@ function LineEditor({
         <Input
           type="number"
           value={isCovered ? "" : amount}
-          disabled={isCovered}
+          disabled={isCovered || line?.artistRefunded}
           onChange={(e) => setAmount(e.target.value)}
           onBlur={onAmountBlur}
           className={cn(
@@ -1234,7 +1311,9 @@ function LineEditor({
       </div>
 
       <div className="w-20 shrink-0">
-        {hasAmount ? (
+        {hasAmount && line?.paidByArtist ? (
+          <AdvancePill refunded={line.artistRefunded} />
+        ) : hasAmount ? (
           <PaidPill
             paid={isPaid}
             onToggle={togglePaid}
@@ -1248,7 +1327,8 @@ function LineEditor({
           MonthPicker visible uniquement sur la ligne RECETTE_HT (date
           d'encaissement billetterie). Les autres lignes payées affichent
           juste le PaidPill sans date associée. */}
-      <div className="w-[110px] shrink-0">
+      <div className="min-w-[110px] shrink-0 flex items-center gap-1">
+        {isCost && hasAmount && line && <AdvanceToggle line={line} disabled={pending} />}
         {isPaid && hasAmount && line && label === "RECETTE_HT" ? (
           <MonthPickerField
             value={line.paidAt}

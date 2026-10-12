@@ -41,6 +41,7 @@ import {
   type FinanceBlock,
 } from "@/lib/production-report";
 import type { ProductionReport } from "@/lib/production-report-server";
+import { ARTIST_MOVEMENT_LABEL as MOVEMENT_LABEL } from "@/lib/finance/artist-account";
 
 export async function buildProductionReportXlsx(r: ProductionReport): Promise<Buffer> {
   const p = r.production;
@@ -98,7 +99,14 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
     { label: "Part artiste acquise (dates jouées)", values: [acc.acquired], fmt: EUR },
     { label: "Dont appelable (billetterie reçue)", values: [acc.callable], fmt: EUR },
     { label: "Quote-parts versées", values: [-acc.paid], fmt: EUR },
-    { label: "Remboursements de l'artiste", values: [acc.refunded], fmt: EUR },
+    { label: "Déficit réglé par l'artiste", values: [acc.refunded], fmt: EUR },
+    ...(acc.advances
+      ? [
+          { label: "Frais avancés par l'artiste", values: [acc.advances - acc.cashAdvances], fmt: EUR },
+          { label: "Avances de trésorerie de l'artiste", values: [acc.cashAdvances], fmt: EUR },
+          { label: "Frais / avances rendus à l'artiste", values: [-acc.advancesPaid], fmt: EUR },
+        ]
+      : []),
     {
       label:
         acc.balance > 0 ? "Solde dû à l'artiste" : acc.balance < 0 ? "Solde dû par l'artiste" : "Compte soldé",
@@ -112,9 +120,15 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
     tableHeader(ws, row, ["Versement", "Date", "Montant"]);
     for (const m of acc.movements) {
       row++;
-      text(ws, `A${row}`, (m.kind === "PAYMENT" ? "Quote-part versée" : "Remboursement de l'artiste") + (m.note ? ` — ${m.note}` : ""));
+      text(
+        ws,
+        `A${row}`,
+        MOVEMENT_LABEL[m.kind] +
+          (m.kind === "PAYMENT" && m.advanceAmount > 0 ? ` (dont frais avancés ${m.advanceAmount} €)` : "") +
+          (m.note ? ` — ${m.note}` : ""),
+      );
       text(ws, `B${row}`, format(m.date, "dd/MM/yyyy"));
-      num(ws, `C${row}`, m.kind === "PAYMENT" ? -m.amount : m.amount, EUR);
+      num(ws, `C${row}`, m.kind === "REFUND" || m.kind === "CASH_ADVANCE" ? m.amount : -m.amount, EUR);
     }
   }
 
@@ -130,7 +144,17 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
       text(ws, `A${row}`, o.label + (o.comment ? ` — ${o.comment}` : ""));
       text(ws, `B${row}`, o.date ? format(o.date, "dd/MM/yyyy") : "");
       num(ws, `C${row}`, o.amount, EUR);
-      text(ws, `D${row}`, o.status === "PAID" ? "Payé" : "À payer");
+      text(
+        ws,
+        `D${row}`,
+        o.paidByArtist
+          ? o.artistRefunded
+            ? "Payé par l'artiste, rendu"
+            : "Payé par l'artiste, à rendre"
+          : o.status === "PAID"
+            ? "Payé"
+            : "À payer",
+      );
       row++;
     }
     text(ws, `A${row}`, "Total", { bold: true });

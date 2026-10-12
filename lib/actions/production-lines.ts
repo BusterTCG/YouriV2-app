@@ -66,6 +66,12 @@ export async function resetRecetteToTicketing(dealId: string): Promise<ActionRes
   });
 }
 
+/** Compte artiste de la production de la date (frais avancés). */
+async function revalidateProductionOfDeal(dealId: string) {
+  const deal = await prisma.deal.findUnique({ where: { id: dealId }, select: { productionId: true } });
+  if (deal?.productionId) revalidatePath(`/shows/production/${deal.productionId}`);
+}
+
 // ──────────────────────────── Add ────────────────────────────
 
 const AddProductionLineSchema = z.object({
@@ -77,6 +83,25 @@ const AddProductionLineSchema = z.object({
   amount: z.union([z.number().nonnegative(), z.literal(null)]).optional(),
   comment: z.string().max(500).nullable().optional(),
 });
+
+/**
+ * Frais avancé par l'artiste déjà remboursé (Stan 2026-10-12) : montant figé
+ * et suppression bloquée tant que le versement qui le rembourse existe.
+ */
+const REFUNDED_ADVANCE_ERROR =
+  "Frais déjà remboursé à l'artiste : supprime d'abord le versement (onglet Artiste de la production)";
+
+async function assertNotRefundedAdvance(id: string, nextAmount?: number | null) {
+  const line = await prisma.productionLine.findUnique({
+    where: { id },
+    select: { artistRefundId: true, amount: true },
+  });
+  if (!line?.artistRefundId) return;
+  if (nextAmount === undefined) throw new Error(REFUNDED_ADVANCE_ERROR);
+  if (Math.abs(Number(line.amount ?? 0) - Number(nextAmount ?? 0)) >= 0.005) {
+    throw new Error(REFUNDED_ADVANCE_ERROR);
+  }
+}
 
 /** Ligne d'un deal accessible (garde profil « Production »). */
 async function requireLineAccess(id: string) {
@@ -138,6 +163,8 @@ const UpdateProductionLineSchema = z.object({
   paidAt: z.coerce.date().nullable().optional(),
   comment: z.string().max(500).nullable().optional(),
   coveredByVenue: z.boolean().optional(),
+  /** Frais avancé par l'artiste (dates d'une production, Stan 2026-10-12). */
+  paidByArtist: z.boolean().optional(),
 });
 
 export async function updateProductionLine(
@@ -154,10 +181,23 @@ export async function updateProductionLine(
       paidAt,
       comment,
       coveredByVenue,
+      paidByArtist,
     } = UpdateProductionLineSchema.parse(input);
     await requireLineAccess(id);
+    if (amount !== undefined) await assertNotRefundedAdvance(id, amount);
+    if (paidByArtist !== undefined || coveredByVenue !== undefined || paymentStatus !== undefined || isPaye !== undefined) {
+      const cur = await prisma.productionLine.findUnique({ where: { id }, select: { artistRefundId: true } });
+      if (cur?.artistRefundId) throw new Error(REFUNDED_ADVANCE_ERROR);
+    }
 
     const data: Prisma.ProductionLineUpdateInput = {};
+    // Avancé par l'artiste : la ligne est « à rembourser » jusqu'au versement
+    // qui la rembourse (statut piloté par le compte artiste).
+    if (paidByArtist !== undefined) {
+      data.paidByArtist = paidByArtist;
+      data.paymentStatus = PaymentStatus.TO_INVOICE;
+      data.paidAt = null;
+    }
     if (customLabel !== undefined) data.customLabel = customLabel;
     if (amount !== undefined) data.amount = amount;
     if (comment !== undefined) data.comment = comment;
@@ -205,6 +245,7 @@ export async function updateProductionLine(
     // relancer quand l'encaissement d'une ligne REVENUE change, pas seulement
     // sur la marge. Les MF ne dépendent que de la marge.
     const marginChanged = amount !== undefined || coveredByVenue !== undefined;
+    if (paidByArtist !== undefined) await revalidateProductionOfDeal(line.dealId);
     const paymentChanged =
       paymentStatus !== undefined ||
       isPaye !== undefined ||
@@ -232,6 +273,7 @@ export async function deleteProductionLine(id: string): Promise<ActionResult> {
     await requireUser();
     if (!id) throw new Error("ID ligne manquant");
     await requireLineAccess(id);
+    await assertNotRefundedAdvance(id);
     const line = await prisma.productionLine.update({
       where: { id },
       data: { deletedAt: new Date() },
@@ -302,6 +344,7 @@ export async function upsertProductionLine(
         },
       });
     } else {
+      await assertNotRefundedAdvance(existing.id, amount <= 0 && !coveredByVenue ? undefined : amount);
       // Si amount = 0 ET pas coveredByVenue → soft-delete (l'user a vidé).
       if (amount <= 0 && !coveredByVenue) {
         await prisma.productionLine.update({
@@ -388,9 +431,11 @@ export async function updateProductionLineById(
     status?: PaymentStatus;
     coveredByVenue?: boolean;
     paidAt?: Date | null;
+    paidByArtist?: boolean;
   },
 ): Promise<ActionResult> {
   return updateProductionLine({
+    paidByArtist: patch.paidByArtist,
     id,
     customLabel: patch.customLabel,
     amount: patch.amount,

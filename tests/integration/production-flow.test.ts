@@ -452,6 +452,118 @@ describe("Étape 4 — compte artiste", () => {
   });
 });
 
+describe("Frais avancés par l'artiste (Stan 2026-10-12)", () => {
+  it("dus tout de suite, remboursés à part ou avec la quote-part, verrouillés une fois remboursés", async () => {
+    const { getArtistAccount } = await import("@/lib/finance/artist-account-server");
+    const line = ok<{ id: string }>(await PL.addProductionLine({ dealId: d1, label: "VHR", amount: 120 })).id;
+    ok(await PL.updateProductionLine({ id: line, paidByArtist: true }));
+    const ov = ok<{ id: string }>(
+      await P.createOverhead(prodId, { label: "Train avancé", amount: 80, paidByArtist: true }),
+    ).id;
+    let acc = await getArtistAccount(prodId, Date.now());
+    expect(acc.advances).toBe(200);
+    expect(acc.advancesDue).toBe(200);
+    expect(acc.balance).toBeCloseTo(acc.quotePartBalance + 200, 2);
+    expect(acc.advanceItems.map((a) => a.kind).sort()).toEqual(["LINE", "OVERHEAD"]);
+
+    // Versement séparé : sans montant = frais cochés ; au-delà, refusé.
+    expect(
+      (
+        await AM.addArtistMovement({
+          productionId: prodId,
+          kind: "EXPENSES",
+          amount: 999,
+          date: new Date(),
+          advances: { lines: [line], overheads: [] },
+        })
+      ).ok,
+    ).toBe(false);
+    ok(
+      await AM.addArtistMovement({
+        productionId: prodId,
+        kind: "EXPENSES",
+        amount: 0,
+        date: new Date(),
+        advances: { lines: [line], overheads: [] },
+      }),
+    );
+    const l = await prisma.productionLine.findUnique({ where: { id: line } });
+    expect(l.paymentStatus).toBe("PAID");
+    expect(l.artistRefundId).not.toBeNull();
+    expect(num((await prisma.artistMovement.findUnique({ where: { id: l.artistRefundId } })).amount)).toBe(120);
+    expect((await PL.updateProductionLine({ id: line, amount: 150 })).ok).toBe(false);
+    expect((await PL.deleteProductionLine(line)).ok).toBe(false);
+    expect((await PL.updateProductionLine({ id: line, paidByArtist: false })).ok).toBe(false);
+
+    // Avec la quote-part : la part frais ne règle pas les dates.
+    acc = await getArtistAccount(prodId, Date.now());
+    const qp = acc.quotePartBalance;
+    ok(
+      await AM.addArtistMovement({
+        productionId: prodId,
+        kind: "PAYMENT",
+        amount: qp + 80,
+        date: new Date(),
+        advances: { lines: [], overheads: [ov] },
+      }),
+    );
+    acc = await getArtistAccount(prodId, Date.now());
+    expect(acc.advancesDue).toBe(0);
+    expect(acc.balance).toBeCloseTo(0, 2);
+    expect(acc.paid).toBeCloseTo(qp, 2);
+    expect((await deal(d1)).artistStatus).toBe("PAID");
+    expect((await P.deleteOverhead(ov)).ok).toBe(false);
+    // Montant inférieur aux frais cochés : refusé.
+    expect(
+      (
+        await AM.addArtistMovement({
+          productionId: prodId,
+          kind: "PAYMENT",
+          amount: 10,
+          date: new Date(),
+          advances: { lines: [line], overheads: [] },
+        })
+      ).ok,
+    ).toBe(false);
+
+    // Supprimer les versements : frais de nouveau à rembourser.
+    for (const m of await prisma.artistMovement.findMany({ where: { productionId: prodId } })) {
+      ok(await AM.deleteArtistMovement(m.id));
+    }
+    const l2 = await prisma.productionLine.findUnique({ where: { id: line } });
+    expect(l2.artistRefundId).toBeNull();
+    expect(l2.paymentStatus).toBe("TO_INVOICE");
+    acc = await getArtistAccount(prodId, Date.now());
+    expect(acc.advancesDue).toBe(200);
+
+    // Avance de trésorerie : due à l'artiste, rendue par « Rembourser l'artiste ».
+    ok(await AM.addArtistMovement({ productionId: prodId, kind: "CASH_ADVANCE", amount: 500, date: new Date() }));
+    const adv = await prisma.artistMovement.findFirst({ where: { productionId: prodId, kind: "CASH_ADVANCE" } });
+    acc = await getArtistAccount(prodId, Date.now());
+    expect(acc.advancesDue).toBe(700);
+    expect(acc.advanceItems.some((a) => a.kind === "CASH" && !a.refunded)).toBe(true);
+    ok(
+      await AM.addArtistMovement({
+        productionId: prodId,
+        kind: "EXPENSES",
+        amount: 0,
+        date: new Date(),
+        advances: { lines: [], overheads: [], cash: [adv.id] },
+      }),
+    );
+    acc = await getArtistAccount(prodId, Date.now());
+    expect(acc.advancesDue).toBe(200);
+    expect((await AM.deleteArtistMovement(adv.id)).ok).toBe(false); // rendue : verrouillée
+    const back = await prisma.artistMovement.findFirst({ where: { productionId: prodId, kind: "EXPENSES" } });
+    ok(await AM.deleteArtistMovement(back.id));
+    ok(await AM.deleteArtistMovement(adv.id));
+
+    // Nettoyage (les scénarios suivants comptent 300 € de frais généraux).
+    ok(await PL.deleteProductionLine(line));
+    ok(await P.deleteOverhead(ov));
+  });
+});
+
 describe("Étape 5 — bilans et comptes (cohérence, sans management fees)", () => {
   it("bilan : total = somme des dates = scalars ; frais généraux entièrement répartis", async () => {
     const { getProductionReport } = await import("@/lib/production-report-server");

@@ -7,21 +7,84 @@ import "server-only";
 
 import { prisma } from "@/lib/db";
 import { localDayKey } from "@/lib/finance/artist-status-daily";
+import { format } from "date-fns";
+import { PRODUCTION_LINE_LABELS } from "@/lib/production-line-labels";
 import {
   computeArtistAccount,
   type AccountDeal,
   type ArtistAccount,
 } from "@/lib/finance/artist-account";
 
+/** Dû à l'artiste : frais avancé (charge d'une date, frais général) ou avance
+ *  de trésorerie (CASH = mouvement CASH_ADVANCE). */
+export type ArtistAdvanceItem = {
+  kind: "LINE" | "OVERHEAD" | "CASH";
+  id: string;
+  /** « Train Paris-Lyon · 12/09/2026 · Petite Loge » */
+  label: string;
+  amount: number;
+  /** Remboursé (versement lié). */
+  refunded: boolean;
+};
+
 export type ArtistAccountView = ArtistAccount & {
   movements: Array<{
     id: string;
-    kind: "PAYMENT" | "REFUND";
+    kind: "PAYMENT" | "REFUND" | "EXPENSES" | "CASH_ADVANCE";
     amount: number;
+    /** Part qui rembourse des frais avancés. */
+    advanceAmount: number;
     date: Date;
     note: string | null;
   }>;
+  advanceItems: ArtistAdvanceItem[];
 };
+
+/** Frais avancés par l'artiste sur la production (Stan 2026-10-12). */
+async function advanceItemsOf(productionId: string): Promise<ArtistAdvanceItem[]> {
+  const [lines, overheads] = await Promise.all([
+    prisma.productionLine.findMany({
+      where: {
+        paidByArtist: true,
+        deletedAt: null,
+        kind: "COST",
+        deal: { productionId, category: "PROD_EXE", deletedAt: null },
+      },
+      select: {
+        id: true,
+        label: true,
+        customLabel: true,
+        amount: true,
+        artistRefundId: true,
+        deal: { select: { date: true, title: true, venueName: true } },
+      },
+      orderBy: [{ deal: { date: "asc" } }, { order: "asc" }],
+    }),
+    prisma.productionOverhead.findMany({
+      where: { productionId, paidByArtist: true },
+      select: { id: true, label: true, date: true, amount: true, artistRefundId: true },
+      orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+    }),
+  ]);
+  return [
+    ...overheads.map((o) => ({
+      kind: "OVERHEAD" as const,
+      id: o.id,
+      label: `${o.label} · frais général${o.date ? ` · ${format(o.date, "dd/MM/yyyy")}` : ""}`,
+      amount: Number(o.amount),
+      refunded: o.artistRefundId != null,
+    })),
+    ...lines.map((l) => ({
+      kind: "LINE" as const,
+      id: l.id,
+      label: `${l.customLabel || PRODUCTION_LINE_LABELS[l.label]} · ${format(l.deal.date, "dd/MM/yyyy")} · ${
+        l.deal.venueName ?? l.deal.title
+      }`,
+      amount: Number(l.amount ?? 0),
+      refunded: l.artistRefundId != null,
+    })),
+  ].filter((a) => Math.round(a.amount * 100) !== 0);
+}
 
 async function accountDeals(productionId: string, nowMs: number): Promise<AccountDeal[]> {
   const startOfToday = new Date(nowMs);
@@ -63,23 +126,42 @@ export async function getArtistAccount(
   productionId: string,
   nowMs: number,
 ): Promise<ArtistAccountView> {
-  const [deals, movements] = await Promise.all([
+  const [deals, movements, advanceItems] = await Promise.all([
     accountDeals(productionId, nowMs),
     prisma.artistMovement.findMany({ where: { productionId }, orderBy: { date: "asc" } }),
+    advanceItemsOf(productionId),
   ]);
   const account = computeArtistAccount(
     deals,
-    movements.map((m) => ({ kind: m.kind, amount: Number(m.amount) })),
+    movements.map((m) => ({
+      kind: m.kind,
+      amount: Number(m.amount),
+      advanceAmount: Number(m.advanceAmount),
+    })),
+    advanceItems,
   );
+  // Avances de trésorerie : à rendre, comme les frais avancés (comptées par
+  // computeArtistAccount depuis les mouvements).
+  const cashItems: ArtistAdvanceItem[] = movements
+    .filter((m) => m.kind === "CASH_ADVANCE")
+    .map((m) => ({
+      kind: "CASH" as const,
+      id: m.id,
+      label: `Avance de trésorerie · ${format(m.date, "dd/MM/yyyy")}${m.note ? ` · ${m.note}` : ""}`,
+      amount: Number(m.amount),
+      refunded: m.repaidById != null,
+    }));
   return {
     ...account,
     movements: movements.map((m) => ({
       id: m.id,
       kind: m.kind,
       amount: Number(m.amount),
+      advanceAmount: m.kind === "EXPENSES" ? Number(m.amount) : Number(m.advanceAmount),
       date: m.date,
       note: m.note,
     })),
+    advanceItems: [...cashItems, ...advanceItems],
   };
 }
 

@@ -139,7 +139,7 @@ export async function ProductionsView({ tab }: { tab?: string }) {
       </div>
 
       {/* Onglets (Stan 2026-10-01) */}
-      <div className="flex items-center gap-1 border-b overflow-x-auto">
+      <div className="flex items-center gap-1 border-b overflow-x-auto overflow-y-hidden">
         {HOME_TABS.map((t) => {
           const b = badges[t.key];
           return (

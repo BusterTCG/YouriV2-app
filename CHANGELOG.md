@@ -6,6 +6,22 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [Production — frais avancés et avances de trésorerie de l'artiste] — 2026-10-12
+
+### Added
+- **Frais avancés par l'artiste** : bouton « Payé par l'artiste ? » sur les charges d'une date de production et case « Payé par l'artiste » sur les frais généraux. La dépense reste une charge (bilan inchangé) et Pangee la doit tout de suite à l'artiste (sans attendre la billetterie). Migration `artist_advances`.
+- Compte artiste : chiffre « Frais avancés », liste des frais (à rembourser / remboursé), solde = quote-part + frais à rembourser.
+- Remboursement **avec la quote-part** (frais cochés dans « Versement de quote-part », inclus dans le montant, sans régler les dates) ou **séparé** (« Rendre l'avance », mouvement `EXPENSES`). Supprimer le versement remet les frais « à rembourser ».
+- Un frais remboursé est verrouillé (montant, statut, suppression) tant que son versement existe.
+- **Versement de l'artiste** : choix explicite **Règlement du déficit** (solde l'exploitation en déficit, mouvement `REFUND`) ou **Avance de trésorerie** (mouvement `CASH_ADVANCE`, à lui rendre comme les frais avancés, avec la quote-part ou via « Rendre l'avance »). Migration `artist_cash_advance`.
+
+### Changed
+- Une date en déficit est **compensée par les dates positives** : elle passe « réglée » dès qu'une date suivante est réglée. Solde négatif avec des dates à venir = « Déficit à date » (sinon dû par l'artiste en fin d'exploitation).
+- Libellés : « Versement de quote-part » (vers l'artiste) / « Versement de l'artiste » (vers nous) ; avances « À rendre / Imputée sur le déficit / Rendue » ; bandeau « Déficit à date » / « Déficit final, dû par l'artiste ».
+- Sens de l'argent affiché sur chaque mouvement (Pangee → artiste / artiste → Pangee). Bilan PDF / Excel : remboursements, frais avancés, avances de trésorerie, frais / avances rendus.
+
+---
+
 ## [Champs chiffrés, création de lieu depuis un deal] — 2026-10-09
 
 ### Fixed
@@ -37,7 +53,7 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ### Changed
 - **Recette HT : un seul endroit, origine visible** (migration `deal_recette_manual`) — saisie uniquement dans le bloc Financier (le relevé du mois de résidence devient un affichage + lien). En salle louée : « = billetterie des séances (calcul auto) », ou « Saisie à la main » (la billetterie ne l'écrase plus) avec « reprendre la billetterie ». Reprise : recettes déjà différentes de la billetterie marquées « à la main ».
-- Lien « À régler · compte artiste → » d'une date : ouvre l'onglet Artiste avec « Verser une quote-part » déplié et la date cochée (ouvrait l'onglet Suivi).
+- Lien « À régler · compte artiste → » d'une date : ouvre l'onglet Artiste avec « Versement de quote-part » déplié et la date cochée (ouvrait l'onglet Suivi).
 
 ### Added
 - **Tâches liées par un identifiant fixe** (migration `task_sync_key`) : Contrat / MEV / VHR synchronisés avec la check-list par `syncKey`, plus par le libellé — renommer une tâche ne casse plus la synchro.
@@ -55,7 +71,7 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 ### Added
 - **Accueil Productions en 3 onglets** : Prochaines dates (4 + dépliable), Spectacles (À clôturer avec « Clôturer », En cours, Dates à rattacher, Terminés), Retard / à solder (cautions + dates passées non soldées).
 - **« Nouvelle production »** (`createProduction`) : le spectacle se crée avant ses dates (nom unique par artiste).
-- **Dates soldées** (migration `deal_settlement`) : « Verser une quote-part » coche les dates qu'elle solde ; frais généraux figés au solde ; « Rouvrir » ; supprimer le versement rouvre ses dates ; reprise des dates déjà réglées (cachets compris).
+- **Dates soldées** (migration `deal_settlement`) : « Versement de quote-part » coche les dates qu'elle solde ; frais généraux figés au solde ; « Rouvrir » ; supprimer le versement rouvre ses dates ; reprise des dates déjà réglées (cachets compris).
 - **Cycle de vie unique d'une date** (`lib/date-lifecycle.ts`, identique à KN) : À confirmer → En préparation → Prête → À solder → Soldée.
 - Tâche **« Paiement taxes SACD CNM »** entre « Envoie Facture » et « Paiement Artiste » (migration `add_task_paiement_taxes` : modèle + dates dont le paiement artiste reste à faire).
 - **Export Excel de toutes les dates** sur l'accueil (porté de KN, sans management fees) ; `lib/excel-export.ts` aligné sur KN.

@@ -767,13 +767,17 @@ model Production {
 /// Mouvement du compte artiste d'une production (portage KN, Stan 2026-09-28).
 /// PAYMENT = quote-part versée à l'artiste (appel de quote-part : uniquement
 /// sur des dates jouées dont la billetterie est encaissée) ; REFUND =
-/// remboursement de l'artiste (perte, trop-perçu). Montant toujours > 0.
+/// remboursement de l'artiste (solde d'exploitation en déficit) ; EXPENSES =
+/// remboursement à l'artiste de frais / avances (Stan 2026-10-12) ;
+/// CASH_ADVANCE = avance de trésorerie de l'artiste, à lui rendre. Montant > 0.
 /// Les statuts artiste des dates (Deal.artistStatus) en sont DÉRIVÉS
 /// (lib/finance/artist-account.ts) — plus de case « Payé » par date.
 /// ⚠️ Les management fees n'entrent jamais dans ce compte.
 enum ArtistMovementKind {
   PAYMENT
   REFUND
+  EXPENSES
+  CASH_ADVANCE
 }
 
 model ArtistMovement {
@@ -788,6 +792,16 @@ model ArtistMovement {
   updatedAt    DateTime           @updatedAt
   /// Dates soldées par ce versement (lot 3).
   settledDeals Deal[]             @relation("SettledByMovement")
+  /// Part du versement qui rembourse des frais avancés par l'artiste
+  /// (PAYMENT : frais cochés avec la quote-part ; EXPENSES : = amount).
+  advanceAmount Decimal           @default(0)
+  /// Frais avancés par l'artiste remboursés par ce versement.
+  refundedLines     ProductionLine[]     @relation("ArtistAdvanceRefund")
+  refundedOverheads ProductionOverhead[] @relation("ArtistAdvanceRefund")
+  /// Avance de trésorerie (CASH_ADVANCE) : versement qui l'a rendue à l'artiste.
+  repaidById   String?
+  repaidBy     ArtistMovement?  @relation("CashAdvanceRepaid", fields: [repaidById], references: [id], onDelete: SetNull)
+  repaidAdvances ArtistMovement[] @relation("CashAdvanceRepaid")
 
   @@index([productionId])
 }
@@ -806,6 +820,12 @@ model ProductionOverhead {
   status       PaymentStatus @default(TO_INVOICE)
   paidAt       DateTime?
   comment      String?
+  /// Frais avancé par l'artiste (Stan 2026-10-12) : reste une charge de la
+  /// production, et Pangee le doit à l'artiste (compte artiste).
+  paidByArtist Boolean       @default(false)
+  /// Versement qui l'a remboursé à l'artiste (null = à rembourser).
+  artistRefundId String?
+  artistRefund   ArtistMovement? @relation("ArtistAdvanceRefund", fields: [artistRefundId], references: [id], onDelete: SetNull)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -948,6 +968,13 @@ model ProductionLine {
   /// true, la ligne n'est pas comptée dans la marge Pangee (la salle l'a
   /// payée en direct).
   coveredByVenue Boolean @default(false)
+
+  /// Frais avancé par l'artiste (Stan 2026-10-12, dates d'une production) :
+  /// reste une charge, et Pangee le doit à l'artiste (compte artiste).
+  paidByArtist Boolean @default(false)
+  /// Versement qui l'a remboursé à l'artiste (null = à rembourser).
+  artistRefundId String?
+  artistRefund   ArtistMovement? @relation("ArtistAdvanceRefund", fields: [artistRefundId], references: [id], onDelete: SetNull)
 
   /// Ordre d'affichage (drag & drop éventuel futur).
   order Int @default(0)

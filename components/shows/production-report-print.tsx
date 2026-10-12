@@ -19,6 +19,7 @@ import {
   type FinanceBlock,
 } from "@/lib/production-report";
 import type { ProductionReport } from "@/lib/production-report-server";
+import { ARTIST_MOVEMENT_LABEL as MOVEMENT_LABEL } from "@/lib/finance/artist-account";
 import { KpiTiles } from "@/components/shows/kpi-visuals";
 import {
   Eur,
@@ -149,7 +150,14 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
                 ["Part artiste acquise (dates jouées)", r.account.acquired],
                 ["Dont appelable (billetterie reçue)", r.account.callable],
                 ["Quote-parts versées", -r.account.paid],
-                ...(r.account.refunded ? [["Remboursements de l'artiste", r.account.refunded] as [string, number]] : []),
+                ...(r.account.refunded ? [["Déficit réglé par l'artiste", r.account.refunded] as [string, number]] : []),
+                ...(r.account.advances
+                  ? [
+                      ["Frais avancés par l'artiste", r.account.advances - r.account.cashAdvances] as [string, number],
+                      ["Avances de trésorerie de l'artiste", r.account.cashAdvances] as [string, number],
+                      ["Frais / avances rendus à l'artiste", -r.account.advancesPaid] as [string, number],
+                    ]
+                  : []),
               ].map(([label, v]) => (
                 <tr key={label as string} className="border-b border-slate-200">
                   <td className="py-1 px-1">{label}</td>
@@ -182,11 +190,14 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
                   <tr key={m.id} className="border-b border-slate-200">
                     <td className="py-1 px-1 whitespace-nowrap">{format(m.date, "dd/MM/yyyy")}</td>
                     <td className="py-1 px-1">
-                      {m.kind === "PAYMENT" ? "Quote-part versée" : "Remboursement de l'artiste"}
+                      {MOVEMENT_LABEL[m.kind]}
+                      {m.kind === "PAYMENT" && m.advanceAmount > 0 && (
+                        <span className="text-slate-500"> (dont frais avancés {formatEur(m.advanceAmount)})</span>
+                      )}
                       {m.note && <span className="text-slate-500"> — {m.note}</span>}
                     </td>
                     <td className="py-1 px-1 text-right">
-                      {m.kind === "PAYMENT" ? "− " : "+ "}
+                      {m.kind === "REFUND" || m.kind === "CASH_ADVANCE" ? "+ " : "− "}
                       {formatEur(m.amount)}
                     </td>
                   </tr>
@@ -214,7 +225,15 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
                     {o.comment && <span className="text-slate-500"> — {o.comment}</span>}
                   </td>
                   <td className="py-1 px-1 text-right">{formatEur(o.amount)}</td>
-                  <td className="py-1 px-1">{o.status === "PAID" ? "Payé" : "À payer"}</td>
+                  <td className="py-1 px-1">
+                    {o.paidByArtist
+                      ? o.artistRefunded
+                        ? "Payé par l'artiste, rendu"
+                        : "Payé par l'artiste, à rendre"
+                      : o.status === "PAID"
+                        ? "Payé"
+                        : "À payer"}
+                  </td>
                 </tr>
               ))}
               <tr className="font-semibold bg-slate-100">

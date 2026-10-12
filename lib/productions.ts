@@ -126,6 +126,10 @@ export type ProductionSummary = {
     amount: number;
     status: PaymentStatus;
     comment: string | null;
+    /** Avancé par l'artiste (Stan 2026-10-12). */
+    paidByArtist: boolean;
+    /** Remboursé à l'artiste (versement lié). */
+    artistRefunded: boolean;
   }>;
   overheadTotal: number;
   perPerformance: number;
@@ -416,6 +420,8 @@ export async function getProductionSummaries(
         amount: Number(o.amount),
         status: o.status,
         comment: o.comment,
+        paidByArtist: o.paidByArtist,
+        artistRefunded: o.artistRefundId != null,
       })),
       overheadTotal,
       perPerformance: allocation.perPerformance,
