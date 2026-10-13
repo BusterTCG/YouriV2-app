@@ -267,16 +267,17 @@ export function ProductionLinesEditor({
     return false;
   }
 
-  // Recettes : RECETTE_HT toujours visible ; DL_PROD masquable.
+  // Recettes : RECETTE_HT et Autres recettes toujours visibles ; DL_PROD masquable.
+  const alwaysShown = (label: ProductionLineLabel) => label === "RECETTE_HT" || label === "AUTRE_RECETTE";
   const displayedRevenues = visibleRevenues.filter(
     (label) =>
-      label === "RECETTE_HT" ||
+      alwaysShown(label) ||
       hasLineContent(label) ||
       manuallyShown.has(label),
   );
   const hiddenRevenues = visibleRevenues.filter(
     (label) =>
-      label !== "RECETTE_HT" &&
+      !alwaysShown(label) &&
       !hasLineContent(label) &&
       !manuallyShown.has(label),
   );
@@ -309,6 +310,9 @@ export function ProductionLinesEditor({
   }
 
   const totalRevenue = visibleRevenues.reduce((s, label) => s + sumOf(label), 0);
+  // Base des calculs auto CNM / SACD : billetterie, hors « Autres recettes »
+  // (Stan 2026-10-14).
+  const ticketRevenue = totalRevenue - sumOf("AUTRE_RECETTE");
   const realCost = visibleCosts.reduce((s, label) => s + sumOf(label), 0);
 
   // Ligne virtuelle "Prod exé" : ce que Pangee se retient en commission.
@@ -426,7 +430,7 @@ export function ProductionLinesEditor({
                 label={label}
                 lines={byLabel.get(label) ?? []}
                 venueDealKind={venueDealKind}
-                totalRevenue={totalRevenue}
+                totalRevenue={ticketRevenue}
                 isManuallyShown={
                   manuallyShown.has(label) && !hasLineContent(label)
                 }

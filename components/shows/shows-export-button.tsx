@@ -135,7 +135,8 @@ function computeFinancials(show: ShowRow): ShowFinancials {
     if (line.kind !== "REVENUE") continue;
     if (line.coveredByVenue) continue;
     if (line.label === "RECETTE_HT") billetterieHt += line.amount;
-    if (line.label === "DL_PROD") dl += line.amount;
+    // Autres recettes (Stan 2026-10-14) : même colonne que le DL.
+    if (line.label === "DL_PROD" || line.label === "AUTRE_RECETTE") dl += line.amount;
   }
   const totalRevenues = billetterieHt + dl;
 
@@ -299,7 +300,7 @@ export function ShowsExportButton({ shows: preloaded, load, artistName }: Props)
           value: (r) => zeroAsNull(r.fin.billetterieHt),
         },
         {
-          header: "DL",
+          header: "DL + autres",
           width: 10,
           format: "EUR",
           value: (r) => zeroAsNull(r.fin.dl),

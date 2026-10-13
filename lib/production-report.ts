@@ -63,10 +63,12 @@ export const REPORT_LINE_LABELS: Record<ProductionLineLabel, string> = {
   ...PRODUCTION_LINE_LABELS,
   RECETTE_HT: "Billetterie HT",
   DL_PROD: "DL Prod",
+  AUTRE_RECETTE: "Autres recettes",
 };
 export const REPORT_LINE_SHORT: Record<ProductionLineLabel, string> = {
   RECETTE_HT: "Billet. HT",
   DL_PROD: "DL Prod",
+  AUTRE_RECETTE: "Autres rec.",
   CNM: "CNM",
   SACD: "SACD",
   LOCATION: "Location",

@@ -15,6 +15,7 @@ export const PRODUCTION_LINE_LABELS: Record<ProductionLineLabel, string> = {
   // Recettes
   RECETTE_HT: "Recette HT",
   DL_PROD: "DL Prod",
+  AUTRE_RECETTE: "Autres recettes",
   // Charges
   CNM: "CNM",
   SACD: "SACD",
@@ -35,6 +36,7 @@ export const PRODUCTION_LINE_LABELS: Record<ProductionLineLabel, string> = {
 export const PRODUCTION_LINE_HINTS: Record<ProductionLineLabel, string | null> = {
   RECETTE_HT: "Billetterie HT (Pangee)",
   DL_PROD: "Montant additionnel par billet vendu",
+  AUTRE_RECETTE: "Hors billetterie",
   CNM: null,
   SACD: null,
   LOCATION: "Loyer salle (mode PROD principalement)",
@@ -70,6 +72,7 @@ export const PRODUCTION_LINE_KIND_OF: Record<
 > = {
   RECETTE_HT: "REVENUE",
   DL_PROD: "REVENUE",
+  AUTRE_RECETTE: "REVENUE",
   CNM: "COST",
   SACD: "COST",
   LOCATION: "COST",
@@ -81,7 +84,7 @@ export const PRODUCTION_LINE_KIND_OF: Record<
 };
 
 /** Labels recettes / charges (pour les sections du tableau de production). */
-export const REVENUE_LABELS: ProductionLineLabel[] = ["RECETTE_HT", "DL_PROD"];
+export const REVENUE_LABELS: ProductionLineLabel[] = ["RECETTE_HT", "DL_PROD", "AUTRE_RECETTE"];
 
 export const COST_LABELS: ProductionLineLabel[] = [
   "CNM",

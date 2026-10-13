@@ -182,6 +182,7 @@ enum ProductionLineLabel {
   // ── Recettes
   RECETTE_HT // Billetterie nette Pangee (PROD/CO_REAL) ou prix de cession (CESSION).
   DL_PROD // Deal Live : montant additionnel par billet vendu, saisi à la main.
+  AUTRE_RECETTE // Autres recettes, hors billetterie (Stan 2026-10-14) ; sous-libellés libres.
   // ── Charges
   CNM // Centre National de la Musique (taxe).
   SACD // Société des Auteurs et Compositeurs Dramatiques.

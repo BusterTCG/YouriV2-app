@@ -6,6 +6,14 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [Production — « Autres recettes »] — 2026-10-14
+
+### Added
+- Tableau de production d'une date : nouvelle recette **« Autres recettes »** (hors billetterie), toujours affichée, avec sous-lignes libres via « + ». Comptée dans le total des recettes, la marge, la part artiste, les bilans PDF / Excel et le compte artiste ; colonne « DL + autres » dans l'export des dates.
+- Les calculs auto CNM (3,5 %) / SACD (15 %) restent sur la billetterie (hors autres recettes).
+
+---
+
 ## [Production — frais avancés et avances de trésorerie de l'artiste] — 2026-10-12
 
 ### Added
