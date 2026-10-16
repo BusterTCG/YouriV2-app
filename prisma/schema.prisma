@@ -477,6 +477,10 @@ model Deal {
   /// le lieu dans l'annuaire.
   venueAddress String?
 
+  /// Marque / Client — BOOKING (portage KN `Deal.brand`, Stan 2026-10-16).
+  /// Texte libre.
+  brand String?
+
   // ── Multi-artiste ──
   dealArtistes DealArtiste[]
 

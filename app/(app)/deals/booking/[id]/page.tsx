@@ -26,6 +26,9 @@ import {
   type DealManagementFeeRow,
 } from "@/components/deals/deal-management-fees-section";
 import type { BookingDealArtistRow, BookingDealChargeRow } from "@/lib/deals-list-types";
+import { requireUser } from "@/lib/auth/users";
+import { isRestrictedRole } from "@/lib/auth/roles";
+import { BookingReadonlyCard } from "@/components/deals/booking-readonly-card";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +76,79 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
     },
   });
   if (!deal) notFound();
+
+  // Profil Production (Nour, Stan 2026-10-16) : infos du deal sans le
+  // financier, FDR et charges en accès complet.
+  const user = await requireUser();
+  if (isRestrictedRole(user.role)) {
+    const myFees = deal.managementFees.filter((mf) => mf.associateKey === user.pangeeKey);
+    return (
+      <div className="max-w-5xl space-y-5">
+        <div>
+          <Link
+            href="/deals/booking"
+            className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+          >
+            <ArrowLeft className="h-3 w-3" /> Deals Booking
+          </Link>
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+            <span>Booking</span>
+            <span className="text-muted-foreground/40">·</span>
+            <span>{deal.organizerName ?? "Sans organisateur"}</span>
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight">{deal.title}</h1>
+          <div className="flex items-center gap-2 flex-wrap pt-1">
+            <Button asChild type="button" variant="outline" size="sm">
+              <Link href={`/deals/booking/${deal.id}/fdr`}>
+                <FileText className="mr-1.5 h-3.5 w-3.5" />
+                Ouvrir la FDR
+              </Link>
+            </Button>
+          </div>
+        </div>
+        <BookingReadonlyCard
+          deal={{
+            status: deal.status,
+            date: deal.date,
+            showTime: deal.showTime,
+            endTime: deal.endTime,
+            artists: deal.dealArtistes.map((da) => ({
+              name: da.artist.name,
+              color: da.artist.color,
+              paid: da.paymentStatus === "PAID",
+            })),
+            venue: [deal.venueName, deal.venueCity].filter(Boolean).join(" · ") || null,
+            organizer:
+              [deal.organizerName, deal.organizerCompany].filter(Boolean).join(" · ") || null,
+            brand: deal.brand,
+            address: deal.venueAddress,
+            marginPaid: deal.budgetPaymentStatus === "PAID",
+            mf:
+              myFees.length > 0
+                ? {
+                    amount: myFees.reduce((acc, mf) => acc + (mf.amount != null ? Number(mf.amount) : 0), 0),
+                    paid: myFees.every((mf) => mf.paymentStatus === "PAID"),
+                  }
+                : null,
+            notes: deal.notes,
+          }}
+        />
+        <DealChargesSection
+          dealId={deal.id}
+          charges={deal.dealCharges.map((c) => ({
+            id: c.id,
+            label: c.label,
+            amount: c.amount != null ? Number(c.amount) : null,
+            paymentStatus: c.paymentStatus,
+            paidAt: c.paidAt,
+            notes: c.notes,
+          }))}
+        />
+      </div>
+    );
+  }
 
   // Pipeline de tâches (Sprint 6 — section "Tâches" inline en haut)
   const tasks = await getTasksForDeal(deal.id);
@@ -214,7 +290,11 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
               venueName: deal.venueName,
               venueCity: deal.venueCity,
               venueAddress: deal.venueAddress,
+              endTime: deal.endTime,
+              brand: deal.brand,
               notes: deal.notes,
+              category: deal.category,
+              status: deal.status,
             }}
           />
         </div>

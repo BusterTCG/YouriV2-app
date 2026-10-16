@@ -153,9 +153,9 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
                 ...(r.account.refunded ? [["Déficit réglé par l'artiste", r.account.refunded] as [string, number]] : []),
                 ...(r.account.advances
                   ? [
-                      ["Frais avancés par l'artiste", r.account.advances - r.account.cashAdvances] as [string, number],
-                      ["Avances de trésorerie de l'artiste", r.account.cashAdvances] as [string, number],
-                      ["Frais / avances rendus à l'artiste", -r.account.advancesPaid] as [string, number],
+                      ["Dépenses payées par l'artiste", r.account.advances - r.account.cashAdvances] as [string, number],
+                      ["Avance virée par l'artiste", r.account.cashAdvances] as [string, number],
+                      ["Remboursé à l'artiste", -r.account.advancesPaid] as [string, number],
                     ]
                   : []),
               ].map(([label, v]) => (

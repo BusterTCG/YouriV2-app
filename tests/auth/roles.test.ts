@@ -13,7 +13,7 @@ describe("rôles et chemins", () => {
     }
   });
 
-  it("Nour : Productions, MF, Artistes, Contacts, Lieux, Tâches, impressions", () => {
+  it("Nour : Productions, Booking, MF, Artistes, Contacts, Lieux, Tâches, impressions", () => {
     expect(isRestrictedRole("PRODUCTION")).toBe(true);
     expect(homeFor("PRODUCTION")).toBe("/shows");
     for (const p of [
@@ -22,6 +22,9 @@ describe("rôles et chemins", () => {
       "/shows/abc/briefing",
       "/shows/production/xyz",
       "/deals/management-fees",
+      "/deals/booking",
+      "/deals/booking/abc",
+      "/deals/booking/abc/fdr",
       "/artistes",
       "/artistes/sossam",
       "/contacts",
@@ -36,13 +39,12 @@ describe("rôles et chemins", () => {
     }
   });
 
-  it("Nour : pas de dashboard, Booking, Cachets, reporting, corbeille ni réglages", () => {
+  it("Nour : pas de dashboard, Cachets, reporting, corbeille ni réglages", () => {
     for (const p of [
       "/",
       "/dashboard",
       "/deals",
-      "/deals/booking",
-      "/deals/booking/abc/fdr",
+      "/deals/bookingx",
       "/deals/cachets",
       "/reporting",
       "/trash",

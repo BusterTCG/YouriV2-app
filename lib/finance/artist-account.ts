@@ -48,8 +48,8 @@ export type AccountMovement = {
 export const ARTIST_MOVEMENT_LABEL: Record<AccountMovement["kind"], string> = {
   PAYMENT: "Versement de quote-part",
   REFUND: "Versement de l'artiste · règlement du déficit",
-  CASH_ADVANCE: "Versement de l'artiste · avance de trésorerie",
-  EXPENSES: "Avance / frais rendus à l'artiste",
+  CASH_ADVANCE: "Avance virée par l'artiste",
+  EXPENSES: "Remboursement à l'artiste",
 };
 
 /** Frais avancé par l'artiste (charge d'une date ou frais général). */

@@ -76,6 +76,9 @@ export interface DealFormDeal {
   venueName: string | null;
   venueCity: string | null;
   venueAddress?: string | null;
+  /** Booking : heure de fin + Marque / Client (portage KN, Stan 2026-10-16). */
+  endTime?: string | null;
+  brand?: string | null;
   notes: string | null;
   // ── Champs Prod Exé (optionnels — utilisés en mode edit pour pré-remplir
   //     les sections spécifiques Prod Exécutive du dialog) ──
@@ -141,6 +144,7 @@ export function DealFormDialog({
   const effectiveCategory = deal?.category ?? category;
   const isProdExe = effectiveCategory === DealCategory.PROD_EXE;
   const isCachets = effectiveCategory === DealCategory.CACHETS;
+  const isBooking = effectiveCategory === DealCategory.BOOKING;
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -158,6 +162,8 @@ export function DealFormDialog({
     deal?.date ? toDateInput(deal.date) : "",
   );
   const [showTime, setShowTime] = useState(deal?.showTime ?? "");
+  const [endTime, setEndTime] = useState(deal?.endTime ?? "");
+  const [brand, setBrand] = useState(deal?.brand ?? "");
   const [status, setStatus] = useState<DealStatus>(deal?.status ?? DealStatus.LEAD);
   const [artistId, setArtistId] = useState<string | null>(
     deal?.artistId ?? defaults?.artistId ?? null,
@@ -355,6 +361,10 @@ export function DealFormDialog({
         venueCity: isCachets ? null : venue?.city ?? null,
         venueAddress: isCachets ? null : venueAddress.trim() || null,
         notes: notes.trim() || null,
+        // Booking : horaire de fin + Marque / Client (portage KN).
+        ...(isBooking
+          ? { endTime: endTime.trim() || null, brand: brand.trim() || null }
+          : {}),
       };
       if (isEdit && deal) {
         const res = await updateDealMeta({ id: deal.id, ...baseMeta });
@@ -587,7 +597,13 @@ export function DealFormDialog({
                       retiré — portage KN étape 2 : les séries passent par
                       l'assistant « Ajouter une résidence » de la production,
                       les doublés par la carte Séances.) */}
-                  <div className="grid gap-2 grid-cols-[200px_140px]">
+                  <div
+                    className={
+                      isBooking
+                        ? "grid gap-2 grid-cols-[200px_140px_140px]"
+                        : "grid gap-2 grid-cols-[200px_140px]"
+                    }
+                  >
                   <div className="space-y-1.5">
                     <FieldLabel htmlFor="date" required>
                       Date
@@ -602,7 +618,7 @@ export function DealFormDialog({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <FieldLabel htmlFor="showTime">Heure début</FieldLabel>
+                    <FieldLabel htmlFor="showTime">{isBooking ? "De" : "Heure début"}</FieldLabel>
                     <Input
                       id="showTime"
                       type="time"
@@ -611,6 +627,18 @@ export function DealFormDialog({
                       disabled={pending}
                     />
                   </div>
+                  {isBooking && (
+                    <div className="space-y-1.5">
+                      <FieldLabel htmlFor="endTime">À</FieldLabel>
+                      <Input
+                        id="endTime"
+                        type="time"
+                        value={endTime}
+                        onChange={(e) => setEndTime(e.target.value)}
+                        disabled={pending}
+                      />
+                    </div>
+                  )}
                   </div>
                 </>
               )}
@@ -669,7 +697,7 @@ export function DealFormDialog({
                     null
                   ) : (
                     <>
-                      {/* Booking : Organisateur + Lieu sur 2 colonnes */}
+                      {/* Booking : Organisateur + Salle sur 2 colonnes */}
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between gap-2">
@@ -688,7 +716,7 @@ export function DealFormDialog({
                         </div>
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between gap-2">
-                            <FieldLabel>Lieu</FieldLabel>
+                            <FieldLabel>Salle</FieldLabel>
                             <button
                               type="button"
                               onClick={() => setOpenVenueDialog(true)}
@@ -703,10 +731,22 @@ export function DealFormDialog({
                         </div>
                       </div>
 
-                      {/* Adresse libre — surtout utile pour Booking entreprise */}
+                      {/* Marque / Client (portage KN, Stan 2026-10-16) */}
+                      <div className="space-y-1.5">
+                        <FieldLabel htmlFor="brand">Marque / Client</FieldLabel>
+                        <Input
+                          id="brand"
+                          value={brand}
+                          onChange={(e) => setBrand(e.target.value)}
+                          className="sm:max-w-[320px]"
+                          disabled={pending}
+                        />
+                      </div>
+
+                      {/* Lieu : adresse libre — surtout utile pour Booking entreprise */}
                       <div className="space-y-1.5">
                         <FieldLabel>
-                          Adresse libre{" "}
+                          Lieu{" "}
                           {venue && (
                             <span className="text-muted-foreground/60 normal-case">
                               (optionnelle si lieu choisi)

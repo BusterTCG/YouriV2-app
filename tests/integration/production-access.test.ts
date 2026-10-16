@@ -4,8 +4,9 @@
 // Nour KN, Stan 2026-09-30) : gardes des server actions sur une base SQLite
 // temporaire construite par les vraies migrations.
 //
-// Nour : deals Production (accès total), Artistes / Contacts / Lieux, ses
-// tâches, ses MF en lecture. Refusé : Booking, Cachets, paiements MF,
+// Nour : deals Production (accès total), Booking en lecture (FDR et charges
+// modifiables, Stan 2026-10-16), Artistes / Contacts / Lieux, ses tâches, ses
+// MF en lecture. Refusé : édition des Booking, Cachets, paiements MF,
 // corbeille (restaurer / supprimer définitivement), templates, tâches des
 // autres.
 
@@ -113,7 +114,7 @@ describe("profil « Production » (Nour) — gardes serveur", () => {
     expect(u.passwordHash).toMatch(/^\$2[ab]\$10\$/);
   });
 
-  it("deals : Production oui, Booking / Cachets non", async () => {
+  it("deals : Production oui, Booking en lecture, Cachets non", async () => {
     current = NOUR;
     denied(await A.createDeal({ category: "BOOKING", title: "X", date: new Date("2026-12-01") }));
     denied(await A.createDeal({ category: "CACHETS", title: "X", date: new Date("2026-12-01") }));
@@ -132,16 +133,23 @@ describe("profil « Production » (Nour) — gardes serveur", () => {
     denied(await A.setDealStatus({ dealId: booking, status: "CONFIRME" }));
     ok(await A.setDealStatus({ dealId: prod, status: "EN_COURS" }));
     denied(await A.updateDealMeta({ id: booking, title: "Piraté" }));
-    denied(await A.addDealCharge({ dealId: booking, label: "Frais", amount: 10 }));
     denied(await A.softDeleteDeal(booking));
     expect(await ACC.canAccessDeal(booking)).toBe(false);
     expect(await ACC.canAccessDeal(prod)).toBe(true);
+    expect(await ACC.canReadDeal(booking)).toBe(true);
     expect((await prisma.deal.findUnique({ where: { id: booking } })).title).toBe("Booking");
   });
 
-  it("FDR, lignes de production, suivi : deals Production uniquement", async () => {
+  it("Booking : charges diverses modifiables (Stan 2026-10-16)", async () => {
     current = NOUR;
-    denied(await BR.ensureBriefingWithPrefill(booking));
+    const charge = ok<{ id: string }>(await A.addDealCharge({ dealId: booking, label: "Train", amount: 80 }));
+    ok(await A.updateDealCharge({ id: charge.id, isPaye: true }));
+    ok(await A.removeDealCharge(charge.id));
+  });
+
+  it("FDR : Production et Booking ; lignes de production, suivi : Production uniquement", async () => {
+    current = NOUR;
+    ok(await BR.ensureBriefingWithPrefill(booking));
     ok(await BR.ensureBriefingWithPrefill(prod));
     denied(await PL.addEmptyProductionLine({ dealId: booking, kind: "COST", label: "TECH" }));
     denied(await SST.syncShowTaskToggle(booking, "contractSigned", true));

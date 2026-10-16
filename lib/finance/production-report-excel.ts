@@ -102,9 +102,9 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
     { label: "Déficit réglé par l'artiste", values: [acc.refunded], fmt: EUR },
     ...(acc.advances
       ? [
-          { label: "Frais avancés par l'artiste", values: [acc.advances - acc.cashAdvances], fmt: EUR },
-          { label: "Avances de trésorerie de l'artiste", values: [acc.cashAdvances], fmt: EUR },
-          { label: "Frais / avances rendus à l'artiste", values: [-acc.advancesPaid], fmt: EUR },
+          { label: "Dépenses payées par l'artiste", values: [acc.advances - acc.cashAdvances], fmt: EUR },
+          { label: "Avance virée par l'artiste", values: [acc.cashAdvances], fmt: EUR },
+          { label: "Remboursé à l'artiste", values: [-acc.advancesPaid], fmt: EUR },
         ]
       : []),
     {

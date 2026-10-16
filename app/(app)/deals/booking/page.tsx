@@ -11,6 +11,10 @@ import { DealsTotals } from "@/components/deals/deals-totals";
 import { BookingDealsList } from "@/components/deals/booking-deals-list";
 import { NewDealButton } from "@/components/deals/new-deal-button";
 import { PrivacyToggle } from "@/components/dashboard/privacy-toggle";
+import { BookingReadonlyList } from "@/components/deals/booking-readonly-list";
+import { requireUser } from "@/lib/auth/users";
+import { isRestrictedRole } from "@/lib/auth/roles";
+import { toRestrictedBookingRows } from "@/lib/deals-list-restricted";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +43,38 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
   const status = parseStatus(sp.status);
   const artistSlug = sp.artist && sp.artist !== "all" ? sp.artist : null;
 
-  const data = await getBookingDealsList({ period, status, artistSlug });
+  const [data, user] = await Promise.all([
+    getBookingDealsList({ period, status, artistSlug }),
+    requireUser(),
+  ]);
+
+  // Profil Production (Nour, Stan 2026-10-16) : statuts seuls, sans montants
+  // (sauf ses management fees), sans création ni édition.
+  if (isRestrictedRole(user.role)) {
+    const rows = await toRestrictedBookingRows(data.deals, user.pangeeKey);
+    return (
+      <div className="max-w-[1400px] space-y-5">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wider">
+            <Briefcase className="h-3.5 w-3.5" />
+            Booking · {data.totals.count} deal{data.totals.count > 1 ? "s" : ""}
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight">Booking</h1>
+          <p className="text-muted-foreground text-sm">
+            Dates de booking en consultation. Ouvre un deal pour sa feuille de
+            route et ses charges.
+          </p>
+        </div>
+        <DealsFilters
+          period={period}
+          status={status}
+          artistSlug={artistSlug}
+          artists={data.artists}
+        />
+        <BookingReadonlyList rows={rows} />
+      </div>
+    );
+  }
 
   const periodLabel =
     PERIOD_PRESET_OPTIONS.find((o) => o.value === period)?.label ?? "Tout";

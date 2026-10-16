@@ -11,7 +11,7 @@
 
 import { NextResponse } from "next/server";
 import { generateFdrPdf } from "@/lib/fdr-pdf";
-import { canAccessDeal } from "@/lib/auth/access";
+import { canReadDeal } from "@/lib/auth/access";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -20,7 +20,7 @@ interface RouteContext {
 export async function GET(request: Request, { params }: RouteContext) {
   const { id } = await params;
   // Profil « Production » (Nour) : FDR des deals Production uniquement.
-  if (!(await canAccessDeal(id))) {
+  if (!(await canReadDeal(id))) {
     return NextResponse.json({ ok: false, error: "Accès non autorisé" }, { status: 403 });
   }
 

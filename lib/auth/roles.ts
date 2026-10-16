@@ -4,11 +4,13 @@
 // 2026-09-30) : compte booking@pangeeprod.com donné à Nour, externe aux
 // associés. Accès limité à :
 //   - Productions (deals Production uniquement, accès total) ;
+//   - Booking (Stan 2026-10-16) : liste et fiches en lecture seule, sans les
+//     montants (sauf ses management fees) ; FDR et charges modifiables ;
 //   - Artistes, Contacts, Lieux (accès total, sans export) ;
 //   - Tâches (uniquement celles qui lui sont assignées) ;
 //   - Management fees (uniquement les siennes, en lecture : les paiements
 //     sont faits par les associés).
-// Pas de dashboard, Booking, Cachets, reporting, corbeille ni réglages.
+// Pas de dashboard, Cachets, reporting, corbeille ni réglages.
 
 export type AppRole = "ADMIN" | "MEMBER" | "PRODUCTION";
 
@@ -17,6 +19,7 @@ export const PRODUCTION_PATHS = [
   "/shows",
   "/deals/prod-executive", // anciennes URLs → redirigées vers /shows
   "/deals/management-fees",
+  "/deals/booking",
   "/artistes",
   "/contacts",
   "/lieux",

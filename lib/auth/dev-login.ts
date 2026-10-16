@@ -21,6 +21,15 @@ export function devAutoLoginEmail(host: string | null): string | null {
   return email;
 }
 
+/**
+ * Choix du compte sur /login en dev local (Stan 2026-10-16 : tester le
+ * profil de Nour, dont le compte n'a pas de mot de passe utilisable) — mêmes
+ * gardes que la connexion auto. La liste des comptes vient de la table User.
+ */
+export function devAccountPickerEnabled(host: string | null): boolean {
+  return devAutoLoginEmail(host) != null;
+}
+
 /** Chemin de retour sûr (interne à l'app). */
 export function safeReturnPath(from: string | null): string {
   return from && from.startsWith("/") && !from.startsWith("//") ? from : "/";

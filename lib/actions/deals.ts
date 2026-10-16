@@ -9,6 +9,7 @@ import { requireUser } from "@/lib/auth/users";
 import {
   requireDealAccess,
   requireDealCategoryAccess,
+  requireDealReadAccess,
   requireFullAccess,
 } from "@/lib/auth/access";
 import { safeAction, type ActionResult } from "@/lib/errors";
@@ -62,6 +63,10 @@ const CreateDealSchema = z.object({
   title: z.string().trim().min(1, "Titre requis").max(200),
   date: z.coerce.date(),
   showTime: z.string().max(20).optional().nullable(),
+  /** Heure de fin (« de … à … », portage KN). */
+  endTime: z.string().max(20).optional().nullable(),
+  /** Marque / Client — Booking (portage KN). */
+  brand: z.string().max(200).optional().nullable(),
   status: z.nativeEnum(DealStatus).optional(),
   organizerId: z.string().optional().nullable(),
   organizerName: z.string().max(200).optional().nullable(),
@@ -115,6 +120,8 @@ export async function createDeal(
         title: data.title,
         date: data.date,
         showTime: data.showTime ?? null,
+        endTime: data.endTime ?? null,
+        brand: data.brand ?? null,
         organizerId: data.organizerId ?? null,
         organizerName: data.organizerName ?? null,
         organizerCompany: data.organizerCompany ?? null,
@@ -212,6 +219,8 @@ const UpdateDealMetaSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   date: z.coerce.date().optional(),
   showTime: z.string().max(20).nullable().optional(),
+  endTime: z.string().max(20).nullable().optional(),
+  brand: z.string().max(200).nullable().optional(),
   organizerId: z.string().nullable().optional(),
   organizerName: z.string().max(200).nullable().optional(),
   organizerCompany: z.string().max(200).nullable().optional(),
@@ -984,7 +993,8 @@ export async function addDealCharge(
   return safeAction("addDealCharge", async () => {
     await requireUser();
     const { dealId, label, amount, notes } = AddDealChargeSchema.parse(input);
-    await requireDealAccess(dealId);
+    // Charges : ouvertes au profil Production sur les Booking (Stan 2026-10-16).
+    await requireDealReadAccess(dealId);
     const charge = await prisma.dealCharge.create({
       data: {
         dealId,
@@ -1024,7 +1034,7 @@ export async function updateDealCharge(
     const { id, label, amount, isPaye, paidAt, notes } =
       UpdateDealChargeSchema.parse(input);
     const scoped = await prisma.dealCharge.findUnique({ where: { id }, select: { dealId: true } });
-    if (scoped) await requireDealAccess(scoped.dealId);
+    if (scoped) await requireDealReadAccess(scoped.dealId);
 
     const data: Prisma.DealChargeUpdateInput = {};
     if (label !== undefined) data.label = label;
@@ -1063,7 +1073,7 @@ export async function removeDealCharge(id: string): Promise<ActionResult> {
   return safeAction("removeDealCharge", async () => {
     await requireUser();
     const scoped = await prisma.dealCharge.findUnique({ where: { id }, select: { dealId: true } });
-    if (scoped) await requireDealAccess(scoped.dealId);
+    if (scoped) await requireDealReadAccess(scoped.dealId);
     if (!id) throw new Error("ID charge manquant");
     const charge = await prisma.dealCharge.update({
       where: { id },

@@ -57,7 +57,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Deals",
     href: "/deals", // page parent avec 3 cards récap (Booking / Prod Exé / Cachet)
     items: [
-      { label: "Booking", href: "/deals/booking", icon: Briefcase },
+      { label: "Booking", href: "/deals/booking", icon: Briefcase, production: true },
       { label: "Productions", href: "/shows", icon: Theater, production: true },
       { label: "Cachets", href: "/deals/cachets", icon: Wallet },
       { label: "Management fees", href: "/deals/management-fees", icon: HandCoins, production: true },

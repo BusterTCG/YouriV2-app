@@ -361,7 +361,7 @@ export function ArtistAccountCard({
         {expenseItems.length > 0 && (
           <div className="rounded-md border divide-y">
             <div className="px-3 py-1.5 text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">
-              Frais avancés par l&apos;artiste
+              Dépenses payées par l&apos;artiste
             </div>
             {expenseItems.map((a) => {
               const st = advanceStatus(a);
@@ -446,7 +446,7 @@ export function ArtistAccountCard({
                   {(
                     [
                       ["REFUND", "Règlement du déficit", "solde l'exploitation"],
-                      ["CASH_ADVANCE", "Avance de trésorerie", "comble d'abord un déficit, le reste lui est rendu"],
+                      ["CASH_ADVANCE", "Avance (virement)", "comble d'abord un déficit, le reste lui est rendu"],
                     ] as const
                   ).map(([k, title, hint]) => (
                     <button
