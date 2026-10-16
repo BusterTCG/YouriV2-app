@@ -107,6 +107,12 @@ export function DashboardChart({ data, period }: Props) {
                         Projection : {formatEur(item.projection)}
                       </div>
                     )}
+                    {/* Réel + projection sur le même mois : total (Stan 2026-10-16). */}
+                    {item.margeNette !== 0 && item.projection !== 0 && (
+                      <div className="tabular-nums font-semibold border-t mt-1 pt-1">
+                        Total : {formatEur(item.margeNette + item.projection)}
+                      </div>
+                    )}
                     {item.margeNette === 0 && item.projection === 0 && (
                       <div className="tabular-nums">{formatEur(0)}</div>
                     )}
