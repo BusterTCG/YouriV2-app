@@ -77,7 +77,9 @@ export interface DashboardData {
   /** Cette semaine : deals dans les 7 prochains jours, tous filtres confondus. */
   thisWeek: WeekItem[];
   /** Série mensuelle Marge Nette 12 derniers mois (cash-flow). */
-  monthlyMargeNette: Array<{ month: string; margeNette: number; key: string }>;
+  /** `projection` = marge nette des deals à venir pas encore encaissée
+   *  (Stan 2026-10-16), au mois de la date du deal. */
+  monthlyMargeNette: Array<{ month: string; margeNette: number; projection: number; key: string }>;
   /** Catalogue artistes pour le sélecteur de filtre (Divers en dernier). */
   artists: Array<{ id: string; name: string; slug: string; color: string | null }>;
 }
@@ -301,6 +303,7 @@ export async function getDashboardData(opts: {
     installmentUnits,
     installmentUnitsPrev,
     chartInstallmentUnits,
+    projectedDealsRaw,
   ] = await Promise.all([
     // KPIs financiers : tous les deals encaissés sur la période (budgetPaidAt
     // dans la fenêtre). On lit les finances pour calculer Marge Brute + MF.
@@ -559,6 +562,26 @@ export async function getDashboardData(opts: {
       { start: chartStart, end: chartEnd },
       { applies: bookingApplies, artistWhere },
     ),
+    // Projection du chart (Stan 2026-10-16) : deals à venir (date ≥
+    // aujourd'hui, dans la fenêtre), hors annulés, budget pas encore encaissé.
+    prisma.deal.findMany({
+      where: {
+        ...catWhere,
+        ...artistWhere,
+        deletedAt: null,
+        status: { not: "ANNULE" },
+        date: { gte: today, lt: chartEnd },
+        budgetPaymentStatus: { not: "PAID" },
+      },
+      select: {
+        category: true,
+        date: true,
+        budgetAmount: true,
+        commissionAmount: true,
+        installments: { select: { amount: true, paymentStatus: true } },
+        ...FINANCIAL_INCLUDE,
+      },
+    }),
   ]);
 
   // ── KPIs ──────────────────────────────────────────────────────────────
@@ -709,6 +732,20 @@ export async function getDashboardData(opts: {
     const key = `${u.paidAt.getFullYear()}-${String(u.paidAt.getMonth()).padStart(2, "0")}`;
     monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + (u.margeBrute - u.totalMf));
   }
+  // Projection : marge nette des deals à venir, au mois de leur date. Une
+  // tranche d'échéancier déjà encaissée est dans les barres réelles → on ne
+  // projette que la part restante.
+  const projectionMap = new Map<string, number>();
+  for (const d of projectedDealsRaw) {
+    const budget = d.budgetAmount != null ? Number(d.budgetAmount) : 0;
+    const received = d.installments
+      .filter((i) => i.paymentStatus === "PAID")
+      .reduce((s, i) => s + (i.amount != null ? Number(i.amount) : 0), 0);
+    const remaining = budget > 0 ? Math.max(0, 1 - received / budget) : 1;
+    const key = `${d.date.getFullYear()}-${String(d.date.getMonth()).padStart(2, "0")}`;
+    const marge = (computeMargeBrute(d) - computeTotalMf(d)) * remaining;
+    projectionMap.set(key, (projectionMap.get(key) ?? 0) + marge);
+  }
   const monthlyMargeNette: DashboardData["monthlyMargeNette"] = [];
   for (let i = 0; i < 12; i++) {
     const m = new Date(chartStart.getFullYear(), chartStart.getMonth() + i, 1);
@@ -716,6 +753,7 @@ export async function getDashboardData(opts: {
     monthlyMargeNette.push({
       month: `${MONTHS_FR[m.getMonth()]} ${String(m.getFullYear()).slice(2)}`,
       margeNette: Math.round(monthlyMap.get(key) ?? 0),
+      projection: Math.round(projectionMap.get(key) ?? 0),
       key,
     });
   }

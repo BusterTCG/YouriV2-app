@@ -6,9 +6,14 @@ import { cn } from "@/lib/utils";
 import { formatPct } from "@/components/deals/deal-helpers";
 import { SensitiveAmount } from "./sensitive-amount";
 import type { DashboardKpis, DashboardPeriod } from "@/lib/dashboard";
+import type { MoneyHeld } from "@/lib/finance/money-held-server";
+import { MoneyHeldCard } from "./money-held-card";
+import { RingMeter } from "@/components/shows/kpi-visuals";
 
 interface Props {
   kpis: DashboardKpis;
+  /** Argent reçu et pas encore reversé (à date). */
+  moneyHeld: MoneyHeld;
   period: DashboardPeriod;
   periodLabel: string;
 }
@@ -24,22 +29,25 @@ interface Props {
  *   2. Marge Nette (= Brute − MF)
  *   3. Taux Marge Nette (%)
  *   4. Management Fees (reversés à l'user connecté)
+ *   5. À reverser — à date (Stan 2026-10-16)
  */
-export function DashboardKpis({ kpis, period, periodLabel }: Props) {
+export function DashboardKpis({ kpis, moneyHeld, period, periodLabel }: Props) {
   void periodLabel;
+  // Période dans le libellé de chaque card, comme KN (Stan 2026-10-16).
+  const p = period === "year" ? "année" : "mois";
   const prevLabel = period === "year" ? "vs an dernier" : "vs mois dernier";
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
       <Card
         icon={<Briefcase className="h-3.5 w-3.5 text-muted-foreground" />}
-        label="CA HT encaissé"
+        label={`CA HT encaissé — ${p}`}
         value={<SensitiveAmount value={kpis.caHtEncaisse} />}
         delta={computeDelta(kpis.caHtEncaisse, kpis.prev.caHtEncaisse)}
         deltaLabel={prevLabel}
       />
       <Card
         icon={<Sparkles className="h-3.5 w-3.5 text-muted-foreground" />}
-        label="Marge Nette"
+        label={`Marge nette — ${p}`}
         value={<SensitiveAmount value={kpis.margeNette} />}
         delta={computeDelta(kpis.margeNette, kpis.prev.margeNette)}
         deltaLabel={prevLabel}
@@ -47,11 +55,15 @@ export function DashboardKpis({ kpis, period, periodLabel }: Props) {
       />
       <Card
         icon={<Percent className="h-3.5 w-3.5 text-muted-foreground" />}
-        label="Marge Nette"
+        label={`Taux de marge nette — ${p}`}
+        // Anneau à teinte fixe, quel que soit le taux (Stan 2026-10-16).
         value={
-          kpis.margeNettePct != null
-            ? formatPct(kpis.margeNettePct, { integer: true })
-            : "—"
+          <RingMeter
+            percent={kpis.margeNettePct}
+            center={kpis.margeNettePct != null ? formatPct(kpis.margeNettePct, { integer: true }) : "—"}
+            size={56}
+            tone="high"
+          />
         }
         // Pour le taux %, on affiche le delta en points (pp) — ex. "+5pp"
         delta={
@@ -66,7 +78,7 @@ export function DashboardKpis({ kpis, period, periodLabel }: Props) {
       />
       <Card
         icon={<HandCoins className="h-3.5 w-3.5 text-muted-foreground" />}
-        label="Management Fees"
+        label={`Mes management fees — ${p}`}
         value={<SensitiveAmount value={kpis.mfEncaisseUser} />}
         delta={
           kpis.mfEncaisseUser != null
@@ -80,6 +92,7 @@ export function DashboardKpis({ kpis, period, periodLabel }: Props) {
             : undefined
         }
       />
+      <MoneyHeldCard moneyHeld={moneyHeld} />
     </div>
   );
 }
@@ -121,7 +134,7 @@ function Card({
     <div className="rounded-md border bg-card p-3 sm:p-4 space-y-1 min-w-0">
       <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold min-w-0">
         {icon}
-        <span className="truncate">{label}</span>
+        <span className="min-w-0 leading-tight">{label}</span>
       </div>
       <div className={`text-lg sm:text-2xl font-semibold tabular-nums truncate ${accentClass}`}>
         {value}

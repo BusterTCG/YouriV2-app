@@ -42,25 +42,28 @@ function fillTone(percent: number | null, variant: Variant) {
 }
 
 /** Anneau de progression (0-100 %), valeur au centre. `fillColors` : teinte
- *  rouge / orange / vert selon le taux (anneaux de remplissage). */
+ *  rouge / orange / vert selon le taux (anneaux de remplissage). `tone` :
+ *  teinte fixe quelle que soit la valeur (taux de marge du dashboard). */
 export function RingMeter({
   percent,
   center,
   variant = "app",
   size = 72,
   fillColors = false,
+  tone,
 }: {
   percent: number | null;
   center: string;
   variant?: Variant;
   size?: number;
   fillColors?: boolean;
+  tone?: keyof typeof FILL_TONES;
 }) {
   const stroke = Math.max(3, Math.round(size / 9));
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const p = percent == null ? 0 : Math.max(0, Math.min(100, percent));
-  const colors = fillColors ? fillTone(percent, variant) : COLORS[variant];
+  const colors = tone ? FILL_TONES[tone][variant] : fillColors ? fillTone(percent, variant) : COLORS[variant];
   return (
     <svg
       width={size}

@@ -6,6 +6,7 @@ import {
   type DashboardCategoryFilter,
 } from "@/lib/dashboard";
 import { DashboardKpis } from "@/components/dashboard/dashboard-kpis";
+import { getMoneyHeld } from "@/lib/finance/money-held-server";
 import {
   DashboardMyTasks,
   DashboardUpcomingTasks,
@@ -61,12 +62,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const artistSlug = sp.artist && sp.artist !== "all" ? sp.artist : null;
 
   const user = await requireUser();
-  const data = await getDashboardData({
-    period,
-    category,
-    artistSlug,
-    myPangeeKey: user.pangeeKey,
-  });
+  const [data, moneyHeld] = await Promise.all([
+    getDashboardData({
+      period,
+      category,
+      artistSlug,
+      myPangeeKey: user.pangeeKey,
+    }),
+    // Argent reçu et pas encore reversé — à date (Stan 2026-10-16).
+    getMoneyHeld({ category, artistSlug }),
+  ]);
 
   const periodLabel = period === "year" ? "année en cours" : "mois en cours";
 
@@ -96,9 +101,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
       </div>
 
+      {/* ── Graphique 12 mois plein largeur, au-dessus des KPIs comme KN
+            (Stan 2026-10-16), avec la projection des deals à venir. */}
+      <DashboardChart data={data.monthlyMargeNette} period={period} />
+
       {/* ── KPIs financiers ─────────────────────────────────────────────── */}
       <DashboardKpis
         kpis={data.kpis}
+        moneyHeld={moneyHeld}
         period={period}
         periodLabel={periodLabel}
       />
@@ -109,9 +119,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         aPayerArtiste={data.alerts.aPayerArtiste}
       />
 
-      {/* ── Graphique 12 mois plein largeur (vision macro, juste sous les KPIs).
-            Stan 2026-06-02 v3 : remonté entre les KPIs et le bloc planning. */}
-      <DashboardChart data={data.monthlyMargeNette} period={period} />
 
       {/* ── 3 colonnes planning : Mes tâches | À venir | Cette semaine
             Plan d'action visible d'un coup d'œil. */}

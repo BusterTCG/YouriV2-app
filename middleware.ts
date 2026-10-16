@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 import { canAccessPath, homeFor } from "@/lib/auth/roles";
+import { devAutoLoginEmail } from "@/lib/auth/dev-login";
 
 /**
  * Middleware Next.js — protège TOUTES les routes de l'app sauf une liste
@@ -26,6 +27,7 @@ const PUBLIC_PATHS = [
   "/api/auth/google/callback",
   "/api/auth/password",
   "/api/auth/logout",
+  "/api/auth/dev-login",
   // Health check public (utilisé par deploy.ps1 + monitoring) — pas d'auth
   // pour permettre le check sans cookie.
   "/api/health",
@@ -70,6 +72,13 @@ export async function middleware(req: NextRequest) {
       { ok: false, error: "Non authentifié" },
       { status: 401 },
     );
+  }
+
+  // Dev local : connexion automatique (jamais en prod, cf. lib/auth/dev-login.ts).
+  if (devAutoLoginEmail(req.headers.get("host"))) {
+    const devLogin = new URL("/api/auth/dev-login", req.url);
+    devLogin.searchParams.set("from", pathname + req.nextUrl.search);
+    return NextResponse.redirect(devLogin);
   }
 
   // Page → redirection vers /login avec ?from=... pour revenir après login

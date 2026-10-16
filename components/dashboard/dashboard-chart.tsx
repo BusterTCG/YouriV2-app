@@ -9,7 +9,7 @@ import { SensitiveAmount } from "./sensitive-amount";
 import type { DashboardPeriod } from "@/lib/dashboard";
 
 interface Props {
-  data: Array<{ key: string; month: string; margeNette: number }>;
+  data: Array<{ key: string; month: string; margeNette: number; projection: number }>;
   period: DashboardPeriod;
 }
 
@@ -23,10 +23,17 @@ interface Props {
  *
  * Data pré-agrégée par `lib/dashboard.ts` : 12 buckets contigus, même les
  * mois sans data sont à 0 pour conserver l'axe X stable.
+ *
+ * Projection (Stan 2026-10-16, idem KN) : barre bleue empilée = marge nette
+ * des deals à venir pas encore encaissée, au mois de la date du deal.
  */
+/** Barre « projection » (deals à venir) — bleu, distinct de l'or encaissé. */
+const PROJECTION_COLOR = "#7aa7e0";
+
 export function DashboardChart({ data, period }: Props) {
   const { isPrivate } = usePrivacy();
   const total = data.reduce((s, m) => s + m.margeNette, 0);
+  const projected = data.reduce((s, m) => s + m.projection, 0);
   // Année déduite du dernier bucket (= mois courant en mode "month", déc de
   // l'année courante en mode "year").
   const lastKey = data[data.length - 1]?.key ?? "";
@@ -43,12 +50,24 @@ export function DashboardChart({ data, period }: Props) {
           <TrendingUp className="h-3.5 w-3.5" />
           {title}
         </div>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          Total :{" "}
-          <span className="font-semibold text-foreground">
-            <SensitiveAmount value={total} />
+        <div className="flex items-center gap-3 text-xs text-muted-foreground tabular-nums">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-sm" style={{ backgroundColor: "var(--yr-gold)" }} />
+            Encaissé :{" "}
+            <span className="font-semibold text-foreground">
+              <SensitiveAmount value={total} />
+            </span>
           </span>
-        </span>
+          {projected !== 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-sm" style={{ backgroundColor: PROJECTION_COLOR }} />
+              Projection :{" "}
+              <span className="font-semibold text-foreground">
+                <SensitiveAmount value={projected} />
+              </span>
+            </span>
+          )}
+        </div>
       </div>
       <div
         className={cn(
@@ -76,16 +95,27 @@ export function DashboardChart({ data, period }: Props) {
               cursor={{ fill: "var(--color-accent)", opacity: 0.3 }}
               content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null;
-                const v = (payload[0].value ?? 0) as number;
+                const item = payload[0].payload as Props["data"][number];
                 return (
                   <div className="rounded-md border bg-popover px-2.5 py-1.5 text-xs shadow-md">
                     <div className="font-medium">{label}</div>
-                    <div className="tabular-nums">{formatEur(v)}</div>
+                    {item.margeNette !== 0 && (
+                      <div className="tabular-nums">Encaissé : {formatEur(item.margeNette)}</div>
+                    )}
+                    {item.projection !== 0 && (
+                      <div className="tabular-nums text-muted-foreground">
+                        Projection : {formatEur(item.projection)}
+                      </div>
+                    )}
+                    {item.margeNette === 0 && item.projection === 0 && (
+                      <div className="tabular-nums">{formatEur(0)}</div>
+                    )}
                   </div>
                 );
               }}
             />
-            <Bar dataKey="margeNette" fill="var(--yr-gold)" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="margeNette" stackId="m" fill="var(--yr-gold)" />
+            <Bar dataKey="projection" stackId="m" fill={PROJECTION_COLOR} radius={[3, 3, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
