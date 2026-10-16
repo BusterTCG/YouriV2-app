@@ -636,8 +636,8 @@ export function ArtistAccountCard({
             Appelable {fmt(account.callable)} − versé {fmt(account.paid)}
             {account.refunded ? ` + déficit réglé ${fmt(account.refunded)}` : ""}
             {account.advancesDue ? ` + frais / avances de l'artiste ${fmt(account.advancesDue)}` : ""}. Sont
-            appelables les dates jouées dont la billetterie est encaissée, et les dates soldées ; une date
-            en déficit se compense avec les dates positives. Frais avancés et avances de trésorerie
+            appelables les dates jouées dont la billetterie est encaissée, les dates soldées et les dates
+            jouées en déficit (perte acquise sans attendre la billetterie) ; une date en déficit se compense avec les dates positives. Frais avancés et avances de trésorerie
             comblent d&apos;abord un déficit ; le reste est rendu à l&apos;artiste.
           </div>
         </div>

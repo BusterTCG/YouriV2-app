@@ -4,7 +4,8 @@
 //   - Part acquise = part artiste des dates JOUÉES (co-prod : % du résultat,
 //     frais généraux inclus ; prod-exé : net artiste). Peut être négative.
 //   - Quote-part APPELABLE = uniquement les dates jouées dont la billetterie
-//     est encaissée (« appel de quote-part », pas une avance).
+//     est encaissée (« appel de quote-part », pas une avance) ; une date
+//     jouée en DÉFICIT compte d'office (la perte est acquise, Stan 2026-10-16).
 //   - Solde = appelable − (quote-parts versées − remboursements de l'artiste).
 //     > 0 : Pangee doit à l'artiste ; < 0 : l'artiste doit à Pangee.
 //     Une date en déficit se compense d'abord avec les dates positives ; en
@@ -103,8 +104,10 @@ export function computeArtistAccount(
   // réellement engagés) — même règle que le bilan d'exploitation.
   const active = deals.filter((d) => !d.cancelled || Math.round(d.artistAmount) !== 0);
   const played = active.filter((d) => d.isPast);
+  // Une date en déficit est acquise contre l'artiste dès qu'elle est jouée,
+  // sans attendre la billetterie (Stan 2026-10-16 : solde = avance − perte).
   const callableDeals = played
-    .filter((d) => d.collected || d.settled)
+    .filter((d) => d.collected || d.settled || d.artistAmount < 0)
     .sort((a, b) => a.date.getTime() - b.date.getTime());
   const settledDeals = callableDeals.filter((d) => d.settled);
   const sum = (xs: AccountDeal[]) => xs.reduce((s, d) => s + d.artistAmount, 0);

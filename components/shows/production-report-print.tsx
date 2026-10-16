@@ -148,7 +148,7 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
             <tbody>
               {[
                 ["Part artiste acquise (dates jouées)", r.account.acquired],
-                ["Dont appelable (billetterie reçue)", r.account.callable],
+                ["Dont appelable (billetterie reçue ou déficit)", r.account.callable],
                 ["Quote-parts versées", -r.account.paid],
                 ...(r.account.refunded ? [["Déficit réglé par l'artiste", r.account.refunded] as [string, number]] : []),
                 ...(r.account.advances

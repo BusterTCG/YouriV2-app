@@ -175,6 +175,15 @@ describe("computeArtistAccount — compensation et avance de trésorerie (Stan 2
     expect(back.statuses.get("a")).toBe("PAID");
   });
 
+  it("avance de trésorerie et date en déficit, billetterie pas reçue : solde = avance − perte", () => {
+    const a = computeArtistAccount(
+      [d("a", "2026-09-01", -12, { collected: false })],
+      [{ kind: "CASH_ADVANCE", amount: 3600 }],
+    );
+    expect(a.callable).toBe(-12);
+    expect(a.balance).toBe(3588);
+  });
+
   it("remboursement d'un déficit (REFUND) : solde l'exploitation", () => {
     const a = computeArtistAccount([d("a", "2026-09-01", -440)], [{ kind: "REFUND", amount: 440 }]);
     expect(a.balance).toBe(0);

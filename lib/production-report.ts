@@ -177,7 +177,9 @@ export function computeKpis(
     paying: aud.paying,
     capacity: aud.capacity,
     ticketAvg: ticketPaying ? Math.round(ticketBase / ticketPaying) : null,
-    played: active.reduce((s, d) => s + d.performancesPlayed, 0),
+    // Réalisé : les représentations des dates comptées au bilan (une résidence
+    // en cours n'y figure pas encore, ses jours passés non plus — Stan 2026-10-16).
+    played: scope === "realized" ? perfs : active.reduce((s, d) => s + d.performancesPlayed, 0),
     planned: active.reduce((s, d) => s + d.performances, 0),
     resultPerPerf: perfs ? Math.round(result / perfs) : null,
     scope,
