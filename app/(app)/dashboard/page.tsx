@@ -78,7 +78,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   return (
     <div className="max-w-6xl space-y-5">
       {/* ── Header ───────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      {/* Filtres toujours sous le titre (Stan 2026-10-16) : à côté, ils
+          sautaient de ligne selon la longueur du sous-titre (mois / année). */}
+      <div className="space-y-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wider">
             <LayoutDashboard className="h-3.5 w-3.5" />
@@ -90,7 +92,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             courantes et l&apos;activité à venir.
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end sm:shrink-0">
+        <div className="flex items-center gap-2 flex-wrap">
           <CategoryFilter />
           <ArtistFilterDropdown
             artistSlug={artistSlug}

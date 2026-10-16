@@ -28,6 +28,7 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 - KPI **« À reverser — à date »** (même logique que KN) : l'argent reçu par Pangee et pas encore versé — cachets artistes, charges, management fees, solde > 0 des comptes artiste et frais généraux des productions. Tant que ce n'est pas « Payé », c'est dû ; au prorata de ce qui est réellement reçu (acompte de 50 % → 50 % de chaque versement). Détail artistes / charges / MF + ligne TVA 20 % indicative ; au clic, la liste des deals et productions concernés.
 - Graphique : barre bleue **« Projection »** empilée = marge nette des deals à venir pas encore encaissée, au mois de leur date.
 - Infobulle du graphique : ligne **« Total »** (encaissé + projection) quand un mois a les deux.
+- Dashboard : filtres toujours sous le titre (ils changeaient de place en passant de Mois à Année).
 - Dev local : **connexion automatique** sans Google (`DEV_AUTO_LOGIN_EMAIL` dans `.env.local`, `next dev` + réseau local uniquement — jamais en prod).
 
 ### Changed
