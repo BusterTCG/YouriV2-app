@@ -189,7 +189,8 @@ export function paymentStatusLabel(s: PaymentStatus): { emoji: string; label: st
 
 /**
  * Classes Tailwind par statut paiement — couleurs spécifiques KN (emerald
- * pour PAID, blue pour INVOICED, amber pour TO_INVOICE, muted pour N_A).
+ * pour PAID, blue pour INVOICED, purple pour VALIDATED, amber pour
+ * TO_INVOICE, muted pour N_A).
  */
 export function paymentStatusClass(s: PaymentStatus): string {
   switch (s) {
@@ -198,7 +199,8 @@ export function paymentStatusClass(s: PaymentStatus): string {
     case "INVOICED":
       return "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30";
     case "VALIDATED":
-      return "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/30";
+      // Violet (Stan 2026-10-16) : le teal se confondait avec le vert « Payé ».
+      return "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/30";
     case "TO_INVOICE":
       return "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30";
     case "DISPUTE":

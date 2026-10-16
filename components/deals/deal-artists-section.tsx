@@ -7,6 +7,7 @@ import type { BookingDealArtistRow } from "@/lib/deals-list-types";
 import { updateDealArtiste, removeDealArtist } from "@/lib/actions/deals";
 import { formatPct } from "./deal-helpers";
 import { ArtistStatusSelect } from "./artist-status-select";
+import { CashAdvanceBadge } from "./cash-advance-badge";
 import { MoneyInput } from "./money-input";
 import { artistInitials } from "@/lib/artists";
 import { DealSectionHeader } from "./deal-section-header";
@@ -171,6 +172,7 @@ function ArtistRow({
             {row.artist.name}
           </span>
         </Link>
+        <CashAdvanceBadge cashAdvance={row.cashAdvance} />
         {/* Bouton supprimer aligné à droite du nom sur mobile */}
         <button
           type="button"

@@ -31,7 +31,7 @@ import { FinanceSummary } from "@/components/shows/finance-summary";
 import { audienceOf, computeKpis, financeOf, productionRates } from "@/lib/production-report";
 import { FillRing, KpiTiles } from "@/components/shows/kpi-visuals";
 import { DateRow, SettlementRow, pastDealsOf, toSettleOf } from "@/components/shows/date-rows";
-import { getArtistAccount } from "@/lib/finance/artist-account-server";
+import { getAdvanceableDeals, getArtistAccount } from "@/lib/finance/artist-account-server";
 import { ArtistAccountCard } from "@/components/shows/artist-account-card";
 import { contractRates, productionContractSummary } from "@/lib/finance/production-overhead";
 import { cn } from "@/lib/utils";
@@ -79,7 +79,10 @@ export default async function ProductionPage({ params, searchParams }: Props) {
     }),
   ]);
   if (!prod) notFound();
-  const account = await getArtistAccount(prod.id, nowMs);
+  const [account, advanceableDeals] = await Promise.all([
+    getArtistAccount(prod.id, nowMs),
+    getAdvanceableDeals(prod.artist.id),
+  ]);
 
   const startOfToday = new Date(nowMs);
   startOfToday.setHours(0, 0, 0, 0);
@@ -431,6 +434,7 @@ export default async function ProductionPage({ params, searchParams }: Props) {
           productionId={prod.id}
           artistName={prod.artist.name}
           openForDealId={verser ?? null}
+          advanceableDeals={advanceableDeals}
           settleable={prod.deals
             .filter((d) => d.stage === "A_SOLDER")
             .map((d) => ({
@@ -461,6 +465,7 @@ export default async function ProductionPage({ params, searchParams }: Props) {
               advanceAmount: m.advanceAmount,
               date: m.date.toISOString().slice(0, 10),
               note: m.note,
+              dealLabels: m.dealLabels,
             })),
             advanceItems: account.advanceItems,
           }}

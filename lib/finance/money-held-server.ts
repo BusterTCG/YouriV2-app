@@ -88,7 +88,12 @@ export async function getMoneyHeld(opts: {
           where: { deletedAt: null, coveredByVenue: false },
           select: { kind: true, amount: true, paymentStatus: true, paidByArtist: true },
         },
-        dealArtistes: { where: live, select: { cachetAmount: true, paymentStatus: true } },
+        // Cachet utilisé comme avance de trésorerie : compté via le compte
+        // artiste de la production (pas deux fois).
+        dealArtistes: {
+          where: { deletedAt: null, cashAdvanceId: null },
+          select: { cachetAmount: true, paymentStatus: true },
+        },
         dealCharges: { where: live, select: { amount: true, paymentStatus: true } },
         managementFees: { where: live, select: { amount: true, paymentStatus: true } },
       },

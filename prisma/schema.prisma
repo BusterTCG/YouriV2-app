@@ -803,6 +803,9 @@ model ArtistMovement {
   repaidById   String?
   repaidBy     ArtistMovement?  @relation("CashAdvanceRepaid", fields: [repaidById], references: [id], onDelete: SetNull)
   repaidAdvances ArtistMovement[] @relation("CashAdvanceRepaid")
+  /// Avance de trésorerie (CASH_ADVANCE) : cachets non payés de l'artiste
+  /// qui la constituent (Stan 2026-10-16, idem KN).
+  advanceDealArtistes DealArtiste[] @relation("CashAdvanceDealArtistes")
 
   @@index([productionId])
 }
@@ -878,6 +881,11 @@ model DealArtiste {
   /// Mois où l'artiste a été payé par Pangee (cash-flow réel sortant).
   /// Sert au reporting + filtre période.
   paidAt DateTime?
+  /// Cachet (pas encore payé) utilisé comme avance de trésorerie de
+  /// l'artiste sur une production (Stan 2026-10-16, idem KN). Le statut ne
+  /// change pas ; l'argent est dû via le compte artiste.
+  cashAdvanceId String?
+  cashAdvance   ArtistMovement? @relation("CashAdvanceDealArtistes", fields: [cashAdvanceId], references: [id], onDelete: SetNull)
 
   notes     String?
   createdAt DateTime @default(now())

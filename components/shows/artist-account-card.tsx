@@ -61,6 +61,8 @@ export type ArtistAccountData = {
     /** "YYYY-MM-DD" */
     date: string;
     note: string | null;
+    /** Avance de trésorerie : deals dont la part artiste la constitue. */
+    dealLabels?: string[];
   }>;
   /** Dû à l'artiste : frais avancés (charges, frais généraux) et avances de trésorerie. */
   advanceItems: Array<{
@@ -83,6 +85,9 @@ export type SettleableDate = {
   collected: boolean;
 };
 
+/** Deal de l'artiste pas encore payé, utilisable comme avance de trésorerie. */
+export type AdvanceableDeal = { id: string; label: string; amount: number };
+
 const MOVEMENT_LABEL = ARTIST_MOVEMENT_LABEL;
 
 const advanceKey = (a: { kind: AdvanceKind; id: string }) => `${a.kind}:${a.id}`;
@@ -93,6 +98,7 @@ export function ArtistAccountCard({
   account,
   settleable = [],
   openForDealId = null,
+  advanceableDeals = [],
 }: {
   productionId: string;
   artistName: string;
@@ -101,6 +107,9 @@ export function ArtistAccountCard({
   /** Arrivée depuis une date (« À régler · compte artiste → ») : formulaire
    *  de versement ouvert, cette date cochée (Stan 2026-10-01). */
   openForDealId?: string | null;
+  /** Deals non payés de l'artiste, à cocher pour une avance de trésorerie
+   *  (Stan 2026-10-16 : sa part sur ces deals sert d'avance). */
+  advanceableDeals?: AdvanceableDeal[];
 }) {
   const openFor = openForDealId ? settleable.find((d) => d.id === openForDealId) ?? null : null;
   const router = useRouter();
@@ -114,6 +123,7 @@ export function ArtistAccountCard({
   const [note, setNote] = useState("");
   const [checked, setChecked] = useState<Set<string>>(() => new Set(openFor ? [openFor.id] : []));
   const [checkedAdv, setCheckedAdv] = useState<Set<string>>(() => new Set());
+  const [checkedDeals, setCheckedDeals] = useState<Set<string>>(() => new Set());
   const b = account.balance;
   const openAdvances = account.advanceItems.filter((a) => !a.refunded);
 
@@ -176,6 +186,7 @@ export function ArtistAccountCard({
     setForm(kind);
     setError(null);
     setNote("");
+    setCheckedDeals(new Set());
     // Frais / avances à rendre : tous cochés d'office (remboursement ; quote-part
     // seulement sans déficit — sinon ils comblent le déficit).
     const adv =
@@ -206,6 +217,16 @@ export function ArtistAccountCard({
     if (kind === "REFUND" && owed > 0 && !amount) setAmount(String(owed));
   }
 
+  /** Avance depuis des deals non payés : montant = parts artiste cochées. */
+  function toggleDeal(id: string) {
+    const next = new Set(checkedDeals);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setCheckedDeals(next);
+    const total = round2(advanceableDeals.filter((d) => next.has(d.id)).reduce((s, d) => s + d.amount, 0));
+    setAmount(total > 0 ? String(total) : "");
+  }
+
   function toggle(id: string) {
     const next = new Set(checked);
     if (next.has(id)) next.delete(id);
@@ -224,6 +245,7 @@ export function ArtistAccountCard({
 
   function save() {
     if (!form) return;
+    setError(null);
     const n = parseFloat(amount.replace(/\s/g, "").replace(",", ".")) || 0;
     const settling = form === "PAYMENT" && checked.size > 0;
     const pick = (k: AdvanceKind) =>
@@ -267,6 +289,7 @@ export function ArtistAccountCard({
             date: new Date(`${date}T12:00:00Z`),
             note: note || null,
             advances: form === "RECEIVED" ? undefined : advances,
+            cashDeals: kind === "CASH_ADVANCE" ? [...checkedDeals] : [],
           });
       if (!res.ok) setError(res.error);
       else setForm(null);
@@ -368,6 +391,9 @@ export function ArtistAccountCard({
                   {m.kind === "PAYMENT" && m.advanceAmount > 0 && (
                     <span className="text-muted-foreground"> (dont frais / avances rendus {fmt(m.advanceAmount)})</span>
                   )}
+                  {m.dealLabels && m.dealLabels.length > 0 && (
+                    <span className="text-muted-foreground"> · depuis {m.dealLabels.join(", ")}</span>
+                  )}
                   {m.note && <span className="text-muted-foreground"> — {m.note}</span>}
                 </span>
                 {m.kind === "CASH_ADVANCE" && cashItem.get(m.id) && (
@@ -439,6 +465,33 @@ export function ArtistAccountCard({
                     </button>
                   ))}
                 </div>
+                {received === "CASH_ADVANCE" && advanceableDeals.length > 0 && (
+                  <div className="space-y-1 pt-1">
+                    <div className="text-[11px] text-muted-foreground">
+                      Avance depuis des deals pas encore payés à l&apos;artiste (optionnel) — sa part sur
+                      ces deals sert d&apos;avance ; leur statut ne change pas.
+                    </div>
+                    <div className="rounded-md border bg-card divide-y">
+                      {advanceableDeals.map((d) => (
+                        <label
+                          key={d.id}
+                          className="flex items-center gap-2 px-2 py-1 text-xs cursor-pointer hover:bg-accent/30"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checkedDeals.has(d.id)}
+                            onChange={() => toggleDeal(d.id)}
+                            className="h-3.5 w-3.5 accent-violet-600"
+                          />
+                          <span className="flex-1 min-w-0 truncate">{d.label}</span>
+                          <span className="tabular-nums font-medium w-24 text-right">
+                            <SensitiveAmount value={d.amount} />
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <span className="text-xs font-semibold">

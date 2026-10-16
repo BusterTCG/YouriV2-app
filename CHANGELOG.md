@@ -6,6 +6,21 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 
 ---
 
+## [Production — avance de trésorerie depuis des cachets non payés · statut « Validé »] — 2026-10-16
+
+### Added
+- Compte artiste → « Versement de l'artiste » → **Avance de trésorerie** (idem KN) : on peut cocher des cachets de l'artiste pas encore payés (Booking / Cachets). Montant pré-rempli = cachets cochés (modifiable). Le statut du cachet ne change pas. Migration `deal_artiste_cash_advance` (`DealArtiste.cashAdvanceId`).
+- Mouvement : « · depuis <deals> » ; fiches Booking / Cachets : badge « Avance tréso · <production> » sur la ligne artiste pour ne pas le payer deux fois. Supprimer l'avance libère les cachets.
+- KPI « À reverser » : un cachet utilisé en avance n'est compté qu'une fois (via le compte artiste).
+
+### Changed
+- Statut paiement **« Validé »** en violet (le teal se confondait avec le vert « Payé »).
+
+### Fixed
+- Compte artiste : l'ancien message d'erreur ne reste plus affiché après un enregistrement réussi.
+
+---
+
 ## [Dashboard — « À reverser », anneau de marge, projection] — 2026-10-16
 
 ### Added

@@ -55,6 +55,7 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
         where: { deletedAt: null },
         include: {
           artist: { select: { id: true, name: true, slug: true, color: true } },
+          cashAdvance: { select: { date: true, production: { select: { id: true, name: true } } } },
         },
       },
       dealCharges: {
@@ -85,6 +86,13 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
     paidAt: da.paidAt,
     notes: da.notes,
     artist: da.artist,
+    cashAdvance: da.cashAdvance
+      ? {
+          productionId: da.cashAdvance.production.id,
+          productionName: da.cashAdvance.production.name,
+          date: da.cashAdvance.date,
+        }
+      : null,
   }));
   const charges: BookingDealChargeRow[] = deal.dealCharges.map((c) => ({
     id: c.id,

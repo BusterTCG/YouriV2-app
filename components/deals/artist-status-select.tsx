@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
  * Select statut artiste — 4 valeurs (Stan 2026-05-26) :
  *   ⏳ En cours · 👍 Validé · 📄 Attente Facture · ✅ Payé
  *
- * Couleur du trigger selon la valeur (amber/teal/blue/emerald).
+ * Couleur du trigger selon la valeur (amber/purple/blue/emerald).
  * Save instantané via `updateDealArtiste`.
  */
 interface Props {

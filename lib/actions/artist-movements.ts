@@ -126,7 +126,33 @@ const Schema = z.object({
   date: z.coerce.date(),
   note: z.string().max(300).nullable().optional(),
   advances: AdvancesSchema,
+  /** Avance de trésorerie : cachets non payés (DealArtiste) qui la constituent. */
+  cashDeals: z.array(z.string().min(1)).default([]),
 });
+
+/**
+ * Cachets cochés pour une avance de trésorerie (Stan 2026-10-16, idem KN) :
+ * cachets de l'artiste de la production, hors productions, pas encore payés
+ * ni déjà utilisés → total des cachets.
+ */
+async function cashDealsTotal(productionId: string, ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  const prod = await prisma.production.findUnique({ where: { id: productionId }, select: { artistId: true } });
+  if (!prod) throw new Error("Production introuvable");
+  const rows = await prisma.dealArtiste.findMany({
+    where: {
+      id: { in: ids },
+      artistId: prod.artistId,
+      deletedAt: null,
+      paymentStatus: { not: "PAID" },
+      cashAdvanceId: null,
+      deal: { deletedAt: null, status: { not: "ANNULE" }, category: { not: "PROD_EXE" } },
+    },
+    select: { cachetAmount: true },
+  });
+  if (rows.length !== ids.length) throw new Error("Deal introuvable, déjà payé ou déjà utilisé en avance");
+  return round2(rows.reduce((s, r) => s + Number(r.cachetAmount ?? 0), 0));
+}
 
 export async function addArtistMovement(input: unknown): Promise<ActionResult> {
   const parsed = Schema.safeParse(input);
@@ -136,9 +162,17 @@ export async function addArtistMovement(input: unknown): Promise<ActionResult> {
     await requireUser();
     const adv = d.kind === "REFUND" || d.kind === "CASH_ADVANCE" ? undefined : d.advances;
     const advance = await advancesTotal(d.productionId, adv);
+    const cashDeals = d.kind === "CASH_ADVANCE" ? d.cashDeals : [];
+    const cashDealsSum = await cashDealsTotal(d.productionId, cashDeals);
     // Remboursement de frais / avances : au plus le total coché (l'excédent sur
-    // un déficit d'exploitation) ; sans montant = total coché.
-    const amount = d.kind === "EXPENSES" && d.amount <= 0 ? advance : d.amount;
+    // un déficit d'exploitation) ; sans montant = total coché. Avance depuis
+    // des cachets : sans montant = total des cachets cochés.
+    const amount =
+      d.kind === "EXPENSES" && d.amount <= 0
+        ? advance
+        : d.kind === "CASH_ADVANCE" && d.amount <= 0
+          ? cashDealsSum
+          : d.amount;
     if (d.kind === "EXPENSES" && advance <= 0) throw new Error("Coche au moins un frais ou une avance");
     if (d.kind === "EXPENSES" && amount > advance + 0.005) {
       throw new Error("Montant supérieur aux frais / avances cochés");
@@ -156,13 +190,16 @@ export async function addArtistMovement(input: unknown): Promise<ActionResult> {
       },
     });
     await linkAdvances(m.id, d.date, adv);
+    if (cashDeals.length) {
+      await prisma.dealArtiste.updateMany({ where: { id: { in: cashDeals } }, data: { cashAdvanceId: m.id } });
+    }
     await logAudit({
       entity: "ArtistMovement",
       entityId: m.id,
       action: "create",
       summary: `${MOVEMENT_LABEL[d.kind]} ${amount} €${
         d.kind === "PAYMENT" && advance > 0 ? ` (dont frais avancés ${advance} €)` : ""
-      }`,
+      }${cashDeals.length ? ` (depuis ${cashDeals.length} cachet${cashDeals.length > 1 ? "s" : ""} non payé${cashDeals.length > 1 ? "s" : ""})` : ""}`,
     });
     await after(d.productionId);
   });
@@ -191,6 +228,8 @@ export async function deleteArtistMovement(id: string): Promise<ActionResult> {
       where: { artistRefundId: id },
       data: { artistRefundId: null, status: "TO_INVOICE", paidAt: null },
     });
+    // Avance depuis des cachets : ils redeviennent libres (statut inchangé).
+    await prisma.dealArtiste.updateMany({ where: { cashAdvanceId: id }, data: { cashAdvanceId: null } });
     await prisma.artistMovement.delete({ where: { id } });
     if (reopened.count > 0) await recomputeProductionFinancials(before.productionId);
     await logAudit({

@@ -49,6 +49,7 @@ export default async function CachetDetailPage({ params }: PageProps) {
         where: { deletedAt: null },
         include: {
           artist: { select: { id: true, name: true, slug: true, color: true } },
+          cashAdvance: { select: { date: true, production: { select: { id: true, name: true } } } },
         },
       },
       cachetPrestations: {
@@ -75,6 +76,13 @@ export default async function CachetDetailPage({ params }: PageProps) {
     paidAt: da.paidAt,
     notes: da.notes,
     artist: da.artist,
+    cashAdvance: da.cashAdvance
+      ? {
+          productionId: da.cashAdvance.production.id,
+          productionName: da.cashAdvance.production.name,
+          date: da.cashAdvance.date,
+        }
+      : null,
   }));
 
   // Projection prestations

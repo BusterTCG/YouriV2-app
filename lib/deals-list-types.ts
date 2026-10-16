@@ -46,6 +46,9 @@ export type BookingDealArtistRow = {
   paidAt: Date | null;
   notes: string | null;
   artist: { id: string; name: string; slug: string; color: string | null };
+  /** Cachet utilisé comme avance de trésorerie sur une production (Stan
+   *  2026-10-16) — renseigné sur les fiches deal. */
+  cashAdvance?: { productionId: string; productionName: string; date: Date } | null;
 };
 
 /** Ligne projetée DealCharge (charges diverses). */

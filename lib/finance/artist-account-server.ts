@@ -36,9 +36,38 @@ export type ArtistAccountView = ArtistAccount & {
     advanceAmount: number;
     date: Date;
     note: string | null;
+    /** Avance de trésorerie : deals dont le cachet la constitue. */
+    dealLabels: string[];
   }>;
   advanceItems: ArtistAdvanceItem[];
 };
+
+/** Cachet de l'artiste pas encore payé, utilisable comme avance de trésorerie
+ *  (id = DealArtiste). */
+export type AdvanceableDeal = { id: string; label: string; amount: number };
+
+const dealLabel = (d: { title: string; date: Date }) => `${d.title} · ${format(d.date, "dd/MM/yyyy")}`;
+
+/**
+ * Cachets de l'artiste (hors productions) que Pangee n'a pas encore payés —
+ * proposés comme avance de trésorerie de l'artiste sur sa production (Stan
+ * 2026-10-16, idem KN). Exclus : cachets déjà utilisés dans une avance.
+ */
+export async function getAdvanceableDeals(artistId: string): Promise<AdvanceableDeal[]> {
+  const rows = await prisma.dealArtiste.findMany({
+    where: {
+      artistId,
+      deletedAt: null,
+      paymentStatus: { not: "PAID" },
+      cachetAmount: { gt: 0 },
+      cashAdvanceId: null,
+      deal: { deletedAt: null, status: { not: "ANNULE" }, category: { not: "PROD_EXE" } },
+    },
+    select: { id: true, cachetAmount: true, deal: { select: { title: true, date: true } } },
+    orderBy: { deal: { date: "asc" } },
+  });
+  return rows.map((r) => ({ id: r.id, label: dealLabel(r.deal), amount: Number(r.cachetAmount) }));
+}
 
 /** Frais avancés par l'artiste sur la production (Stan 2026-10-12). */
 async function advanceItemsOf(productionId: string): Promise<ArtistAdvanceItem[]> {
@@ -128,7 +157,16 @@ export async function getArtistAccount(
 ): Promise<ArtistAccountView> {
   const [deals, movements, advanceItems] = await Promise.all([
     accountDeals(productionId, nowMs),
-    prisma.artistMovement.findMany({ where: { productionId }, orderBy: { date: "asc" } }),
+    prisma.artistMovement.findMany({
+      where: { productionId },
+      orderBy: { date: "asc" },
+      include: {
+        advanceDealArtistes: {
+          select: { deal: { select: { title: true, date: true } } },
+          orderBy: { deal: { date: "asc" } },
+        },
+      },
+    }),
     advanceItemsOf(productionId),
   ]);
   const account = computeArtistAccount(
@@ -160,6 +198,7 @@ export async function getArtistAccount(
       advanceAmount: m.kind === "EXPENSES" ? Number(m.amount) : Number(m.advanceAmount),
       date: m.date,
       note: m.note,
+      dealLabels: m.advanceDealArtistes.map((a) => dealLabel(a.deal)),
     })),
     advanceItems: [...cashItems, ...advanceItems],
   };

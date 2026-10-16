@@ -10,6 +10,7 @@ import { MonthPickerField } from "./month-picker-field";
 import { DealSectionHeader } from "./deal-section-header";
 import { SectionStatusBadge } from "./section-status-badge";
 import { PaidPill } from "./paid-pill";
+import { CashAdvanceBadge } from "./cash-advance-badge";
 import { updateDealArtiste } from "@/lib/actions/deals";
 import { DEFAULT_EMPLOYEE_CHARGES_RATE } from "@/lib/finance/cachet-payroll";
 import type { BookingDealArtistRow } from "@/lib/deals-list-types";
@@ -120,6 +121,7 @@ export function CachetArtisteSection({ artiste }: Props) {
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
               Intermittent · GUSO
             </div>
+            <CashAdvanceBadge cashAdvance={artiste.cashAdvance} />
           </div>
         </div>
 
