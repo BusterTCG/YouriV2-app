@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import type { DealCategory, PaymentStatus, Prisma } from "@prisma/client";
 import { getArtistAccount } from "@/lib/finance/artist-account-server";
 import { heldOnDeal, owedTotal, receivedRatio } from "@/lib/finance/money-held";
+import { PANGEE_TEAM, getAssigneeName } from "@/lib/pangee-team";
 
 export type MoneyHeldItem = {
   id: string;
@@ -26,7 +27,9 @@ export type MoneyHeld = {
   charges: number;
   /** Dû aux associés (management fees non payées). */
   fees: number;
-  /** Détail : 1 ligne par deal / production, plus gros montant d'abord. */
+  /** Détail : 1 ligne par deal / production (artistes + charges, plus gros
+   *  montant d'abord), puis 1 ligne « MF <associé> » par personne (Stan
+   *  2026-10-16 : MF regroupées plutôt qu'éparpillées dans les deals). */
   items: MoneyHeldItem[];
 };
 
@@ -95,7 +98,7 @@ export async function getMoneyHeld(opts: {
           select: { cachetAmount: true, paymentStatus: true },
         },
         dealCharges: { where: live, select: { amount: true, paymentStatus: true } },
-        managementFees: { where: live, select: { amount: true, paymentStatus: true } },
+        managementFees: { where: live, select: { amount: true, paymentStatus: true, associateKey: true } },
       },
     }),
     category === "all" || category === "PROD_EXE"
@@ -127,6 +130,8 @@ export async function getMoneyHeld(opts: {
   let charges = 0;
   let fees = 0;
   const items: MoneyHeldItem[] = [];
+  /** MF dues par associé : montant + nombre de deals. */
+  const feesByKey = new Map<string, { amount: number; deals: number }>();
 
   for (const d of deals) {
     let expected: number;
@@ -157,17 +162,21 @@ export async function getMoneyHeld(opts: {
     }
 
     const held = heldOnDeal({ expected, received, artists: artistLines, charges: chargeLines, fees: owed(d.managementFees) });
-    const amount = round2(held.artists + held.charges + held.fees);
-    if (amount <= 0) continue;
+    const ratio = receivedRatio(expected, received);
     artists += held.artists;
     charges += held.charges;
     fees += held.fees;
-    const parts = [
-      held.artists > 0 ? "artistes" : null,
-      held.charges > 0 ? "charges" : null,
-      held.fees > 0 ? "management fees" : null,
-    ].filter(Boolean);
-    const ratio = receivedRatio(expected, received);
+    // MF : regroupées par associé (lignes « MF <prénom> » en fin de liste).
+    const keys = new Set(d.managementFees.map((f) => f.associateKey));
+    for (const key of keys) {
+      const due = round2(owedTotal(owed(d.managementFees.filter((f) => f.associateKey === key))) * ratio);
+      if (due <= 0) continue;
+      const acc = feesByKey.get(key) ?? { amount: 0, deals: 0 };
+      feesByKey.set(key, { amount: acc.amount + due, deals: acc.deals + 1 });
+    }
+    const amount = round2(held.artists + held.charges);
+    if (amount <= 0) continue;
+    const parts = [held.artists > 0 ? "artistes" : null, held.charges > 0 ? "charges" : null].filter(Boolean);
     items.push({
       id: d.id,
       title: d.title,
@@ -208,6 +217,18 @@ export async function getMoneyHeld(opts: {
   });
 
   items.sort((a, b) => b.amount - a.amount);
+  // MF par associé, dans l'ordre de l'équipe (inconnus à la fin).
+  const order = PANGEE_TEAM.map((m) => m.key);
+  const rank = (k: string) => (order.includes(k) ? order.indexOf(k) : order.length);
+  for (const [key, f] of [...feesByKey].sort(([a], [b]) => rank(a) - rank(b))) {
+    items.push({
+      id: `mf-${key}`,
+      title: `MF ${getAssigneeName(key)}`,
+      subtitle: `management fees · ${f.deals} deal${f.deals > 1 ? "s" : ""}`,
+      href: `/deals/management-fees?associate=${encodeURIComponent(key)}&status=pending`,
+      amount: round2(f.amount),
+    });
+  }
   artists = round2(artists);
   charges = round2(charges);
   fees = round2(fees);

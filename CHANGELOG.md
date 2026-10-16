@@ -14,6 +14,7 @@ Historique des modifications de Youri V2. Format inspiré de [Keep a Changelog](
 - KPI « À reverser » : un cachet utilisé en avance n'est compté qu'une fois (via le compte artiste).
 
 ### Changed
+- KPI « À reverser » : le détail liste les deals (artistes + charges), puis les management fees **regroupées par personne** (« MF Angath », « MF Certe »…, lien vers la page Management fees filtrée).
 - Statut paiement **« Validé »** en violet (le teal se confondait avec le vert « Payé »).
 
 ### Fixed
