@@ -19,6 +19,18 @@
         "backups/recette-source.db"
       ],
       "port": 3001
+    },
+    {
+      "name": "kuroneko-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "../KuroNeko-App"
+      ],
+      "port": 3000,
+      "autoPort": false
     }
   ]
 }

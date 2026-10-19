@@ -14,15 +14,22 @@ import { softDeleteDeal } from "@/lib/actions/deals";
  */
 interface Props {
   deal: DealFormDeal;
+  /** Profil Production sur un Booking (Stan 2026-10-19) : « Modifier » seul,
+   *  sans changer le statut ni supprimer. */
+  restricted?: boolean;
 }
 
-export function DealActions({ deal }: Props) {
+export function DealActions({ deal, restricted = false }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [pendingDelete, startDeleteTransition] = useTransition();
 
   function handleDelete() {
-    if (!confirm(`Supprimer le deal "${deal.title}" ? Tous les artistes et charges seront aussi supprimés (corbeille).`)) {
+    if (
+      !confirm(
+        `Supprimer le deal "${deal.title}" ? Tous les artistes et charges seront aussi supprimés (corbeille).`,
+      )
+    ) {
       return;
     }
     startDeleteTransition(async () => {
@@ -54,22 +61,29 @@ export function DealActions({ deal }: Props) {
         <Pencil className="mr-1.5 h-3.5 w-3.5" />
         Modifier
       </Button>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={handleDelete}
-        disabled={pendingDelete}
-        className="text-destructive hover:text-destructive"
-      >
-        {pendingDelete ? (
-          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-        )}
-        Supprimer
-      </Button>
-      <DealFormDialog open={editing} onOpenChange={setEditing} deal={deal} />
+      {!restricted && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleDelete}
+          disabled={pendingDelete}
+          className="text-destructive hover:text-destructive"
+        >
+          {pendingDelete ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+          )}
+          Supprimer
+        </Button>
+      )}
+      <DealFormDialog
+        open={editing}
+        onOpenChange={setEditing}
+        deal={deal}
+        statusLocked={restricted}
+      />
     </>
   );
 }

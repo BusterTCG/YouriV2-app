@@ -1,17 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
-import {
-  ArrowLeft,
-  Calendar,
-  Clock,
-  MapPin,
-  FileText,
-} from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { Button } from "@/components/ui/button";
-import { formatShowTime } from "@/components/deals/deal-helpers";
 import { DealBudgetSection } from "@/components/deals/deal-budget-section";
 import { DealPipelineBar } from "@/components/tasks/deal-pipeline-bar";
 import { getTasksForDeal } from "@/lib/queries/tasks";
@@ -41,7 +32,7 @@ interface PageProps {
  *
  * Layout :
  *   1. Back link + eyebrow ("BOOKING · {organisateur}")
- *   2. Titre + meta inline (date / heure / lieu / statut)
+ *   2. Titre + étapes, puis carte d'infos générales (Stan 2026-10-19)
  *   3. Boutons "Ouvrir la FDR" (placeholder Phase 3.7) + "Modifier" (placeholder)
  *   4. Section Budget (vert recettes)
  *   5. Section Artistes (rouge charges)
@@ -81,6 +72,40 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
   // la marge ; FDR, artistes (sans %, Stan 2026-10-19) et charges en accès
   // complet.
   const user = await requireUser();
+
+  // Formulaire « Modifier » (infos générales) et carte d'infos : communs à
+  // tous les comptes (Stan 2026-10-19).
+  const formDeal = {
+    id: deal.id,
+    title: deal.title,
+    date: deal.date,
+    showTime: deal.showTime,
+    organizerId: deal.organizerId,
+    organizerName: deal.organizerName,
+    organizerCompany: deal.organizerCompany,
+    organizerCity: deal.organizerCity,
+    venueId: deal.venueId,
+    venueName: deal.venueName,
+    venueCity: deal.venueCity,
+    venueAddress: deal.venueAddress,
+    endTime: deal.endTime,
+    brand: deal.brand,
+    notes: deal.notes,
+    category: deal.category,
+    status: deal.status,
+  };
+  const info = {
+    status: deal.status,
+    date: deal.date,
+    showTime: deal.showTime,
+    endTime: deal.endTime,
+    venue: [deal.venueName, deal.venueCity].filter(Boolean).join(" · ") || null,
+    organizer: [deal.organizerName, deal.organizerCompany].filter(Boolean).join(" · ") || null,
+    brand: deal.brand,
+    address: deal.venueAddress,
+    notes: deal.notes,
+  };
+
   if (isRestrictedRole(user.role)) {
     const myFees = deal.managementFees.filter((mf) => mf.associateKey === user.pangeeKey);
     return (
@@ -107,19 +132,12 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
                 Ouvrir la FDR
               </Link>
             </Button>
+            <DealActions deal={formDeal} restricted />
           </div>
         </div>
         <BookingReadonlyCard
           deal={{
-            status: deal.status,
-            date: deal.date,
-            showTime: deal.showTime,
-            endTime: deal.endTime,
-            venue: [deal.venueName, deal.venueCity].filter(Boolean).join(" · ") || null,
-            organizer:
-              [deal.organizerName, deal.organizerCompany].filter(Boolean).join(" · ") || null,
-            brand: deal.brand,
-            address: deal.venueAddress,
+            ...info,
             marginPaid: deal.budgetPaymentStatus === "PAID",
             mf:
               myFees.length > 0
@@ -128,7 +146,6 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
                     paid: myFees.every((mf) => mf.paymentStatus === "PAID"),
                   }
                 : null,
-            notes: deal.notes,
           }}
         />
         {/* Pas de budget ni de % transmis au navigateur : ils donneraient le CA. */}
@@ -263,26 +280,8 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
         {/* Titre */}
         <h1 className="text-3xl font-bold tracking-tight">{deal.title}</h1>
 
-        {/* Meta inline : date / heure / lieu / statut */}
+        {/* Étapes du deal (date, lieu, statut : carte d'infos ci-dessous) */}
         <div className="flex items-center gap-3 flex-wrap text-sm text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">
-            <Calendar className="h-3.5 w-3.5" />
-            {format(deal.date, "EEEE d MMMM yyyy", { locale: fr })}
-          </span>
-          {deal.showTime && (
-            <span className="inline-flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5" />
-              {formatShowTime(deal.showTime)}
-            </span>
-          )}
-          {deal.venueCity && (
-            <span className="inline-flex items-center gap-1.5">
-              <MapPin className="h-3.5 w-3.5" />
-              {deal.venueName ? `${deal.venueName} · ` : ""}
-              {deal.venueCity}
-            </span>
-          )}
-          <DealStatusInline dealId={deal.id} value={deal.status} />
           <DealPipelineBar dealId={deal.id} tasks={tasks} />
         </div>
 
@@ -294,29 +293,14 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
               Ouvrir la FDR
             </Link>
           </Button>
-          <DealActions
-            deal={{
-              id: deal.id,
-              title: deal.title,
-              date: deal.date,
-              showTime: deal.showTime,
-              organizerId: deal.organizerId,
-              organizerName: deal.organizerName,
-              organizerCompany: deal.organizerCompany,
-              organizerCity: deal.organizerCity,
-              venueId: deal.venueId,
-              venueName: deal.venueName,
-              venueCity: deal.venueCity,
-              venueAddress: deal.venueAddress,
-              endTime: deal.endTime,
-              brand: deal.brand,
-              notes: deal.notes,
-              category: deal.category,
-              status: deal.status,
-            }}
-          />
+          <DealActions deal={formDeal} />
         </div>
       </div>
+
+      <BookingReadonlyCard
+        statusSlot={<DealStatusInline dealId={deal.id} value={deal.status} />}
+        deal={info}
+      />
 
       {/* Section CA (ex-Budget) — inclut l'échéancier de paiement intégré
           (Stan 2026-06-13). Quand des tranches existent, elles pilotent
@@ -357,15 +341,6 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
         allChargesPaid={allChargesPaid}
       />
 
-      {/* Notes deal globales */}
-      {deal.notes && (
-        <div className="rounded-md border bg-muted/20 px-4 py-3">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">
-            Notes
-          </div>
-          <p className="text-sm whitespace-pre-wrap">{deal.notes}</p>
-        </div>
-      )}
     </div>
   );
 }

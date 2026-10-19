@@ -117,6 +117,9 @@ interface Props {
     artistName?: string | null;
     showName?: string | null;
   };
+  /** Profil Production sur un Booking (Stan 2026-10-19) : infos générales
+   *  modifiables, statut du deal non. */
+  statusLocked?: boolean;
 }
 
 const CATEGORY_LABEL: Record<DealCategory, string> = {
@@ -136,6 +139,7 @@ export function DealFormDialog({
   deal,
   category = DealCategory.BOOKING,
   defaults,
+  statusLocked = false,
 }: Props) {
   const router = useRouter();
   const isEdit = !!deal;
@@ -514,6 +518,7 @@ export function DealFormDialog({
                 setTitle={setTitle}
                 status={status}
                 setStatus={setStatus}
+                statusLocked={statusLocked}
                 pending={pending}
                 isProdExe={isProdExe}
               />
@@ -773,6 +778,7 @@ export function DealFormDialog({
                 setTitle={setTitle}
                 status={status}
                 setStatus={setStatus}
+                statusLocked={statusLocked}
                 pending={pending}
                 isProdExe={isProdExe}
               />
@@ -1093,6 +1099,7 @@ function IdentitySection({
   setTitle,
   status,
   setStatus,
+  statusLocked,
   pending,
   isProdExe,
 }: {
@@ -1100,6 +1107,7 @@ function IdentitySection({
   setTitle: (s: string) => void;
   status: DealStatus;
   setStatus: (s: DealStatus) => void;
+  statusLocked: boolean;
   pending: boolean;
   isProdExe: boolean;
 }) {
@@ -1125,7 +1133,7 @@ function IdentitySection({
           <Select
             value={status}
             onValueChange={(v) => setStatus(v as DealStatus)}
-            disabled={pending}
+            disabled={pending || statusLocked}
           >
             <SelectTrigger className="h-9 text-sm">
               <SelectValue />

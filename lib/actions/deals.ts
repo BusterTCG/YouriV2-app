@@ -241,7 +241,9 @@ export async function updateDealMeta(
   return safeAction("updateDealMeta", async () => {
     await requireUser();
     const { id, ...patch } = UpdateDealMetaSchema.parse(input);
-    await requireDealAccess(id);
+    // Profil Production : aussi les infos générales d'un Booking (Stan
+    // 2026-10-19) — pas le statut, ni la suppression, ni le CA.
+    await requireDealReadAccess(id);
     // Si on update venueAddress sans venueId et sans venueCity explicite,
     // extraire la ville depuis l'adresse (cohérence avec createDeal).
     if (

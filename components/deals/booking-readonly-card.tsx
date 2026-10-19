@@ -6,14 +6,18 @@ import { cn } from "@/lib/utils";
 import { dealStatusLabel, formatEur, formatShowTime } from "./deal-helpers";
 
 /**
- * Fiche d'un deal Booking pour le profil Production (Nour, Stan 2026-10-16) :
- * les infos du deal en lecture seule, sans le financier — statuts seulement,
- * et le montant de SES management fees. Les artistes ont leur propre bloc,
- * modifiable (Stan 2026-10-19).
+ * Infos générales d'un deal Booking, pour TOUS les comptes (Stan 2026-10-19 :
+ * « plus complet », d'abord fait pour Nour le 2026-10-16). Modification via
+ * le bouton « Modifier ». Profil Production : sans le financier — statut de
+ * la marge seulement, et le montant de SES management fees. Les artistes ont
+ * leur propre bloc.
  */
 export function BookingReadonlyCard({
+  statusSlot,
   deal,
 }: {
+  /** Statut modifiable sur place (associés) ; texte seul sinon. */
+  statusSlot?: ReactNode;
   deal: {
     status: DealStatus;
     date: Date;
@@ -23,8 +27,9 @@ export function BookingReadonlyCard({
     organizer: string | null;
     brand: string | null;
     address: string | null;
-    marginPaid: boolean;
-    mf: { amount: number; paid: boolean } | null;
+    /** Absent pour les associés : la marge a sa propre section. */
+    marginPaid?: boolean;
+    mf?: { amount: number; paid: boolean } | null;
     notes: string | null;
   };
 }) {
@@ -34,7 +39,11 @@ export function BookingReadonlyCard({
   return (
     <div className="rounded-md border bg-card p-4 space-y-2.5 text-sm">
       <Row label="Statut">
-        {s.emoji} {s.label}
+        {statusSlot ?? (
+          <>
+            {s.emoji} {s.label}
+          </>
+        )}
       </Row>
       <Row label="Date">
         <span className="capitalize">{format(deal.date, "EEEE d MMMM yyyy", { locale: fr })}</span>
@@ -44,9 +53,11 @@ export function BookingReadonlyCard({
       <Row label="Organisateur">{deal.organizer}</Row>
       <Row label="Marque / Client">{deal.brand}</Row>
       <Row label="Lieu">{deal.address}</Row>
-      <Row label="Marge">
-        <Pill paid={deal.marginPaid} />
-      </Row>
+      {deal.marginPaid !== undefined && (
+        <Row label="Marge">
+          <Pill paid={deal.marginPaid} />
+        </Row>
+      )}
       {deal.mf && (
         <Row label="Tes mgmt fees">
           <Pill paid={deal.mf.paid} paidLabel="Payé">

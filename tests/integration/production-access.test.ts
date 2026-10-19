@@ -132,12 +132,24 @@ describe("profil « Production » (Nour) — gardes serveur", () => {
 
     denied(await A.setDealStatus({ dealId: booking, status: "CONFIRME" }));
     ok(await A.setDealStatus({ dealId: prod, status: "EN_COURS" }));
-    denied(await A.updateDealMeta({ id: booking, title: "Piraté" }));
     denied(await A.softDeleteDeal(booking));
     expect(await ACC.canAccessDeal(booking)).toBe(false);
     expect(await ACC.canAccessDeal(prod)).toBe(true);
     expect(await ACC.canReadDeal(booking)).toBe(true);
     expect((await prisma.deal.findUnique({ where: { id: booking } })).title).toBe("Booking");
+  });
+
+  it("Booking : infos générales modifiables, pas le statut (Stan 2026-10-19)", async () => {
+    current = NOUR;
+    ok(await A.updateDealMeta({ id: booking, brand: "Marque X", notes: "Loges à 18h" }));
+    expect(await prisma.deal.findUnique({ where: { id: booking } })).toMatchObject({
+      title: "Booking",
+      brand: "Marque X",
+      notes: "Loges à 18h",
+    });
+    denied(await A.setDealStatus({ dealId: booking, status: "ANNULE" }));
+    const cachets = (await prisma.deal.findFirst({ where: { category: "CACHETS" } }))?.id;
+    if (cachets) denied(await A.updateDealMeta({ id: cachets, title: "Non" }));
   });
 
   it("Booking : charges diverses modifiables (Stan 2026-10-16)", async () => {
