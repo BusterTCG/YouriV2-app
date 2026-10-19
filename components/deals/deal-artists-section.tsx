@@ -32,9 +32,14 @@ interface Props {
   dealId: string;
   budgetAmount: number | null;
   artistes: BookingDealArtistRow[];
+  /**
+   * Profil Production (Nour, Stan 2026-10-19) : pas de colonne % — rapporté
+   * au cachet, il donnerait le CA. La page ne passe alors ni budget ni %.
+   */
+  hidePct?: boolean;
 }
 
-export function DealArtistsSection({ dealId, budgetAmount, artistes }: Props) {
+export function DealArtistsSection({ dealId, budgetAmount, artistes, hidePct = false }: Props) {
   // Tri alphabétique français (case + accents insensibles) sur le nom affiché,
   // cohérent avec listPangeeArtists (Stan 2026-06-17). L'ordre d'insertion en
   // BDD n'a pas de sens fonctionnel.
@@ -74,7 +79,7 @@ export function DealArtistsSection({ dealId, budgetAmount, artistes }: Props) {
           </div>
         ) : (
           sortedArtistes.map((a) => (
-            <ArtistRow key={a.id} row={a} budgetAmount={budgetAmount} />
+            <ArtistRow key={a.id} row={a} budgetAmount={budgetAmount} hidePct={hidePct} />
           ))
         )}
         <div className="px-3 py-2 flex justify-end bg-muted/20">
@@ -88,9 +93,11 @@ export function DealArtistsSection({ dealId, budgetAmount, artistes }: Props) {
 function ArtistRow({
   row,
   budgetAmount,
+  hidePct,
 }: {
   row: BookingDealArtistRow;
   budgetAmount: number | null;
+  hidePct: boolean;
 }) {
   const [, startTransition] = useTransition();
   const [removing, startRemoveTransition] = useTransition();
@@ -200,9 +207,11 @@ function ArtistRow({
         </div>
 
         {/* Row 2 col 1 : % budget (dessous le montant sur mobile) */}
-        <div className="sm:w-16 sm:shrink-0">
-          <PctInput value={derivedPct} onCommit={commitPct} />
-        </div>
+        {!hidePct && (
+          <div className="sm:w-16 sm:shrink-0">
+            <PctInput value={derivedPct} onCommit={commitPct} />
+          </div>
+        )}
 
         {/* Row 2 col 2 mobile = spacer vide pour aligner % à gauche ; desktop = Statut */}
         <div className="hidden sm:block sm:w-36 sm:shrink-0">

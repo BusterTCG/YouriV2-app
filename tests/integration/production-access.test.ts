@@ -147,6 +147,27 @@ describe("profil « Production » (Nour) — gardes serveur", () => {
     ok(await A.removeDealCharge(charge.id));
   });
 
+  it("Booking : artistes modifiables, % recalculé côté serveur (Stan 2026-10-19)", async () => {
+    current = STAN;
+    ok(await A.updateDealBudget({ dealId: booking, amount: 10000 }));
+    const other = (await prisma.artist.create({ data: { name: "Ike", slug: "ike" } })).id;
+    current = NOUR;
+    const da = ok<{ id: string }>(await A.addDealArtist({ dealId: booking, artistId: other }));
+    // Un % envoyé par le client est ignoré : il suit le cachet.
+    ok(await A.updateDealArtiste({ id: da.id, cachetAmount: 500, sharePct: 99 }));
+    ok(await A.updateDealArtiste({ id: da.id, paymentStatus: "PAID", notes: "Train" }));
+    expect(await prisma.dealArtiste.findUnique({ where: { id: da.id } })).toMatchObject({
+      paymentStatus: "PAID",
+      notes: "Train",
+    });
+    const row = await prisma.dealArtiste.findUnique({ where: { id: da.id } });
+    expect(Number(row.cachetAmount)).toBe(500);
+    expect(Number(row.sharePct)).toBe(5);
+    ok(await A.removeDealArtist(da.id));
+    // Le CA reste réservé aux associés.
+    denied(await A.updateDealBudget({ dealId: booking, amount: 1 }));
+  });
+
   it("FDR : Production et Booking ; lignes de production, suivi : Production uniquement", async () => {
     current = NOUR;
     ok(await BR.ensureBriefingWithPrefill(booking));

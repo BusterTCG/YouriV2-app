@@ -9,6 +9,7 @@ import { requireUser } from "@/lib/auth/users";
 import {
   requireDealAccess,
   requireDealCategoryAccess,
+  isRestricted,
   requireDealReadAccess,
   requireFullAccess,
 } from "@/lib/auth/access";
@@ -445,6 +446,18 @@ export async function softDeleteDealAndRedirect(id: string): Promise<void> {
 
 // ───────── Add / Remove DealArtiste ─────────
 
+/**
+ * Bloc Artistes du profil Production (Nour, Stan 2026-10-19) : elle modifie
+ * les cachets sans voir le CA — ni le %, qui le trahirait. Son écran n'a donc
+ * pas le budget : le % est recalculé ici depuis le CA du deal.
+ */
+async function sharePctFromBudget(dealId: string, cachetAmount: number | null): Promise<number | null> {
+  if (cachetAmount == null) return null;
+  const deal = await prisma.deal.findUnique({ where: { id: dealId }, select: { budgetAmount: true } });
+  const budget = deal?.budgetAmount != null ? Number(deal.budgetAmount) : null;
+  return budget != null && budget > 0 ? Math.round((cachetAmount / budget) * 1000) / 10 : null;
+}
+
 const AddDealArtistSchema = z.object({
   dealId: z.string().min(1),
   artistId: z.string().min(1),
@@ -458,13 +471,15 @@ export async function addDealArtist(
   return safeAction("addDealArtist", async () => {
     await requireUser();
     const { dealId, artistId, cachetAmount, sharePct } = AddDealArtistSchema.parse(input);
-    await requireDealAccess(dealId);
+    const user = await requireDealReadAccess(dealId);
     const created = await prisma.dealArtiste.create({
       data: {
         dealId,
         artistId,
         cachetAmount: cachetAmount ?? null,
-        sharePct: sharePct ?? null,
+        sharePct: isRestricted(user)
+          ? await sharePctFromBudget(dealId, cachetAmount ?? null)
+          : (sharePct ?? null),
       },
       select: { id: true },
     });
@@ -485,7 +500,7 @@ export async function removeDealArtist(id: string): Promise<ActionResult> {
   return safeAction("removeDealArtist", async () => {
     await requireUser();
     const scoped = await prisma.dealArtiste.findUnique({ where: { id }, select: { dealId: true } });
-    if (scoped) await requireDealAccess(scoped.dealId);
+    if (scoped) await requireDealReadAccess(scoped.dealId);
     if (!id) throw new Error("ID DealArtiste manquant");
     const da = await prisma.dealArtiste.update({
       where: { id },
@@ -890,11 +905,18 @@ export async function updateDealArtiste(
     const { id, cachetAmount, sharePct, paymentStatus, isPaye, paidAt, notes } =
       UpdateDealArtisteSchema.parse(input);
     const scoped = await prisma.dealArtiste.findUnique({ where: { id }, select: { dealId: true } });
-    if (scoped) await requireDealAccess(scoped.dealId);
+    if (scoped) await requireDealReadAccess(scoped.dealId);
 
     const data: Prisma.DealArtisteUpdateInput = {};
     if (cachetAmount !== undefined) data.cachetAmount = cachetAmount;
-    if (sharePct !== undefined) data.sharePct = sharePct;
+    if (isRestricted(user)) {
+      // Profil Production : le % suit le cachet, il n'est jamais saisi.
+      if (cachetAmount !== undefined && scoped) {
+        data.sharePct = await sharePctFromBudget(scoped.dealId, cachetAmount);
+      }
+    } else if (sharePct !== undefined) {
+      data.sharePct = sharePct;
+    }
     // paymentStatus direct (4 valeurs Stan) — priorité sur le toggle legacy.
     if (paymentStatus !== undefined) {
       data.paymentStatus = paymentStatus;

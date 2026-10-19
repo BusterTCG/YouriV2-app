@@ -77,8 +77,9 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
   });
   if (!deal) notFound();
 
-  // Profil Production (Nour, Stan 2026-10-16) : infos du deal sans le
-  // financier, FDR et charges en accès complet.
+  // Profil Production (Nour, Stan 2026-10-16) : infos du deal sans le CA ni
+  // la marge ; FDR, artistes (sans %, Stan 2026-10-19) et charges en accès
+  // complet.
   const user = await requireUser();
   if (isRestrictedRole(user.role)) {
     const myFees = deal.managementFees.filter((mf) => mf.associateKey === user.pangeeKey);
@@ -114,11 +115,6 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
             date: deal.date,
             showTime: deal.showTime,
             endTime: deal.endTime,
-            artists: deal.dealArtistes.map((da) => ({
-              name: da.artist.name,
-              color: da.artist.color,
-              paid: da.paymentStatus === "PAID",
-            })),
             venue: [deal.venueName, deal.venueCity].filter(Boolean).join(" · ") || null,
             organizer:
               [deal.organizerName, deal.organizerCompany].filter(Boolean).join(" · ") || null,
@@ -134,6 +130,28 @@ export default async function DealBookingDetailPage({ params }: PageProps) {
                 : null,
             notes: deal.notes,
           }}
+        />
+        {/* Pas de budget ni de % transmis au navigateur : ils donneraient le CA. */}
+        <DealArtistsSection
+          dealId={deal.id}
+          budgetAmount={null}
+          hidePct
+          artistes={deal.dealArtistes.map((da) => ({
+            id: da.id,
+            amount: da.cachetAmount != null ? Number(da.cachetAmount) : null,
+            sharePct: null,
+            paymentStatus: da.paymentStatus,
+            paidAt: da.paidAt,
+            notes: da.notes,
+            artist: da.artist,
+            cashAdvance: da.cashAdvance
+              ? {
+                  productionId: da.cashAdvance.production.id,
+                  productionName: da.cashAdvance.production.name,
+                  date: da.cashAdvance.date,
+                }
+              : null,
+          }))}
         />
         <DealChargesSection
           dealId={deal.id}

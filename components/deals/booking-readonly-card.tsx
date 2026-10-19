@@ -8,7 +8,8 @@ import { dealStatusLabel, formatEur, formatShowTime } from "./deal-helpers";
 /**
  * Fiche d'un deal Booking pour le profil Production (Nour, Stan 2026-10-16) :
  * les infos du deal en lecture seule, sans le financier — statuts seulement,
- * et le montant de SES management fees.
+ * et le montant de SES management fees. Les artistes ont leur propre bloc,
+ * modifiable (Stan 2026-10-19).
  */
 export function BookingReadonlyCard({
   deal,
@@ -18,7 +19,6 @@ export function BookingReadonlyCard({
     date: Date;
     showTime: string | null;
     endTime: string | null;
-    artists: Array<{ name: string; color: string | null; paid: boolean }>;
     venue: string | null;
     organizer: string | null;
     brand: string | null;
@@ -39,19 +39,6 @@ export function BookingReadonlyCard({
       <Row label="Date">
         <span className="capitalize">{format(deal.date, "EEEE d MMMM yyyy", { locale: fr })}</span>
         {hours && <span className="text-muted-foreground"> · {hours}</span>}
-      </Row>
-      <Row label="Artistes">
-        {deal.artists.length > 0 && (
-          <span className="inline-flex flex-wrap gap-1.5">
-            {deal.artists.map((a, i) => (
-              <Pill key={i} paid={a.paid} paidLabel="Payé">
-                <span style={{ color: a.color ?? undefined }} className="font-medium">
-                  {a.name}
-                </span>
-              </Pill>
-            ))}
-          </span>
-        )}
       </Row>
       <Row label="Salle">{deal.venue}</Row>
       <Row label="Organisateur">{deal.organizer}</Row>
