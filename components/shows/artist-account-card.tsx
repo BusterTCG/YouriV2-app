@@ -297,6 +297,13 @@ export function ArtistAccountCard({
     });
   }
 
+  const netPaid = account.paid - account.refunded;
+  // Barre seulement quand les trois parts sont positives (sinon trop-versé ou
+  // déficit : l'encadré du solde explique).
+  const showBar =
+    account.acquired > 0 && netPaid >= 0 && account.quotePartBalance >= 0 && account.pendingCollection >= 0;
+  const pct = (n: number) => `${Math.max(0, (n / account.acquired) * 100)}%`;
+
   const showAdvances =
     form === "EXPENSES" || (form === "PAYMENT" && openAdvances.length > 0 && deficit === 0);
 
@@ -335,12 +342,24 @@ export function ArtistAccountCard({
       </div>
 
       <div className="px-4 py-3 space-y-3 text-sm">
-        {/* Chiffres */}
+        {/* Chiffres : du total gagné au reste à verser, seul chiffre mis en
+            avant (Stan 2026-10-24 : « Appelable » se lisait comme disponible). */}
         <div className={cn("grid grid-cols-2 gap-3", account.advances !== 0 ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
-          <Figure label="Part artiste" hint="dates jouées" value={account.acquired} />
-          <Figure label="Appelable" hint="billetterie encaissée" value={account.callable} strong />
-          <Figure label="En attente" hint="billetterie pas reçue" value={account.pendingCollection} muted />
-          <Figure label="Net versé" hint="quote-parts − déficit réglé" value={account.paid - account.refunded} muted />
+          <Figure label="Gagné" hint="sa part sur les dates jouées" value={account.acquired} />
+          <Figure
+            label="Encaissé"
+            hint={
+              Math.round(account.pendingCollection) > 0
+                ? `+ ${fmt(account.pendingCollection)} de billetterie attendue`
+                : "billetterie reçue ou date soldée"
+            }
+            value={account.callable}
+          />
+          <Figure
+            label="Déjà versé"
+            hint={account.refunded ? "quote-parts − déficit réglé" : "quote-parts versées"}
+            value={netPaid}
+          />
           {account.advances !== 0 && (
             <Figure
               label="Avances à rendre"
@@ -355,7 +374,44 @@ export function ArtistAccountCard({
               term
             />
           )}
+          <Figure
+            label={b < 0 && Math.round(b) !== 0 ? (account.upcoming > 0 ? "Déficit à date" : "Dû par l'artiste") : "Reste à verser"}
+            hint={
+              Math.round(b) === 0
+                ? "compte soldé"
+                : b > 0
+                  ? "à verser à l'artiste maintenant"
+                  : account.upcoming > 0
+                    ? "compensé par les prochaines dates"
+                    : "à régler par l'artiste"
+            }
+            value={Math.abs(b)}
+            strong
+            valueClassName={cn(
+              b > 0 && Math.round(b) !== 0 && "text-amber-700 dark:text-amber-400",
+              b < 0 && Math.round(b) !== 0 && "text-sky-700 dark:text-sky-400",
+            )}
+          />
         </div>
+
+        {/* Découpage du total gagné : versé / à verser / billetterie attendue. */}
+        {showBar && (
+          <div className="space-y-1">
+            <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+              <div className="bg-emerald-500/70" style={{ width: pct(netPaid) }} />
+              <div className="bg-amber-500" style={{ width: pct(account.quotePartBalance) }} />
+              <div className="bg-muted-foreground/25" style={{ width: pct(account.pendingCollection) }} />
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground">
+              <BarLegend dot="bg-emerald-500/70" label="Déjà versé" value={netPaid} />
+              <BarLegend dot="bg-amber-500" label={account.advancesDue ? "Quote-part à verser" : "Reste à verser"} value={account.quotePartBalance} />
+              <BarLegend dot="bg-muted-foreground/25" label="Billetterie attendue" value={account.pendingCollection} />
+              <span className="ml-auto">
+                Total gagné <SensitiveAmount value={account.acquired} />
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Frais avancés par l'artiste */}
         {expenseItems.length > 0 && (
@@ -633,10 +689,10 @@ export function ArtistAccountCard({
             </div>
           )}
           <div className="w-full text-[11px] text-muted-foreground">
-            Appelable {fmt(account.callable)} − versé {fmt(account.paid)}
+            Encaissé {fmt(account.callable)} − versé {fmt(account.paid)}
             {account.refunded ? ` + déficit réglé ${fmt(account.refunded)}` : ""}
-            {account.advancesDue ? ` + frais / avances de l'artiste ${fmt(account.advancesDue)}` : ""}. Sont
-            appelables les dates jouées dont la billetterie est encaissée, les dates soldées et les dates
+            {account.advancesDue ? ` + frais / avances de l'artiste ${fmt(account.advancesDue)}` : ""}. Comptent
+            comme encaissées les dates jouées dont la billetterie est reçue, les dates soldées et les dates
             jouées en déficit (perte acquise sans attendre la billetterie) ; une date en déficit se compense avec les dates positives. Frais avancés et avances de trésorerie
             comblent d&apos;abord un déficit ; le reste est rendu à l&apos;artiste.
           </div>
@@ -653,6 +709,7 @@ function Figure({
   strong,
   muted,
   term,
+  valueClassName,
 }: {
   label: string;
   hint: string;
@@ -661,6 +718,7 @@ function Figure({
   muted?: boolean;
   /** Bulle « ? » frais avancés. */
   term?: boolean;
+  valueClassName?: string;
 }) {
   return (
     <div>
@@ -668,11 +726,28 @@ function Figure({
         {label}
         {term && <GlossaryHint term="artistAdvance" />}
       </div>
-      <div className={cn("text-lg font-semibold", muted && "text-muted-foreground", strong && "text-foreground")}>
+      <div
+        className={cn(
+          "font-semibold",
+          strong ? "text-xl" : "text-lg",
+          muted && "text-muted-foreground",
+          strong && "text-foreground",
+          valueClassName,
+        )}
+      >
         <SensitiveAmount value={value} />
       </div>
       <div className="text-[11px] text-muted-foreground">{hint}</div>
     </div>
+  );
+}
+
+function BarLegend({ dot, label, value }: { dot: string; label: string; value: number }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={cn("h-2 w-2 rounded-full", dot)} />
+      {label} <SensitiveAmount value={value} />
+    </span>
   );
 }
 

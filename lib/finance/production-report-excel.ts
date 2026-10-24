@@ -97,7 +97,7 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
   const acc = r.account;
   row = writeStatTable(ws, row + 1, ["Compte artiste", "Montant"], [
     { label: "Part artiste acquise (dates jouées)", values: [acc.acquired], fmt: EUR },
-    { label: "Dont appelable (billetterie reçue ou déficit)", values: [acc.callable], fmt: EUR },
+    { label: "Dont encaissé (billetterie reçue ou déficit)", values: [acc.callable], fmt: EUR },
     { label: "Quote-parts versées", values: [-acc.paid], fmt: EUR },
     { label: "Déficit réglé par l'artiste", values: [acc.refunded], fmt: EUR },
     ...(acc.advances

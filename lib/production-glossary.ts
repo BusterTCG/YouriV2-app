@@ -46,7 +46,7 @@ export const GLOSSARY = {
   },
   quotePart: {
     title: "Quote-part artiste",
-    text: "Part acquise = part artiste des dates jouées. Appelable = celle des dates dont la billetterie est encaissée (ou soldées). On verse la quote-part sur appel de l'artiste, en cochant les dates qu'elle solde. Une date en déficit se compense d'abord avec les dates positives ; si le total reste négatif en fin d'exploitation, l'artiste rembourse.",
+    text: "Part acquise = part artiste des dates jouées. Encaissé = celle des dates dont la billetterie est reçue (ou soldées) ; reste à verser = encaissé − déjà versé. On verse la quote-part sur appel de l'artiste, en cochant les dates qu'elle solde. Une date en déficit se compense d'abord avec les dates positives ; si le total reste négatif en fin d'exploitation, l'artiste rembourse.",
   },
   artistAdvance: {
     title: "Frais et avances de l'artiste",
