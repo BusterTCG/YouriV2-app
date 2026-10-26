@@ -34,7 +34,7 @@ import {
   performanceCountOf,
 } from "@/lib/finance/production-overhead";
 import { frozenShareOf } from "@/lib/finance/settlement-rules";
-import { dateStage, type DateStage } from "@/lib/date-lifecycle";
+import { dateStage, hasOpenMoney, type DateStage } from "@/lib/date-lifecycle";
 
 export type MoneyTotals = {
   revenue: number;
@@ -340,6 +340,13 @@ export async function getProductionSummaries(
       const openCachets = d.dealArtistes
         .filter((a) => a.paymentStatus !== "PAID")
         .reduce((s, a) => s + (dec(a.cachetAmount) ?? 0), 0);
+      const openRevenue = lines
+        .filter((l) => l.kind === "REVENUE" && l.paymentStatus !== "PAID")
+        .reduce((s, l) => s + Number(l.amount), 0);
+      const openCost =
+        lines
+          .filter((l) => l.kind === "COST" && l.paymentStatus !== "PAID")
+          .reduce((s, l) => s + Number(l.amount), 0) + openCachets;
       return {
         id: d.id,
         residencyId: d.residencyId,
@@ -366,19 +373,15 @@ export async function getProductionSummaries(
         briefingStatus: d.briefing?.status ?? null,
         venueDealKind: d.venueDealKind,
         ...contract,
-        openRevenue: lines
-          .filter((l) => l.kind === "REVENUE" && l.paymentStatus !== "PAID")
-          .reduce((s, l) => s + Number(l.amount), 0),
-        openCost:
-          lines
-            .filter((l) => l.kind === "COST" && l.paymentStatus !== "PAID")
-            .reduce((s, l) => s + Number(l.amount), 0) + openCachets,
+        openRevenue,
+        openCost,
         artistStatus: d.artistStatus,
         settledAt: d.settledAt,
         stage: dateStage({
           status: d.status,
           isPast,
           settled: d.settledAt != null,
+          openMoney: hasOpenMoney(openRevenue, openCost),
           contractSigned: d.contractSigned,
           ticketingReady: d.ticketingReady,
           vhrBooked: d.vhrBooked,

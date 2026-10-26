@@ -171,7 +171,7 @@ export function DateRow({ d }: { d: ProductionDealView }) {
       </div>
       <StagePill
         stage={d.stage}
-        detail={d.stage === "EN_PREPARATION" ? nextPrepStep(d) : d.settledAt ? format(d.settledAt, "dd/MM/yy") : null}
+        detail={d.stage === "EN_PREPARATION" ? nextPrepStep(d) : d.stage === "SOLDEE" && d.settledAt ? format(d.settledAt, "dd/MM/yy") : null}
       />
       <Money label="CA" value={d.pnl.revenue} />
       <Money label="Résultat" value={d.pnl.margin} signed />

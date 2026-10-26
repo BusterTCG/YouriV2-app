@@ -39,7 +39,7 @@ import { PerformancesCard } from "@/components/shows/performances-card";
 import { DepositCard } from "@/components/shows/deposit-card";
 import { StagePill } from "@/components/shows/stage-pill";
 import { SettledBanner } from "@/components/shows/settled-banner";
-import { dateStage, nextPrepStep } from "@/lib/date-lifecycle";
+import { dateStage, hasOpenMoney, nextPrepStep } from "@/lib/date-lifecycle";
 import type { BookingDealArtistRow } from "@/lib/deals-list-types";
 import { cn } from "@/lib/utils";
 
@@ -142,10 +142,22 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
   const lastDayKey = activePerfDays.length
     ? activePerfDays[activePerfDays.length - 1]
     : format(deal.date, "yyyy-MM-dd");
+  // Reste à encaisser / à payer (cachets compris) — même calcul que les listes.
+  const openRevenue = deal.productionLines
+    .filter((l) => l.kind === "REVENUE" && l.paymentStatus !== "PAID")
+    .reduce((s, l) => s + Number(l.amount), 0);
+  const openCost =
+    deal.productionLines
+      .filter((l) => l.kind === "COST" && l.paymentStatus !== "PAID")
+      .reduce((s, l) => s + Number(l.amount), 0) +
+    deal.dealArtistes
+      .filter((a) => a.paymentStatus !== "PAID")
+      .reduce((s, a) => s + (a.cachetAmount != null ? Number(a.cachetAmount) : 0), 0);
   const stage = dateStage({
     status: deal.status,
     isPast: lastDayKey < todayKey,
     settled: deal.settledAt != null,
+    openMoney: hasOpenMoney(openRevenue, openCost),
     contractSigned: deal.contractSigned,
     ticketingReady: deal.ticketingReady,
     vhrBooked: deal.vhrBooked,
@@ -382,6 +394,8 @@ export default async function ProdExecutiveDetailPage({ params, searchParams }: 
           dealId={deal.id}
           settledOn={format(deal.settledAt, "dd/MM/yyyy")}
           overheadShare={deal.settledOverheadShare != null ? Number(deal.settledOverheadShare) : null}
+          openRevenue={openRevenue}
+          openCost={openCost}
         />
       )}
 

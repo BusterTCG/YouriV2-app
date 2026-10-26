@@ -8,7 +8,10 @@
 //   - En préparation : confirmée, une étape manque (Contrat → MEV → VHR).
 //   - Prête          : confirmée, contrat signé, billetterie en ligne, VHR pris.
 //   - À solder       : jouée, comptes pas encore clos.
-//   - Soldée         : comptes clos (appel de quote-part, cf. settledAt).
+//   - Soldée         : comptes clos — quote-part artiste réglée (settledAt)
+//                      ET plus rien à payer ni à encaisser sur la date
+//                      (Stan 2026-10-26 : un appel de quote-part versé avant
+//                      la dernière charge laisse la date « À solder »).
 //
 // Module pur, identique dans KuroNeko-App et YouriV2-app (statuts des deux
 // apps reconnus).
@@ -25,6 +28,8 @@ export type LifecycleSource = {
   status: string;
   isPast: boolean;
   settled: boolean;
+  /** Recettes non encaissées ou charges non payées sur la date. */
+  openMoney: boolean;
   contractSigned: boolean;
   ticketingReady: boolean;
   vhrBooked: boolean;
@@ -49,10 +54,15 @@ export function nextPrepStep(d: Pick<LifecycleSource, "contractSigned" | "ticket
   return null;
 }
 
+/** Reste-t-il de l'argent à encaisser ou à payer (arrondi à l'euro) ? */
+export function hasOpenMoney(openRevenue: number, openCost: number): boolean {
+  return Math.round(openRevenue) !== 0 || Math.round(openCost) !== 0;
+}
+
 export function dateStage(d: LifecycleSource): DateStage {
-  if (d.settled) return "SOLDEE";
+  if (d.settled && !d.openMoney) return "SOLDEE";
   if (CANCELLED.has(d.status)) return "ANNULEE";
-  if (d.isPast) return "A_SOLDER";
+  if (d.isPast || d.settled) return "A_SOLDER";
   if (UNCONFIRMED.has(d.status)) return "A_CONFIRMER";
   return nextPrepStep(d) ? "EN_PREPARATION" : "PRETE";
 }
