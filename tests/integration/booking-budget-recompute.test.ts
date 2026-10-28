@@ -1,7 +1,7 @@
 // @vitest-environment node
 //
-// Booking : changer le CA recalcule les artistes au % du CA (Stan 2026-10-27).
-// Un artiste ou un management fee déjà payé garde son montant (= virement
+// Booking : changer le CA garde le montant des artistes et recalcule leur %
+// (Stan 2026-10-28). Un management fee déjà payé garde son montant (= virement
 // réel) ; l'écart s'affiche côté UI comme complément à verser.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
@@ -57,7 +57,7 @@ afterAll(async () => {
 });
 
 describe("Booking — changement de CA", () => {
-  it("le cachet au % suit le CA ; artiste et MF payés restent figés", async () => {
+  it("le montant artiste reste, son % suit le CA ; le MF payé reste figé", async () => {
     const a1 = (await prisma.artist.create({ data: { name: "A1", slug: "a1" } })).id;
     const a2 = (await prisma.artist.create({ data: { name: "A2", slug: "a2" } })).id;
     const dealId = ok<{ id: string }>(
@@ -78,10 +78,12 @@ describe("Booking — changement de CA", () => {
 
     const rows = await prisma.dealArtiste.findMany({ where: { dealId } });
     const byId = new Map(rows.map((r: { id: string }) => [r.id, r]));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(Number((byId.get(open) as any).cachetAmount)).toBe(4200);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    expect(Number((byId.get(open) as any).cachetAmount)).toBe(3500);
+    expect(Number((byId.get(open) as any).sharePct)).toBe(29.2);
     expect(Number((byId.get(paid) as any).cachetAmount)).toBe(1000);
+    expect(Number((byId.get(paid) as any).sharePct)).toBe(8.3);
+    /* eslint-enable @typescript-eslint/no-explicit-any */
     // MF payé : montant figé (le complément s'affiche côté UI).
     expect(Number((await prisma.dealManagementFee.findUnique({ where: { id: fee.id } })).amount)).toBe(825);
   });

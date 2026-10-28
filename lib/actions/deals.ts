@@ -878,18 +878,22 @@ export async function updateDealBudget(
       select: { category: true },
     });
     if (amount !== undefined) {
-      // Artistes au % du CA : le montant suit le nouveau CA (Stan 2026-10-27).
-      // Un artiste déjà payé garde son montant (= virement réel) ; l'écart
-      // s'affiche comme complément sur sa ligne.
-      if (deal.category === "BOOKING" && amount != null) {
+      // Le montant artiste ne bouge pas, c'est son % du CA qui suit
+      // (Stan 2026-10-28).
+      if (deal.category === "BOOKING") {
         const artistes = await prisma.dealArtiste.findMany({
-          where: { dealId, deletedAt: null, sharePct: { not: null }, paymentStatus: { not: PaymentStatus.PAID } },
-          select: { id: true, sharePct: true },
+          where: { dealId, deletedAt: null, cachetAmount: { not: null } },
+          select: { id: true, cachetAmount: true },
         });
         for (const a of artistes) {
           await prisma.dealArtiste.update({
             where: { id: a.id },
-            data: { cachetAmount: Math.round((amount * Number(a.sharePct)) / 100) },
+            data: {
+              sharePct:
+                amount != null && amount > 0
+                  ? Math.round((Number(a.cachetAmount) / amount) * 1000) / 10
+                  : null,
+            },
           });
         }
       }
