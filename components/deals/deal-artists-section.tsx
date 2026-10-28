@@ -13,6 +13,8 @@ import { artistInitials } from "@/lib/artists";
 import { DealSectionHeader } from "./deal-section-header";
 import { SectionStatusBadge } from "./section-status-badge";
 import { ArtistRosterPicker } from "./artist-roster-picker";
+import { SensitiveAmount } from "@/components/dashboard/sensitive-amount";
+import { cn } from "@/lib/utils";
 
 /**
  * Section Artistes — copie fidèle KN show § Section "CHARGES" (rouge),
@@ -145,6 +147,21 @@ function ArtistRow({
     }
     await updateDealArtiste(patch);
   }
+  /**
+   * Artiste payé puis CA modifié (Stan 2026-10-27) : son montant reste le
+   * virement réel, on affiche l'écart avec son % du nouveau CA. Tolérance =
+   * arrondi du % stocké au 0,1.
+   */
+  const pctGap =
+    row.paymentStatus === "PAID" &&
+    row.sharePct != null &&
+    budgetAmount != null &&
+    budgetAmount > 0
+      ? Math.round((budgetAmount * row.sharePct) / 100) - (row.amount ?? 0)
+      : 0;
+  const showPctGap =
+    budgetAmount != null && Math.abs(pctGap) > Math.max(1, budgetAmount * 0.0005);
+
   function commitNotes(e: React.FocusEvent<HTMLInputElement>) {
     const next = e.target.value.trim() || null;
     if (next !== row.notes) {
@@ -199,6 +216,21 @@ function ArtistRow({
         {/* Row 1 col 1 : Montant */}
         <div className="sm:w-32 sm:shrink-0">
           <MoneyInput value={row.amount} onCommit={commitAmount} />
+          {showPctGap && (
+            <div
+              className={cn(
+                "mt-0.5 text-[10px] leading-tight text-right tabular-nums",
+                pctGap > 0
+                  ? "text-amber-700 dark:text-amber-400"
+                  : "text-red-700 dark:text-red-400",
+              )}
+              title="Écart avec son % du CA actuel"
+            >
+              {pctGap > 0 ? "+" : "−"}
+              <SensitiveAmount value={Math.abs(pctGap)} />{" "}
+              {pctGap > 0 ? "à verser" : "trop versé"}
+            </div>
+          )}
         </div>
 
         {/* Row 1 col 2 : Statut paiement (aligné avec Budget Encaissé / Charges Payé) */}

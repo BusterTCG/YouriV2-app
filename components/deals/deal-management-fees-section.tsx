@@ -334,7 +334,7 @@ function ManagementFeeBlock({
       {fees.length > 0 ? (
         <div className="space-y-1 sm:space-y-0.5 pl-0 sm:pl-5">
           {fees.map((fee) => (
-            <ManagementFeeRow key={fee.id} fee={fee} />
+            <ManagementFeeRow key={fee.id} fee={fee} margeYouri={margeYouri} />
           ))}
         </div>
       ) : (
@@ -348,9 +348,23 @@ function ManagementFeeBlock({
 
 // ──────────────────────────── ManagementFeeRow (1 ligne par associé) ────────────────────────────
 
-function ManagementFeeRow({ fee }: { fee: DealManagementFeeRow }) {
+function ManagementFeeRow({
+  fee,
+  margeYouri,
+}: {
+  fee: DealManagementFeeRow;
+  margeYouri: number;
+}) {
   const member = PANGEE_TEAM.find((m) => m.key === fee.associateKey);
   const displayName = member?.firstName ?? fee.associateKey;
+
+  // Ligne payée = montant figé (virement réel). Si la marge a bougé depuis
+  // (CA, cachet, charge modifiés), on affiche l'écart à régulariser
+  // (Stan 2026-10-27).
+  const expected =
+    margeYouri > 0 ? Math.round((margeYouri * Number(fee.sharePct)) / 100) : 0;
+  const gap =
+    fee.paymentStatus === "PAID" ? expected - (fee.amount ?? 0) : 0;
 
   async function togglePaye(next: boolean) {
     await updateManagementFee({ id: fee.id, isPaye: next });
@@ -374,6 +388,21 @@ function ManagementFeeRow({ fee }: { fee: DealManagementFeeRow }) {
       {/* Montant € */}
       <span className="font-medium shrink-0 text-right sm:w-20">
         <SensitiveAmount value={fee.amount ?? 0} />
+        {Math.abs(gap) >= 1 && (
+          <span
+            className={cn(
+              "block text-[10px] font-normal leading-tight",
+              gap > 0
+                ? "text-amber-700 dark:text-amber-400"
+                : "text-red-700 dark:text-red-400",
+            )}
+            title="Écart avec le montant recalculé sur la marge actuelle"
+          >
+            {gap > 0 ? "+" : "−"}
+            <SensitiveAmount value={Math.abs(gap)} />{" "}
+            {gap > 0 ? "à verser" : "trop versé"}
+          </span>
+        )}
       </span>
 
       {/* PaidToggle manuel — Stan coche quand il a versé le cash à l'associé */}

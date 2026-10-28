@@ -872,9 +872,28 @@ export async function updateDealBudget(
     }
     if (paidAt !== undefined) data.budgetPaidAt = paidAt;
 
-    await prisma.deal.update({ where: { id: dealId }, data });
-    // Recalcule les MF si le budget a changé (cf. helper).
+    const deal = await prisma.deal.update({
+      where: { id: dealId },
+      data,
+      select: { category: true },
+    });
     if (amount !== undefined) {
+      // Artistes au % du CA : le montant suit le nouveau CA (Stan 2026-10-27).
+      // Un artiste déjà payé garde son montant (= virement réel) ; l'écart
+      // s'affiche comme complément sur sa ligne.
+      if (deal.category === "BOOKING" && amount != null) {
+        const artistes = await prisma.dealArtiste.findMany({
+          where: { dealId, deletedAt: null, sharePct: { not: null }, paymentStatus: { not: PaymentStatus.PAID } },
+          select: { id: true, sharePct: true },
+        });
+        for (const a of artistes) {
+          await prisma.dealArtiste.update({
+            where: { id: a.id },
+            data: { cachetAmount: Math.round((amount * Number(a.sharePct)) / 100) },
+          });
+        }
+      }
+      // Recalcule les MF (après les artistes : ils entrent dans la marge).
       await recomputeMfForDeal(dealId);
     }
     revalidatePath("/dashboard");
