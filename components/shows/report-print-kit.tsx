@@ -112,14 +112,26 @@ export function Section({ title, children }: { title: string; children: React.Re
 
 const LEFT_COLS = new Set(["Lieu", "Libellé", "Détail", "Statut", "Commentaire", "Poste"]);
 
-export function HeadRow({ cols, small }: { cols: string[]; small?: boolean }) {
+export function HeadRow({
+  cols,
+  small,
+  numericWidth,
+}: {
+  cols: string[];
+  small?: boolean;
+  /** Largeur commune des colonnes de chiffres (sinon, largeur selon le titre). */
+  numericWidth?: string;
+}) {
   return (
     <tr className={`${small ? "text-[9px]" : "text-[10px]"} uppercase tracking-wide`} style={{ background: "#f7f0dc" }}>
       {cols.map((c, i) => (
         <th
           key={c + i}
           className={`py-1 px-1 font-semibold align-bottom ${i === 0 || LEFT_COLS.has(c) ? "text-left" : "text-right"}`}
-          style={c === "Part Pangee" ? { color: "#9a7415" } : undefined}
+          style={{
+            ...(c === "Part Pangee" ? { color: "#9a7415" } : {}),
+            ...(numericWidth && i !== 0 && !LEFT_COLS.has(c) ? { width: numericWidth } : {}),
+          }}
         >
           {c}
         </th>

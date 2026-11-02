@@ -45,6 +45,16 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
   // y compris contrat « Résidences » distinct.
   const { showSplit: coprod } = resultLabels(r.rates);
   const columns = detailColumns(r.dates);
+  const detailHeads = [
+    "Date",
+    "Lieu",
+    "Repr.",
+    "Payants",
+    ...columns.revenues.map((l) => REPORT_LINE_SHORT[l]),
+    ...columns.costs.map((c) => costRowLabel(c, true)),
+    coprod ? "Bénéfice" : "Net artiste",
+    ...(coprod ? ["Part Pangee", "Part artiste"] : []),
+  ];
   // Sections présentes seulement si elles ont du contenu.
   const paidUpcoming = r.account.upcomingCostItems;
   const extra = paidUpcoming.length > 0 ? 1 : 0;
@@ -87,19 +97,7 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
       <Section title="2. Détail par date">
         <table className="w-full text-[10px] tabular-nums leading-tight">
           <thead>
-            <HeadRow
-              small
-              cols={[
-                "Date",
-                "Lieu",
-                "Repr.",
-                "Payants",
-                ...columns.revenues.map((l) => REPORT_LINE_SHORT[l]),
-                ...columns.costs.map((c) => costRowLabel(c, true)),
-                coprod ? "Bénéfice" : "Net artiste",
-                ...(coprod ? ["Part Pangee", "Part artiste"] : []),
-              ]}
-            />
+            <HeadRow small cols={detailHeads} numericWidth={`${70 / (detailHeads.length - 2)}%`} />
           </thead>
           <tbody>
             {r.dates.map((d) => {
@@ -146,15 +144,15 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
 
       {extra > 0 && (
         <Section title="3. Dépenses déjà payées sur dates à venir">
-          <table className="text-sm tabular-nums" style={{ width: "60%" }}>
+          <table className="text-sm tabular-nums">
             <thead>
               <HeadRow cols={["Date", "Libellé", "Montant"]} />
             </thead>
             <tbody>
               {paidUpcoming.map((e) => (
                 <tr key={e.id} className="border-b border-slate-200">
-                  <td className="py-1 px-1 whitespace-nowrap capitalize">{e.dateLabel}</td>
-                  <td className="py-1 px-1">{e.label}</td>
+                  <td className="py-1 pl-1 pr-6 whitespace-nowrap capitalize">{e.dateLabel}</td>
+                  <td className="py-1 pl-1 pr-10">{e.label}</td>
                   <td className="py-1 px-1 text-right">{formatEur(e.amount)}</td>
                 </tr>
               ))}
@@ -211,9 +209,7 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
               )}
             </tbody>
           </table>
-          {r.account.movements.length === 0 ? (
-            <p className="text-sm italic text-slate-500">Aucun versement enregistré.</p>
-          ) : (
+          {r.account.movements.length > 0 && (
             <table className="w-full text-sm tabular-nums">
               <thead>
                 <HeadRow cols={["Date", "Libellé", "Montant"]} />
