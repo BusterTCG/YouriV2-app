@@ -8,7 +8,9 @@
 //     jouée en DÉFICIT compte d'office (la perte est acquise, Stan 2026-10-16).
 //   - Solde = appelable − (quote-parts versées − remboursements de l'artiste).
 //     > 0 : Pangee doit à l'artiste ; < 0 : l'artiste doit à Pangee.
-//     Une date en déficit se compense d'abord avec les dates positives ; en
+//     Une date en déficit se compense d'abord avec les dates positives, y
+//     compris celles dont la billetterie est attendue (Stan 2026-11-02) : un
+//     solde négatif n'est dû que s'il le reste après cette compensation. En
 //     fin d'exploitation, un solde négatif est dû par l'artiste (il le
 //     rembourse : REFUND, « solde d'exploitation »).
 //   - Avance de trésorerie de l'artiste (CASH_ADVANCE, Stan 2026-10-12) :
@@ -69,6 +71,10 @@ export type ArtistAccount = {
   callable: number;
   /** Part des dates jouées pas encore appelable (billetterie non reçue). */
   pendingCollection: number;
+  /** Part de `pendingCollection` qui compense un solde négatif. */
+  collectionOffset: number;
+  /** Reste de `pendingCollection`, à verser une fois la billetterie reçue. */
+  payableOnCollection: number;
   /** Part artiste estimée sur toute l'exploitation. */
   forecast: number;
   /** Quote-parts versées (hors remboursement de frais). */
@@ -84,7 +90,8 @@ export type ArtistAccount = {
   advancesPaid: number;
   /** Frais avancés restant à rembourser. */
   advancesDue: number;
-  /** Solde quote-part seule : appelable − (versé − remboursé). */
+  /** Solde quote-part seule : appelable − (versé − remboursé), après
+   *  compensation par la billetterie attendue. */
   quotePartBalance: number;
   /** Solde : > 0 Pangee doit à l'artiste, < 0 l'artiste doit à Pangee
    *  (quote-part + frais avancés à rembourser). */
@@ -147,10 +154,16 @@ export function computeArtistAccount(
 
   const acquired = round2(sum(played));
   const callable = round2(sum(callableDeals));
+  const pendingCollection = round2(acquired - callable);
+  const beforeOffset = round2(callable - net);
+  const collectionOffset = round2(Math.min(Math.max(0, -beforeOffset), Math.max(0, pendingCollection)));
+  const quotePartBalance = round2(beforeOffset + collectionOffset);
   return {
     acquired,
     callable,
-    pendingCollection: round2(acquired - callable),
+    pendingCollection,
+    collectionOffset,
+    payableOnCollection: round2(pendingCollection - collectionOffset),
     forecast: round2(sum(active)),
     upcoming: active.filter((d) => !d.isPast).length,
     cashAdvances: round2(cashAdvances),
@@ -159,8 +172,15 @@ export function computeArtistAccount(
     advances: round2(advances),
     advancesPaid: round2(advancesPaid),
     advancesDue: round2(advances - advancesPaid),
-    quotePartBalance: round2(callable - net),
-    balance: round2(callable - net + advances - advancesPaid),
+    quotePartBalance,
+    balance: round2(quotePartBalance + advances - advancesPaid),
     statuses,
   };
+}
+
+/** Libellé du solde dans les bilans (PDF, Excel). */
+export function artistBalanceLabel(a: Pick<ArtistAccount, "balance" | "payableOnCollection">): string {
+  if (a.balance > 0) return "Solde dû à l'artiste";
+  if (a.balance < 0) return "Solde dû par l'artiste";
+  return Math.round(a.payableOnCollection) > 0 ? "Rien à verser à ce jour" : "Compte soldé";
 }

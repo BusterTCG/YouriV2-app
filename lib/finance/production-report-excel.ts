@@ -41,7 +41,7 @@ import {
   type FinanceBlock,
 } from "@/lib/production-report";
 import type { ProductionReport } from "@/lib/production-report-server";
-import { ARTIST_MOVEMENT_LABEL as MOVEMENT_LABEL } from "@/lib/finance/artist-account";
+import { ARTIST_MOVEMENT_LABEL as MOVEMENT_LABEL, artistBalanceLabel } from "@/lib/finance/artist-account";
 
 export async function buildProductionReportXlsx(r: ProductionReport): Promise<Buffer> {
   const p = r.production;
@@ -91,13 +91,45 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
     r.rates,
   );
 
-  // 2. Compte artiste
+  // Dépenses déjà payées sur dates à venir (section seulement si elle a du contenu)
+  const extra = r.paidUpcoming.length > 0 ? 1 : 0;
+  if (extra) {
+    const resultLabel = resultLabels(r.rates).result;
+    row += 2;
+    sectionTitle(ws, row, "2. DÉPENSES DÉJÀ PAYÉES SUR DATES À VENIR", 5);
+    tableHeader(ws, row + 1, ["Libellé", "Date", "Montant"]);
+    row += 1;
+    for (const e of r.paidUpcoming) {
+      row++;
+      text(ws, `A${row}`, e.label);
+      text(ws, `B${row}`, e.dateLabel);
+      num(ws, `C${row}`, e.amount, EUR);
+    }
+    row++;
+    text(ws, `A${row}`, "Total", { bold: true });
+    num(ws, `C${row}`, r.paidUpcomingTotal, EUR, true);
+    fillRow(ws, row, SUBTOTAL_BG, 3);
+    row++;
+    text(ws, `A${row}`, `${resultLabel} des dates jouées`);
+    num(ws, `C${row}`, r.finance.result, EUR);
+    row++;
+    text(ws, `A${row}`, `${resultLabel} à date, après ces dépenses`, { bold: true });
+    num(ws, `C${row}`, r.finance.result - r.paidUpcomingTotal, EUR, true);
+    fillRow(ws, row, SUBTOTAL_BG, 3);
+  }
+
+  // Compte artiste
   row += 2;
-  sectionTitle(ws, row, "2. COMPTE ARTISTE", 5);
+  sectionTitle(ws, row, `${2 + extra}. COMPTE ARTISTE`, 5);
   const acc = r.account;
   row = writeStatTable(ws, row + 1, ["Compte artiste", "Montant"], [
     { label: "Part artiste acquise (dates jouées)", values: [acc.acquired], fmt: EUR },
-    { label: "Dont encaissé (billetterie reçue ou déficit)", values: [acc.callable], fmt: EUR },
+    ...(Math.round(acc.pendingCollection) !== 0
+      ? [{ label: "Billetterie à recevoir", values: [-acc.pendingCollection], fmt: EUR }]
+      : []),
+    ...(Math.round(acc.collectionOffset) !== 0
+      ? [{ label: "Compensé par cette billetterie", values: [acc.collectionOffset], fmt: EUR }]
+      : []),
     { label: "Quote-parts versées", values: [-acc.paid], fmt: EUR },
     { label: "Déficit réglé par l'artiste", values: [acc.refunded], fmt: EUR },
     ...(acc.advances
@@ -108,13 +140,17 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
         ]
       : []),
     {
-      label:
-        acc.balance > 0 ? "Solde dû à l'artiste" : acc.balance < 0 ? "Solde dû par l'artiste" : "Compte soldé",
+      label: artistBalanceLabel(acc),
       values: [Math.abs(acc.balance)],
       fmt: EUR,
     },
   ]);
   fillRow(ws, row, SUBTOTAL_BG, 2);
+  if (Math.round(acc.payableOnCollection) > 0) {
+    row++;
+    text(ws, `A${row}`, "À verser une fois la billetterie reçue");
+    num(ws, `B${row}`, acc.payableOnCollection, EUR);
+  }
   if (acc.movements.length) {
     row += 2;
     tableHeader(ws, row, ["Versement", "Date", "Montant"]);
@@ -132,9 +168,9 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
     }
   }
 
-  // 3. Frais généraux
+  // Frais généraux
   row += 2;
-  sectionTitle(ws, row, "3. FRAIS GÉNÉRAUX", 5);
+  sectionTitle(ws, row, `${3 + extra}. FRAIS GÉNÉRAUX`, 5);
   tableHeader(ws, row + 1, ["Libellé", "Date", "Montant", "Statut"]);
   row += 2;
   if (p.overheads.length === 0) {

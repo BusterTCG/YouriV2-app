@@ -51,6 +51,8 @@ export type ArtistAccountData = {
   advancesPaid: number;
   advancesDue: number;
   quotePartBalance: number;
+  collectionOffset: number;
+  payableOnCollection: number;
   balance: number;
   movements: Array<{
     id: string;
@@ -378,7 +380,9 @@ export function ArtistAccountCard({
             label={b < 0 && Math.round(b) !== 0 ? (account.upcoming > 0 ? "Déficit à date" : "Dû par l'artiste") : "Reste à verser"}
             hint={
               Math.round(b) === 0
-                ? "compte soldé"
+                ? Math.round(account.payableOnCollection) > 0
+                  ? `${fmt(account.payableOnCollection)} une fois la billetterie reçue`
+                  : "compte soldé"
                 : b > 0
                   ? "à verser à l'artiste maintenant"
                   : account.upcoming > 0
@@ -400,12 +404,12 @@ export function ArtistAccountCard({
             <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
               <div className="bg-emerald-500/70" style={{ width: pct(netPaid) }} />
               <div className="bg-amber-500" style={{ width: pct(account.quotePartBalance) }} />
-              <div className="bg-muted-foreground/25" style={{ width: pct(account.pendingCollection) }} />
+              <div className="bg-muted-foreground/25" style={{ width: pct(account.payableOnCollection) }} />
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground">
               <BarLegend dot="bg-emerald-500/70" label="Déjà versé" value={netPaid} />
               <BarLegend dot="bg-amber-500" label={account.advancesDue ? "Quote-part à verser" : "Reste à verser"} value={account.quotePartBalance} />
-              <BarLegend dot="bg-muted-foreground/25" label="Billetterie attendue" value={account.pendingCollection} />
+              <BarLegend dot="bg-muted-foreground/25" label="Billetterie attendue" value={account.payableOnCollection} />
               <span className="ml-auto">
                 Total gagné <SensitiveAmount value={account.acquired} />
               </span>
@@ -653,7 +657,9 @@ export function ArtistAccountCard({
           )}
         >
           <div className="font-semibold inline-flex items-center gap-1.5">
-            {Math.round(b) === 0 ? (
+            {Math.round(b) === 0 && Math.round(account.payableOnCollection) > 0 ? (
+              `Rien à verser à ce jour · ${fmt(account.payableOnCollection)} une fois la billetterie reçue`
+            ) : Math.round(b) === 0 ? (
               <>
                 <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                 Compte soldé
@@ -691,9 +697,10 @@ export function ArtistAccountCard({
           <div className="w-full text-[11px] text-muted-foreground">
             Encaissé {fmt(account.callable)} − versé {fmt(account.paid)}
             {account.refunded ? ` + déficit réglé ${fmt(account.refunded)}` : ""}
+            {account.collectionOffset ? ` + compensé par la billetterie attendue ${fmt(account.collectionOffset)}` : ""}
             {account.advancesDue ? ` + frais / avances de l'artiste ${fmt(account.advancesDue)}` : ""}. Comptent
             comme encaissées les dates jouées dont la billetterie est reçue, les dates soldées et les dates
-            jouées en déficit (perte acquise sans attendre la billetterie) ; une date en déficit se compense avec les dates positives. Frais avancés et avances de trésorerie
+            jouées en déficit (perte acquise sans attendre la billetterie) ; une date en déficit se compense avec les dates positives, même si leur billetterie est encore attendue. Frais avancés et avances de trésorerie
             comblent d&apos;abord un déficit ; le reste est rendu à l&apos;artiste.
           </div>
         </div>

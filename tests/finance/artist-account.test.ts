@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeArtistAccount, type AccountDeal } from "@/lib/finance/artist-account";
+import { artistBalanceLabel, computeArtistAccount, type AccountDeal } from "@/lib/finance/artist-account";
 
 const d = (id: string, day: string, artistAmount: number, opts: Partial<AccountDeal> = {}): AccountDeal => ({
   id,
@@ -182,6 +182,52 @@ describe("computeArtistAccount — compensation et avance de trésorerie (Stan 2
     );
     expect(a.callable).toBe(-12);
     expect(a.balance).toBe(3588);
+  });
+
+  it("déficit compensé par une date positive dont la billetterie est attendue (Stan 2026-11-02)", () => {
+    const a = computeArtistAccount(
+      [d("sept", "2026-09-30", 852, { collected: false }), d("oct", "2026-10-31", -240, { collected: false })],
+      [],
+    );
+    expect(a.acquired).toBe(612);
+    expect(a.callable).toBe(-240);
+    expect(a.pendingCollection).toBe(852);
+    expect(a.collectionOffset).toBe(240);
+    expect(a.payableOnCollection).toBe(612);
+    expect(a.quotePartBalance).toBe(0);
+    expect(a.balance).toBe(0);
+    expect(artistBalanceLabel(a)).toBe("Rien à verser à ce jour");
+    expect(a.statuses.get("oct")).toBe("TO_INVOICE");
+  });
+
+  it("déficit plus grand que la billetterie attendue : seul l'écart reste dû", () => {
+    const a = computeArtistAccount(
+      [d("a", "2026-09-30", 100, { collected: false }), d("b", "2026-10-31", -300)],
+      [],
+    );
+    expect(a.acquired).toBe(-200);
+    expect(a.collectionOffset).toBe(100);
+    expect(a.payableOnCollection).toBe(0);
+    expect(a.balance).toBe(-200);
+    expect(artistBalanceLabel(a)).toBe("Solde dû par l'artiste");
+  });
+
+  it("billetterie reçue ensuite : la compensation disparaît, le net devient à verser", () => {
+    const a = computeArtistAccount([d("sept", "2026-09-30", 852), d("oct", "2026-10-31", -240)], []);
+    expect(a.collectionOffset).toBe(0);
+    expect(a.payableOnCollection).toBe(0);
+    expect(a.balance).toBe(612);
+    expect(artistBalanceLabel(a)).toBe("Solde dû à l'artiste");
+  });
+
+  it("frais avancés : dus en plus quand le déficit est compensé par la billetterie attendue", () => {
+    const a = computeArtistAccount(
+      [d("sept", "2026-09-30", 852, { collected: false }), d("oct", "2026-10-31", -240)],
+      [],
+      [{ amount: 100 }],
+    );
+    expect(a.quotePartBalance).toBe(0);
+    expect(a.balance).toBe(100);
   });
 
   it("remboursement d'un déficit (REFUND) : solde l'exploitation", () => {

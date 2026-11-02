@@ -313,6 +313,7 @@ export function reportNotes(o: {
   rates: ReportRates;
   upcomingCount?: number;
   unallocatedOverhead?: number;
+  paidUpcomingTotal?: number;
 }): string[] {
   const r = o.rates;
   const res = r?.residency;
@@ -338,6 +339,9 @@ export function reportNotes(o: {
       : []),
     ...((o.upcomingCount ?? 0) > 0
       ? [`État à date : seules les dates déjà jouées sont comptées (${o.upcomingCount} date${(o.upcomingCount ?? 0) > 1 ? "s" : ""} à venir non comptée${(o.upcomingCount ?? 0) > 1 ? "s" : ""}).`]
+      : []),
+    ...((o.paidUpcomingTotal ?? 0) !== 0
+      ? ["Dépenses déjà payées sur des dates à venir : déduites du net à date uniquement. Elles n'entrent dans le compte artiste qu'une fois la date jouée."]
       : []),
   ];
 }

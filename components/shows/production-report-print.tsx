@@ -19,7 +19,7 @@ import {
   type FinanceBlock,
 } from "@/lib/production-report";
 import type { ProductionReport } from "@/lib/production-report-server";
-import { ARTIST_MOVEMENT_LABEL as MOVEMENT_LABEL } from "@/lib/finance/artist-account";
+import { ARTIST_MOVEMENT_LABEL as MOVEMENT_LABEL, artistBalanceLabel } from "@/lib/finance/artist-account";
 import { KpiTiles } from "@/components/shows/kpi-visuals";
 import {
   Eur,
@@ -44,7 +44,9 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
   const n = (v: number | null) => (v ? v.toLocaleString("fr-FR") : "—");
   // Colonnes de fin selon le contrat : prod-exé (rémunération Pangee), co-prod (partage).
   // (y compris contrat « Résidences » distinct)
-  const { showFee: prodExe, showSplit: coprod } = resultLabels(r.rates);
+  const { showFee: prodExe, showSplit: coprod, result: resultLabel } = resultLabels(r.rates);
+  // Section « dépenses déjà payées » seulement si elle a du contenu.
+  const extra = r.paidUpcoming.length > 0 ? 1 : 0;
 
   return (
     <ReportShell
@@ -142,13 +144,49 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
         </table>
       </Section>
 
-      <Section title="3. Compte artiste">
+      {extra > 0 && (
+        <Section title="3. Dépenses déjà payées sur dates à venir">
+          <table className="text-sm tabular-nums" style={{ width: "60%" }}>
+            <thead>
+              <HeadRow cols={["Date", "Libellé", "Montant"]} />
+            </thead>
+            <tbody>
+              {r.paidUpcoming.map((e) => (
+                <tr key={e.id} className="border-b border-slate-200">
+                  <td className="py-1 px-1 whitespace-nowrap capitalize">{e.dateLabel}</td>
+                  <td className="py-1 px-1">{e.label}</td>
+                  <td className="py-1 px-1 text-right">{formatEur(e.amount)}</td>
+                </tr>
+              ))}
+              <tr className="font-semibold bg-slate-100">
+                <td className="py-1 px-1" colSpan={2}>Total</td>
+                <td className="py-1 px-1 text-right">{formatEur(r.paidUpcomingTotal)}</td>
+              </tr>
+              <tr className="border-b border-slate-200">
+                <td className="py-1 px-1" colSpan={2}>{resultLabel} des dates jouées</td>
+                <td className="py-1 px-1 text-right">{formatEur(r.finance.result)}</td>
+              </tr>
+              <tr className="font-semibold" style={{ background: "#fbf5e4" }}>
+                <td className="py-1 px-1" colSpan={2}>{resultLabel} à date, après ces dépenses</td>
+                <td className="py-1 px-1 text-right">{formatEur(r.finance.result - r.paidUpcomingTotal)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </Section>
+      )}
+
+      <Section title={`${3 + extra}. Compte artiste`}>
         <div className="grid gap-6 items-start" style={{ gridTemplateColumns: "1fr 1.3fr" }}>
           <table className="w-full text-sm tabular-nums">
             <tbody>
               {[
                 ["Part artiste acquise (dates jouées)", r.account.acquired],
-                ["Dont encaissé (billetterie reçue ou déficit)", r.account.callable],
+                ...(Math.round(r.account.pendingCollection) !== 0
+                  ? [["Billetterie à recevoir", -r.account.pendingCollection] as [string, number]]
+                  : []),
+                ...(Math.round(r.account.collectionOffset) !== 0
+                  ? [["Compensé par cette billetterie", r.account.collectionOffset] as [string, number]]
+                  : []),
                 ["Quote-parts versées", -r.account.paid],
                 ...(r.account.refunded ? [["Déficit réglé par l'artiste", r.account.refunded] as [string, number]] : []),
                 ...(r.account.advances
@@ -165,17 +203,17 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
                 </tr>
               ))}
               <tr className="font-semibold" style={{ background: "#fbf5e4" }}>
-                <td className="py-1 px-1">
-                  {r.account.balance > 0
-                    ? "Solde dû à l'artiste"
-                    : r.account.balance < 0
-                      ? "Solde dû par l'artiste"
-                      : "Compte soldé"}
-                </td>
+                <td className="py-1 px-1">{artistBalanceLabel(r.account)}</td>
                 <td className="py-1 px-1 text-right">
                   {Math.round(r.account.balance) === 0 ? "—" : formatEur(Math.abs(r.account.balance))}
                 </td>
               </tr>
+              {Math.round(r.account.payableOnCollection) > 0 && (
+                <tr className="border-b border-slate-200">
+                  <td className="py-1 px-1">À verser une fois la billetterie reçue</td>
+                  <td className="py-1 px-1 text-right">{formatEur(r.account.payableOnCollection)}</td>
+                </tr>
+              )}
             </tbody>
           </table>
           {r.account.movements.length === 0 ? (
@@ -208,7 +246,7 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
         </div>
       </Section>
 
-      <Section title="4. Frais généraux">
+      <Section title={`${4 + extra}. Frais généraux`}>
         {p.overheads.length === 0 ? (
           <p className="text-sm italic text-slate-500">Aucun frais général.</p>
         ) : (

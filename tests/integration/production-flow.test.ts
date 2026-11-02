@@ -590,6 +590,33 @@ describe("Étape 5 — bilans et comptes (cohérence, sans management fees)", ()
     expect(JSON.stringify(r)).not.toMatch(/managementFee|margeNette/i);
   });
 
+  it("bilan : dépenses déjà payées sur dates à venir listées, hors résultat des dates jouées (Stan 2026-11-02)", async () => {
+    const { getProductionReport } = await import("@/lib/production-report-server");
+    const before = (await getProductionReport(prodId, Date.now()))!;
+    const paid = ok<{ id: string }>(await PL.addProductionLine({ dealId: d2, label: "AUTRE", amount: 123 })).id;
+    const open = ok<{ id: string }>(await PL.addProductionLine({ dealId: d2, label: "VHR", amount: 45 })).id;
+    await prisma.productionLine.update({ where: { id: paid }, data: { paymentStatus: "PAID" } });
+    const r = (await getProductionReport(prodId, Date.now()))!;
+    expect(r.paidUpcoming.map((e) => e.id)).toContain(paid);
+    expect(r.paidUpcoming.map((e) => e.id)).not.toContain(open);
+    expect(r.paidUpcomingTotal).toBeCloseTo(before.paidUpcomingTotal + 123, 2);
+    expect(r.finance.result).toBe(before.finance.result);
+    expect(r.account.balance).toBe(before.account.balance);
+    const { buildProductionReportXlsx } = await import("@/lib/finance/production-report-excel");
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load((await buildProductionReportXlsx(r)) as unknown as ArrayBuffer);
+    const texts: string[] = [];
+    wb.getWorksheet("Bilan d'exploitation")!.eachRow((row) =>
+      row.eachCell((c) => texts.push(String(c.value ?? ""))),
+    );
+    expect(texts).toContain("2. DÉPENSES DÉJÀ PAYÉES SUR DATES À VENIR");
+    expect(texts).toContain("3. COMPTE ARTISTE");
+    expect(texts).toContain("4. FRAIS GÉNÉRAUX");
+    ok(await PL.deleteProductionLine(paid));
+    ok(await PL.deleteProductionLine(open));
+  });
+
   it("compte de production d'une date = scalars ; Excel sans management fees", async () => {
     const { getDealReport } = await import("@/lib/deal-report");
     const { buildDealReportXlsx } = await import("@/lib/finance/deal-report-excel");
