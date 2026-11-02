@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import ExcelJS from "exceljs";
 import { buildDealReportXlsx } from "@/lib/finance/deal-report-excel";
-import { financeOf } from "@/lib/production-report";
+import { COST_ROWS, financeOf } from "@/lib/production-report";
 import { dealPnl } from "@/lib/finance/production-overhead";
 import type { DealReport } from "@/lib/deal-report";
 
@@ -52,8 +52,31 @@ describe("compte de production Excel", () => {
     );
     const all = texts.join(" | ");
     expect(all).toContain("Cachets artistes");
-    expect(all).toContain("Rémunération prod-exé Pangee");
+    expect(all).toContain("Prod Exe Pangée");
     expect(all).not.toMatch(/management|mgmt|marge nette|apport d'affaires|travail effectif/i);
     expect(all).not.toMatch(/Kuro Neko/i);
+  });
+
+  it("prod-exé entre SACD et location, sans couleur propre (Stan 2026-11-02)", async () => {
+    const i = (c: (typeof COST_ROWS)[number]) => COST_ROWS.indexOf(c);
+    expect(i("KN_FEE")).toBe(i("SACD") + 1);
+    expect(i("KN_FEE")).toBeLessThan(i("LOCATION"));
+
+    const buf = await buildDealReportXlsx(report);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf as unknown as ArrayBuffer);
+    const labels: string[] = [];
+    let feeFill: unknown = "absent";
+    wb.eachSheet((ws) =>
+      ws.eachRow((row) => {
+        const v = String(row.getCell(1).value ?? "");
+        labels.push(v);
+        const fill = row.getCell(1).fill;
+        if (v === "Prod Exe Pangée") feeFill = fill?.type === "pattern" ? fill.pattern : undefined;
+      }),
+    );
+    expect(feeFill).not.toBe("absent");
+    expect(feeFill).not.toBe("solid");
+    expect(labels.indexOf("Prod Exe Pangée")).toBeLessThan(labels.indexOf("Location salle"));
   });
 });

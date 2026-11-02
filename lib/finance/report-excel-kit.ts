@@ -72,8 +72,9 @@ export async function writeDocHeader(
 
 /**
  * Compte d'exploitation (même structure partout) : recettes, CA, charges
- * (postes vides masqués, frais généraux après la SACD), puis selon le modèle :
- *   prod-exé → rémunération Pangee dans les charges, fin sur « Net artiste » ;
+ * (postes vides masqués, prod-exé Pangee et frais généraux après la SACD), puis
+ * selon le modèle :
+ *   prod-exé → fin sur « Net artiste » ;
  *   co-prod  → résultat, puis partage Part Pangee / Part artiste.
  * `columns` : une colonne de montants par périmètre (ex. Réalisé / Estimé).
  * Retourne la dernière ligne écrite.
@@ -106,7 +107,6 @@ export function writeFinanceTable(
   line("Chiffre d'affaires", (f) => f.revenue, { strong: true });
   group(ws, row++, "CHARGES");
   for (const c of COST_ROWS) line(costRowLabel(c), (f) => costRowValue(f, c), { indent: true, hideZero: true });
-  if (L.showFee) line(L.knFee, (f) => f.knFee, { indent: true, gold: true });
   line("Total charges", (f) => f.totalCost, { strong: true });
   line(L.result, (f) => f.result, { strong: true, signed: true });
   if (L.showSplit) {
@@ -162,7 +162,7 @@ export function tableHeader(ws: ExcelJS.Worksheet, row: number, labels: string[]
   labels.forEach((l, i) => {
     const c = ws.getRow(row).getCell(i + 1);
     c.value = l;
-    c.font = { size: 9, bold: true, color: { argb: l === "Prod-exé Pangee" || l === "Part Pangee" ? "FF9A7415" : YR_NAVY } };
+    c.font = { size: 9, bold: true, color: { argb: l === "Part Pangee" ? "FF9A7415" : YR_NAVY } };
     c.alignment = {
       horizontal: i === 0 || LEFT_HEADERS.has(l) ? "left" : "right",
       wrapText: true,

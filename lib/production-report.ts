@@ -3,8 +3,8 @@
 //
 // Transparence totale : chaque poste de recette / charge est détaillé, et la
 // part Pangee apparaît selon le contrat :
-//   - prod-exé : Pangee prend x % du CA → ligne « Rémunération prod-exé
-//     Pangee » DANS les charges, le compte se termine sur le net artiste ;
+//   - prod-exé : Pangee prend x % du CA → ligne « Prod Exe Pangée » DANS les
+//     charges, le compte se termine sur le net artiste ;
 //   - co-prod  : CA − charges − frais généraux − prod-exé = bénéfice, partagé
 //     À LA FIN entre Pangee et l'artiste.
 //
@@ -30,14 +30,16 @@ import {
 export { COST_LABELS, REVENUE_LABELS };
 
 /**
- * Ordre des charges dans le compte : frais généraux juste après la SACD (KN),
+ * Ordre des charges dans le compte : rémunération prod-exé Pangee puis frais
+ * généraux juste après la SACD (Stan 2026-11-02 : une charge comme les autres),
  * cachets artistes juste après la location (ordre du tableau de production
  * Youri).
  */
-export type CostRow = ProductionLineLabel | "OVERHEAD" | "CACHETS";
+export type CostRow = ProductionLineLabel | "KN_FEE" | "OVERHEAD" | "CACHETS";
 export const COST_ROWS: CostRow[] = [
   "CNM",
   "SACD",
+  "KN_FEE",
   "OVERHEAD",
   "LOCATION",
   "CACHETS",
@@ -48,11 +50,13 @@ export const COST_ROWS: CostRow[] = [
   "AUTRE",
 ];
 export function costRowLabel(c: CostRow, short = false): string {
+  if (c === "KN_FEE") return "Prod Exe Pangée";
   if (c === "OVERHEAD") return short ? "Frais gén." : "Frais généraux";
   if (c === "CACHETS") return short ? "Cachets" : "Cachets artistes";
   return short ? REPORT_LINE_SHORT[c] : REPORT_LINE_LABELS[c];
 }
 export function costRowValue(f: FinanceBlock, c: CostRow): number {
+  if (c === "KN_FEE") return f.knFee;
   if (c === "OVERHEAD") return f.overhead;
   if (c === "CACHETS") return f.cachets;
   return f.byLabel[c];
@@ -361,12 +365,10 @@ export function detailColumns(dates: Array<{ finance: FinanceBlock }>) {
 
 /**
  * Structure et libellés de fin de compte d'exploitation selon le contrat :
- *   prod-exé > 0 → ligne de rémunération Pangee dans les charges ;
  *   co-prod > 0  → « Bénéfice à partager » puis Part Pangee / Part artiste ;
  *   sinon        → « Net artiste ».
  */
 export function resultLabels(rates: ReportRates) {
-  const pe = rates?.pe ?? 0;
   const cp = rates?.cp ?? 0;
   const res = rates?.residency;
   if (res) {
@@ -374,18 +376,14 @@ export function resultLabels(rates: ReportRates) {
     // libellés avec les deux taux.
     const both = (a: number, b: number) => (a === b ? `${a} %` : `${a} % dates · ${b} % résidences`);
     return {
-      showFee: pe > 0 || res.pe > 0,
       showSplit: cp > 0 || res.cp > 0,
-      knFee: `Rémunération prod-exé Pangee (${both(pe, res.pe)} du CA)`,
       result: cp > 0 || res.cp > 0 ? "Bénéfice à partager" : "Net artiste",
       kn: `Part co-prod Pangee (${both(cp, res.cp)})`,
       artist: "Part artiste",
     };
   }
   return {
-    showFee: pe > 0,
     showSplit: cp > 0,
-    knFee: `Rémunération prod-exé Pangee (${pe} % du CA)`,
     result: cp > 0 ? "Bénéfice à partager" : "Net artiste",
     kn: `Part co-prod Pangee (${cp} %)`,
     artist: `Part artiste (${100 - cp} %)`,

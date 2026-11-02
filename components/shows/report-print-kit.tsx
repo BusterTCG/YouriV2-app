@@ -119,7 +119,7 @@ export function HeadRow({ cols, small }: { cols: string[]; small?: boolean }) {
         <th
           key={c + i}
           className={`py-1 px-1 font-semibold align-bottom ${i === 0 || LEFT_COLS.has(c) ? "text-left" : "text-right"}`}
-          style={c === "Prod-exé Pangee" || c === "Part Pangee" ? { color: "#9a7415" } : undefined}
+          style={c === "Part Pangee" ? { color: "#9a7415" } : undefined}
         >
           {c}
         </th>
@@ -180,8 +180,9 @@ export function StatTable({
 
 /**
  * Compte d'exploitation (même structure partout) : recettes, CA, charges
- * (postes vides masqués, frais généraux après la SACD), puis selon le modèle :
- *   prod-exé → rémunération Pangee dans les charges, fin sur « Net artiste » ;
+ * (postes vides masqués, prod-exé Pangee et frais généraux après la SACD), puis
+ * selon le modèle :
+ *   prod-exé → fin sur « Net artiste » ;
  *   co-prod  → résultat, puis partage Part Pangee / Part artiste.
  */
 export function FinanceTable({
@@ -234,7 +235,6 @@ export function FinanceTable({
         {row("Chiffre d'affaires", (f) => f.revenue, { strong: true })}
         {group("Charges")}
         {COST_ROWS.map((c) => row(costRowLabel(c), (f) => costRowValue(f, c), { indent: true, hideZero: true }))}
-        {L.showFee && row(L.knFee, (f) => f.knFee, { indent: true, gold: true })}
         {row("Total charges", (f) => f.totalCost, { strong: true })}
         {row(L.result, (f) => f.result, { strong: true, signed: true })}
         {L.showSplit && row(L.kn, (f) => f.knShare, { gold: true })}

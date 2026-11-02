@@ -268,16 +268,15 @@ function addDates(ws: ExcelJS.Worksheet, r: ProductionReport) {
 /** En-têtes des colonnes de fin selon le contrat. */
 function endHeads(r: ProductionReport): string[] {
   // Colonnes selon le(s) contrat(s) — y compris contrat « Résidences » distinct.
-  const { showFee: pe, showSplit: cp } = resultLabels(r.rates);
-  return [...(pe ? ["Prod-exé Pangee"] : []), cp ? "Bénéfice" : "Net artiste", ...(cp ? ["Part Pangee", "Part artiste"] : [])];
+  const { showSplit: cp } = resultLabels(r.rates);
+  return [cp ? "Bénéfice" : "Net artiste", ...(cp ? ["Part Pangee", "Part artiste"] : [])];
 }
 
 /** Valeurs des colonnes de fin : [montant, signé (couleur +/−), fond or]. */
 function endValues(r: ProductionReport, f: FinanceBlock): Array<[number, boolean, boolean]> {
   // Colonnes selon le(s) contrat(s) — y compris contrat « Résidences » distinct.
-  const { showFee: pe, showSplit: cp } = resultLabels(r.rates);
+  const { showSplit: cp } = resultLabels(r.rates);
   return [
-    ...(pe ? ([[f.knFee, false, true]] as Array<[number, boolean, boolean]>) : []),
     [f.result, true, false],
     ...(cp
       ? ([

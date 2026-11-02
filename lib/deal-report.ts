@@ -129,6 +129,7 @@ export async function getDealReport(dealId: string, nowMs: number): Promise<Deal
     for (const l of shown.filter((x) => x.label === label)) lines.push(toLine(l, "REVENUE"));
   }
   for (const c of COST_ROWS) {
+    if (c === "KN_FEE") continue; // calculée : dans le compte, pas une ligne saisie
     if (c === "OVERHEAD") {
       if (overheadShare !== 0 && allocation) {
         lines.push({

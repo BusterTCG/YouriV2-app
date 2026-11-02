@@ -1,6 +1,6 @@
 // Compte d'exploitation compact de l'onglet Résultats (Stan 2026-09-28 :
 // remplace les 6 tuiles de montants). Même structure que le bilan :
-// recettes, charges (postes vides masqués, frais généraux, prod-exé Pangee), puis
+// recettes, charges (postes vides masqués, prod-exé Pangee, frais généraux), puis
 // bénéfice partagé (co-prod) ou net artiste. Colonnes : une par périmètre (Réalisé à date / Total).
 // Server-safe.
 
@@ -83,7 +83,6 @@ export function FinanceSummary({
           {row("Chiffre d'affaires", (f) => f.revenue, { strong: true })}
           {group("Charges")}
           {COST_ROWS.map((c) => row(costRowLabel(c), (f) => costRowValue(f, c), { indent: true, hideZero: true }))}
-          {L.showFee && row(L.knFee, (f) => f.knFee, { indent: true })}
           {row("Total charges", (f) => f.totalCost, { strong: true })}
           {row(L.result, (f) => f.result, { strong: true, signed: true })}
           {L.showSplit && row(L.kn, (f) => f.knShare, { gold: true })}

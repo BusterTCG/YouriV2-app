@@ -41,9 +41,9 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
   const aud = [r.audience];
   const fins = [r.finance];
   const n = (v: number | null) => (v ? v.toLocaleString("fr-FR") : "—");
-  // Colonnes de fin selon le contrat : prod-exé (rémunération Pangee), co-prod (partage).
-  // (y compris contrat « Résidences » distinct)
-  const { showFee: prodExe, showSplit: coprod } = resultLabels(r.rates);
+  // Colonnes de fin selon le contrat : co-prod (partage),
+  // y compris contrat « Résidences » distinct.
+  const { showSplit: coprod } = resultLabels(r.rates);
   const columns = detailColumns(r.dates);
   // Sections présentes seulement si elles ont du contenu.
   const paidUpcoming = r.account.upcomingCostItems;
@@ -96,7 +96,6 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
                 "Payants",
                 ...columns.revenues.map((l) => REPORT_LINE_SHORT[l]),
                 ...columns.costs.map((c) => costRowLabel(c, true)),
-                ...(prodExe ? ["Prod-exé Pangee"] : []),
                 coprod ? "Bénéfice" : "Net artiste",
                 ...(coprod ? ["Part Pangee", "Part artiste"] : []),
               ]}
@@ -129,7 +128,7 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
                     {d.paying ? d.paying : "—"}
                     {fill != null && <span className="text-slate-500"> ({fill}%)</span>}
                   </td>
-                  <MoneyCells f={d.finance} columns={columns} prodExe={prodExe} coprod={coprod} />
+                  <MoneyCells f={d.finance} columns={columns} coprod={coprod} />
                 </tr>
               );
             })}
@@ -139,7 +138,7 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
               </td>
               <Num v={r.audience.performances} />
               <Num v={r.audience.paying} />
-              <MoneyCells f={r.finance} columns={columns} prodExe={prodExe} coprod={coprod} />
+              <MoneyCells f={r.finance} columns={columns} coprod={coprod} />
             </tr>
           </tbody>
         </table>
@@ -293,12 +292,10 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
 function MoneyCells({
   f,
   columns,
-  prodExe,
   coprod,
 }: {
   f: FinanceBlock;
   columns: ReturnType<typeof detailColumns>;
-  prodExe: boolean;
   coprod: boolean;
 }) {
   return (
@@ -309,7 +306,6 @@ function MoneyCells({
       {columns.costs.map((c) => (
         <Eur key={c} v={costRowValue(f, c)} />
       ))}
-      {prodExe && <Eur v={f.knFee} gold />}
       <Eur v={f.result} sign />
       {coprod && (
         <>
