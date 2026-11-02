@@ -53,6 +53,7 @@ export type ArtistAccountData = {
   quotePartBalance: number;
   collectionOffset: number;
   payableOnCollection: number;
+  upcomingCosts: number;
   balance: number;
   movements: Array<{
     id: string;
@@ -403,11 +404,15 @@ export function ArtistAccountCard({
           <div className="space-y-1">
             <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
               <div className="bg-emerald-500/70" style={{ width: pct(netPaid) }} />
+              <div className="bg-sky-500/70" style={{ width: pct(account.upcomingCosts) }} />
               <div className="bg-amber-500" style={{ width: pct(account.quotePartBalance) }} />
               <div className="bg-muted-foreground/25" style={{ width: pct(account.payableOnCollection) }} />
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground">
               <BarLegend dot="bg-emerald-500/70" label="Déjà versé" value={netPaid} />
+              {account.upcomingCosts !== 0 && (
+                <BarLegend dot="bg-sky-500/70" label="Payé sur dates à venir" value={account.upcomingCosts} />
+              )}
               <BarLegend dot="bg-amber-500" label={account.advancesDue ? "Quote-part à verser" : "Reste à verser"} value={account.quotePartBalance} />
               <BarLegend dot="bg-muted-foreground/25" label="Billetterie attendue" value={account.payableOnCollection} />
               <span className="ml-auto">
@@ -697,6 +702,7 @@ export function ArtistAccountCard({
           <div className="w-full text-[11px] text-muted-foreground">
             Encaissé {fmt(account.callable)} − versé {fmt(account.paid)}
             {account.refunded ? ` + déficit réglé ${fmt(account.refunded)}` : ""}
+            {account.upcomingCosts ? ` − déjà payé sur dates à venir ${fmt(account.upcomingCosts)}` : ""}
             {account.collectionOffset ? ` + compensé par la billetterie attendue ${fmt(account.collectionOffset)}` : ""}
             {account.advancesDue ? ` + frais / avances de l'artiste ${fmt(account.advancesDue)}` : ""}. Comptent
             comme encaissées les dates jouées dont la billetterie est reçue, les dates soldées et les dates

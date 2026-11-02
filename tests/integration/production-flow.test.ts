@@ -590,18 +590,23 @@ describe("Étape 5 — bilans et comptes (cohérence, sans management fees)", ()
     expect(JSON.stringify(r)).not.toMatch(/managementFee|margeNette/i);
   });
 
-  it("bilan : dépenses déjà payées sur dates à venir listées, hors résultat des dates jouées (Stan 2026-11-02)", async () => {
+  it("bilan : dépenses déjà payées sur dates à venir déduites du solde, hors résultat des dates jouées (Stan 2026-11-02)", async () => {
     const { getProductionReport } = await import("@/lib/production-report-server");
     const before = (await getProductionReport(prodId, Date.now()))!;
     const paid = ok<{ id: string }>(await PL.addProductionLine({ dealId: d2, label: "AUTRE", amount: 123 })).id;
     const open = ok<{ id: string }>(await PL.addProductionLine({ dealId: d2, label: "VHR", amount: 45 })).id;
     await prisma.productionLine.update({ where: { id: paid }, data: { paymentStatus: "PAID" } });
     const r = (await getProductionReport(prodId, Date.now()))!;
-    expect(r.paidUpcoming.map((e) => e.id)).toContain(paid);
-    expect(r.paidUpcoming.map((e) => e.id)).not.toContain(open);
+    const ids = r.account.upcomingCostItems.map((e) => e.id);
+    expect(ids).toContain(paid);
+    expect(ids).not.toContain(open);
     expect(r.paidUpcomingTotal).toBeCloseTo(before.paidUpcomingTotal + 123, 2);
     expect(r.finance.result).toBe(before.finance.result);
-    expect(r.account.balance).toBe(before.account.balance);
+    expect(r.account.upcomingCosts).toBeCloseTo(before.account.upcomingCosts + 123, 2);
+    expect(r.account.balance).toBeCloseTo(
+      before.account.balance - 123 + (r.account.collectionOffset - before.account.collectionOffset),
+      2,
+    );
     const { buildProductionReportXlsx } = await import("@/lib/finance/production-report-excel");
     const ExcelJS = (await import("exceljs")).default;
     const wb = new ExcelJS.Workbook();

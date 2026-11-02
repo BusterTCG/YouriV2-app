@@ -459,6 +459,7 @@ export default async function ProductionPage({ params, searchParams }: Props) {
             quotePartBalance: account.quotePartBalance,
             collectionOffset: account.collectionOffset,
             payableOnCollection: account.payableOnCollection,
+            upcomingCosts: account.upcomingCosts,
             balance: account.balance,
             movements: account.movements.map((m) => ({
               id: m.id,

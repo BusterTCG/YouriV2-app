@@ -13,6 +13,9 @@
 //     solde négatif n'est dû que s'il le reste après cette compensation. En
 //     fin d'exploitation, un solde négatif est dû par l'artiste (il le
 //     rembourse : REFUND, « solde d'exploitation »).
+//   - Dépenses déjà payées sur des dates à venir (Stan 2026-11-02) : déduites
+//     du solde tant que la date n'est pas jouée ; une fois jouée, elles passent
+//     dans le résultat de la date (donc dans la part acquise).
 //   - Avance de trésorerie de l'artiste (CASH_ADVANCE, Stan 2026-10-12) :
 //     Pangee la doit à l'artiste, rendue comme les frais avancés.
 //   - Frais avancés par l'artiste (Stan 2026-10-12) : dus dès la saisie (pas
@@ -75,6 +78,8 @@ export type ArtistAccount = {
   collectionOffset: number;
   /** Reste de `pendingCollection`, à verser une fois la billetterie reçue. */
   payableOnCollection: number;
+  /** Dépenses déjà payées sur des dates à venir (part supportée par l'artiste). */
+  upcomingCosts: number;
   /** Part artiste estimée sur toute l'exploitation. */
   forecast: number;
   /** Quote-parts versées (hors remboursement de frais). */
@@ -106,6 +111,7 @@ export function computeArtistAccount(
   deals: AccountDeal[],
   movements: AccountMovement[],
   advanceItems: AccountAdvance[] = [],
+  upcomingCosts = 0,
 ): ArtistAccount {
   // Dates annulées : comptées seulement si elles portent un montant (frais
   // réellement engagés) — même règle que le bilan d'exploitation.
@@ -155,7 +161,7 @@ export function computeArtistAccount(
   const acquired = round2(sum(played));
   const callable = round2(sum(callableDeals));
   const pendingCollection = round2(acquired - callable);
-  const beforeOffset = round2(callable - net);
+  const beforeOffset = round2(callable - net - upcomingCosts);
   const collectionOffset = round2(Math.min(Math.max(0, -beforeOffset), Math.max(0, pendingCollection)));
   const quotePartBalance = round2(beforeOffset + collectionOffset);
   return {
@@ -164,6 +170,7 @@ export function computeArtistAccount(
     pendingCollection,
     collectionOffset,
     payableOnCollection: round2(pendingCollection - collectionOffset),
+    upcomingCosts: round2(upcomingCosts),
     forecast: round2(sum(active)),
     upcoming: active.filter((d) => !d.isPast).length,
     cashAdvances: round2(cashAdvances),

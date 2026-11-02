@@ -230,6 +230,30 @@ describe("computeArtistAccount — compensation et avance de trésorerie (Stan 2
     expect(a.balance).toBe(100);
   });
 
+  it("dépenses déjà payées sur dates à venir : déduites du solde (Stan 2026-11-02)", () => {
+    const a = computeArtistAccount([d("sept", "2026-09-30", 852), d("oct", "2026-10-31", -240)], [], [], 1800);
+    expect(a.acquired).toBe(612);
+    expect(a.upcomingCosts).toBe(1800);
+    expect(a.quotePartBalance).toBe(-1188);
+    expect(a.balance).toBe(-1188);
+    expect(artistBalanceLabel(a)).toBe("Solde dû par l'artiste");
+  });
+
+  it("dépenses déjà payées : compensées par la billetterie attendue, frais avancés rendus", () => {
+    const pending = computeArtistAccount(
+      [d("sept", "2026-09-30", 852, { collected: false }), d("oct", "2026-10-31", -240)],
+      [],
+      [],
+      100,
+    );
+    expect(pending.balance).toBe(0);
+    expect(pending.collectionOffset).toBe(340);
+    expect(pending.payableOnCollection).toBe(512);
+    // Payée par l'artiste : la dépense et son remboursement s'annulent.
+    const byArtist = computeArtistAccount([d("sept", "2026-09-30", 500)], [], [{ amount: 100 }], 100);
+    expect(byArtist.balance).toBe(500);
+  });
+
   it("remboursement d'un déficit (REFUND) : solde l'exploitation", () => {
     const a = computeArtistAccount([d("a", "2026-09-01", -440)], [{ kind: "REFUND", amount: 440 }]);
     expect(a.balance).toBe(0);

@@ -29,13 +29,12 @@ import {
   writeStatTable,
 } from "@/lib/finance/report-excel-kit";
 import {
-  COST_ROWS,
   REPORT_LINE_SHORT,
-  REVENUE_LABELS,
   costRowLabel,
   costRowValue,
   dateFillRate,
   dateVenueLabel,
+  detailColumns,
   reportNotes,
   resultLabels,
   type FinanceBlock,
@@ -92,14 +91,15 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
   );
 
   // Dépenses déjà payées sur dates à venir (section seulement si elle a du contenu)
-  const extra = r.paidUpcoming.length > 0 ? 1 : 0;
+  const { showSplit: coprod } = resultLabels(r.rates);
+  const paidUpcoming = r.account.upcomingCostItems;
+  const extra = paidUpcoming.length > 0 ? 1 : 0;
   if (extra) {
-    const resultLabel = resultLabels(r.rates).result;
     row += 2;
     sectionTitle(ws, row, "2. DÉPENSES DÉJÀ PAYÉES SUR DATES À VENIR", 5);
     tableHeader(ws, row + 1, ["Libellé", "Date", "Montant"]);
     row += 1;
-    for (const e of r.paidUpcoming) {
+    for (const e of paidUpcoming) {
       row++;
       text(ws, `A${row}`, e.label);
       text(ws, `B${row}`, e.dateLabel);
@@ -109,13 +109,6 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
     text(ws, `A${row}`, "Total", { bold: true });
     num(ws, `C${row}`, r.paidUpcomingTotal, EUR, true);
     fillRow(ws, row, SUBTOTAL_BG, 3);
-    row++;
-    text(ws, `A${row}`, `${resultLabel} des dates jouées`);
-    num(ws, `C${row}`, r.finance.result, EUR);
-    row++;
-    text(ws, `A${row}`, `${resultLabel} à date, après ces dépenses`, { bold: true });
-    num(ws, `C${row}`, r.finance.result - r.paidUpcomingTotal, EUR, true);
-    fillRow(ws, row, SUBTOTAL_BG, 3);
   }
 
   // Compte artiste
@@ -124,6 +117,9 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
   const acc = r.account;
   row = writeStatTable(ws, row + 1, ["Compte artiste", "Montant"], [
     { label: "Part artiste acquise (dates jouées)", values: [acc.acquired], fmt: EUR },
+    ...(Math.round(acc.upcomingCosts) !== 0
+      ? [{ label: `Déjà payé sur dates à venir${coprod ? " (part artiste)" : ""}`, values: [-acc.upcomingCosts], fmt: EUR }]
+      : []),
     ...(Math.round(acc.pendingCollection) !== 0
       ? [{ label: "Billetterie à recevoir", values: [-acc.pendingCollection], fmt: EUR }]
       : []),
@@ -168,14 +164,12 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
     }
   }
 
-  // Frais généraux
-  row += 2;
-  sectionTitle(ws, row, `${3 + extra}. FRAIS GÉNÉRAUX`, 5);
-  tableHeader(ws, row + 1, ["Libellé", "Date", "Montant", "Statut"]);
-  row += 2;
-  if (p.overheads.length === 0) {
-    text(ws, `A${row}`, "Aucun frais général.", { italic: true, color: "FF999999" });
-  } else {
+  // Frais généraux (section seulement s'il y en a)
+  if (p.overheads.length > 0) {
+    row += 2;
+    sectionTitle(ws, row, `${3 + extra}. FRAIS GÉNÉRAUX`, 5);
+    tableHeader(ws, row + 1, ["Libellé", "Date", "Montant", "Statut"]);
+    row += 2;
     for (const o of p.overheads) {
       text(ws, `A${row}`, o.label + (o.comment ? ` — ${o.comment}` : ""));
       text(ws, `B${row}`, o.date ? format(o.date, "dd/MM/yyyy") : "");
@@ -205,7 +199,7 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
     }
     fillRow(ws, row, SUBTOTAL_BG, 3);
   }
-  writeNotes(ws, row + 2, [...reportNotes(r), "Détail de chaque poste, date par date : onglet « Détail par date »."], 5);
+  writeNotes(ws, row + 2, [...reportNotes({ ...r, hasOverhead: p.overheads.length > 0 }), "Détail de chaque poste, date par date : onglet « Détail par date »."], 5);
 
   // Détail par date : onglet dédié (chaque poste en colonne).
   addDates(wb.addWorksheet("Détail par date", sheetOptions("landscape")), r);
@@ -215,14 +209,15 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
 }
 
 function addDates(ws: ExcelJS.Worksheet, r: ProductionReport) {
+  const columns = detailColumns(r.dates);
   const heads = [
     "Date",
     "Lieu",
     "Repr.",
     "Payants",
     "Rempl.",
-    ...REVENUE_LABELS.map((l) => REPORT_LINE_SHORT[l]),
-    ...COST_ROWS.map((c) => costRowLabel(c, true)),
+    ...columns.revenues.map((l) => REPORT_LINE_SHORT[l]),
+    ...columns.costs.map((c) => costRowLabel(c, true)),
     ...endHeads(r),
   ];
   ws.columns = heads.map((_, i) => ({ width: i === 1 ? 30 : 11 }));
@@ -233,8 +228,8 @@ function addDates(ws: ExcelJS.Worksheet, r: ProductionReport) {
   let row = 4;
   const moneyCols = (f: FinanceBlock, bold: boolean) => {
     let c = 6;
-    for (const l of REVENUE_LABELS) num(ws, cell(c++, row), f.byLabel[l], EUR, bold);
-    for (const k of COST_ROWS) num(ws, cell(c++, row), costRowValue(f, k), EUR, bold);
+    for (const l of columns.revenues) num(ws, cell(c++, row), f.byLabel[l], EUR, bold);
+    for (const k of columns.costs) num(ws, cell(c++, row), costRowValue(f, k), EUR, bold);
     for (const [v, signed, gold] of endValues(r, f)) {
       num(ws, cell(c, row), v, EUR, bold, signed);
       if (gold && !bold) ws.getCell(cell(c, row)).fill = solid(GOLD_BG);

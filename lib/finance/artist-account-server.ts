@@ -8,6 +8,8 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { localDayKey } from "@/lib/finance/artist-status-daily";
 import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import { contractRates } from "@/lib/finance/production-overhead";
 import { PRODUCTION_LINE_LABELS } from "@/lib/production-line-labels";
 import {
   computeArtistAccount,
@@ -27,7 +29,20 @@ export type ArtistAdvanceItem = {
   refunded: boolean;
 };
 
+/** Dépense déjà payée sur une date à venir (charge ou cachet). */
+export type UpcomingCostItem = {
+  id: string;
+  /** « 14/11/26 », ou « déc. 2026 » pour un mois de résidence. */
+  dateLabel: string;
+  /** « Location salle · Dix Heures » */
+  label: string;
+  amount: number;
+  /** Part supportée par l'artiste selon le contrat de la date (co-prod : sa part du bénéfice). */
+  artistAmount: number;
+};
+
 export type ArtistAccountView = ArtistAccount & {
+  upcomingCostItems: UpcomingCostItem[];
   movements: Array<{
     id: string;
     kind: "PAYMENT" | "REFUND" | "EXPENSES" | "CASH_ADVANCE";
@@ -115,6 +130,65 @@ async function advanceItemsOf(productionId: string): Promise<ArtistAdvanceItem[]
   ].filter((a) => Math.round(a.amount * 100) !== 0);
 }
 
+/** Charges et cachets déjà sortis de la trésorerie sur des dates à venir. */
+async function upcomingCostItemsOf(dealIds: string[]): Promise<UpcomingCostItem[]> {
+  if (dealIds.length === 0) return [];
+  const deals = await prisma.deal.findMany({
+    where: { id: { in: dealIds } },
+    orderBy: { date: "asc" },
+    select: {
+      id: true,
+      date: true,
+      title: true,
+      venueName: true,
+      isMultiDate: true,
+      artistShareKind: true,
+      coprodKnPct: true,
+      prodExePct: true,
+      productionLines: {
+        where: {
+          kind: "COST",
+          deletedAt: null,
+          coveredByVenue: false,
+          OR: [{ paymentStatus: "PAID" }, { paidByArtist: true }],
+        },
+        orderBy: { order: "asc" },
+        select: { id: true, label: true, customLabel: true, amount: true },
+      },
+      dealArtistes: {
+        where: { deletedAt: null, paymentStatus: "PAID" },
+        select: { id: true, cachetAmount: true, artist: { select: { name: true } } },
+      },
+      performances: { where: { cancelled: false }, orderBy: { date: "asc" }, take: 1, select: { date: true } },
+    },
+  });
+  return deals.flatMap((d) => {
+    const first = d.performances[0]?.date ?? d.date;
+    const dateLabel = format(first, d.isMultiDate ? "MMM yyyy" : "dd/MM/yy", { locale: fr });
+    const venue = d.venueName ?? d.title;
+    const rates = contractRates({
+      artistShareKind: d.artistShareKind,
+      coprodKnPct: d.coprodKnPct != null ? Number(d.coprodKnPct) : null,
+      prodExePct: d.prodExePct != null ? Number(d.prodExePct) : null,
+    });
+    const artistRatio = rates ? (100 - rates.cp) / 100 : 0;
+    return [
+      ...d.productionLines.map((l) => ({
+        id: l.id,
+        label: `${l.customLabel || PRODUCTION_LINE_LABELS[l.label]} · ${venue}`,
+        amount: Number(l.amount ?? 0),
+      })),
+      ...d.dealArtistes.map((a) => ({
+        id: a.id,
+        label: `Cachet ${a.artist.name} · ${venue}`,
+        amount: Number(a.cachetAmount ?? 0),
+      })),
+    ]
+      .filter((e) => Math.round(e.amount * 100) !== 0)
+      .map((e) => ({ ...e, dateLabel, artistAmount: e.amount * artistRatio }));
+  });
+}
+
 async function accountDeals(productionId: string, nowMs: number): Promise<AccountDeal[]> {
   const startOfToday = new Date(nowMs);
   startOfToday.setHours(0, 0, 0, 0);
@@ -169,6 +243,9 @@ export async function getArtistAccount(
     }),
     advanceItemsOf(productionId),
   ]);
+  const upcomingCostItems = await upcomingCostItemsOf(
+    deals.filter((d) => !d.isPast && !d.cancelled).map((d) => d.id),
+  );
   const account = computeArtistAccount(
     deals,
     movements.map((m) => ({
@@ -177,6 +254,7 @@ export async function getArtistAccount(
       advanceAmount: Number(m.advanceAmount),
     })),
     advanceItems,
+    upcomingCostItems.reduce((s, e) => s + e.artistAmount, 0),
   );
   // Avances de trésorerie : à rendre, comme les frais avancés (comptées par
   // computeArtistAccount depuis les mouvements).
@@ -191,6 +269,7 @@ export async function getArtistAccount(
     }));
   return {
     ...account,
+    upcomingCostItems,
     movements: movements.map((m) => ({
       id: m.id,
       kind: m.kind,

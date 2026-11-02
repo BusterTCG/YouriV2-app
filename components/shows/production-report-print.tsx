@@ -7,13 +7,12 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { formatEur } from "@/components/deals/deal-helpers";
 import {
-  COST_ROWS,
   REPORT_LINE_SHORT,
-  REVENUE_LABELS,
   costRowLabel,
   costRowValue,
   dateFillRate,
   dateVenueLabel,
+  detailColumns,
   reportNotes,
   resultLabels,
   type FinanceBlock,
@@ -44,9 +43,11 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
   const n = (v: number | null) => (v ? v.toLocaleString("fr-FR") : "—");
   // Colonnes de fin selon le contrat : prod-exé (rémunération Pangee), co-prod (partage).
   // (y compris contrat « Résidences » distinct)
-  const { showFee: prodExe, showSplit: coprod, result: resultLabel } = resultLabels(r.rates);
-  // Section « dépenses déjà payées » seulement si elle a du contenu.
-  const extra = r.paidUpcoming.length > 0 ? 1 : 0;
+  const { showFee: prodExe, showSplit: coprod } = resultLabels(r.rates);
+  const columns = detailColumns(r.dates);
+  // Sections présentes seulement si elles ont du contenu.
+  const paidUpcoming = r.account.upcomingCostItems;
+  const extra = paidUpcoming.length > 0 ? 1 : 0;
 
   return (
     <ReportShell
@@ -61,7 +62,7 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
           : "Exploitation en cours"
       } · édité le ${format(r.generatedAt, "dd/MM/yyyy")}`}
       contract={r.contractLabel}
-      notes={reportNotes(r)}
+      notes={reportNotes({ ...r, hasOverhead: p.overheads.length > 0 })}
     >
       <KpiTiles kpis={r.kpis} variant="print" />
 
@@ -93,8 +94,8 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
                 "Lieu",
                 "Repr.",
                 "Payants",
-                ...REVENUE_LABELS.map((l) => REPORT_LINE_SHORT[l]),
-                ...COST_ROWS.map((c) => costRowLabel(c, true)),
+                ...columns.revenues.map((l) => REPORT_LINE_SHORT[l]),
+                ...columns.costs.map((c) => costRowLabel(c, true)),
                 ...(prodExe ? ["Prod-exé Pangee"] : []),
                 coprod ? "Bénéfice" : "Net artiste",
                 ...(coprod ? ["Part Pangee", "Part artiste"] : []),
@@ -128,7 +129,7 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
                     {d.paying ? d.paying : "—"}
                     {fill != null && <span className="text-slate-500"> ({fill}%)</span>}
                   </td>
-                  <MoneyCells f={d.finance} prodExe={prodExe} coprod={coprod} />
+                  <MoneyCells f={d.finance} columns={columns} prodExe={prodExe} coprod={coprod} />
                 </tr>
               );
             })}
@@ -138,7 +139,7 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
               </td>
               <Num v={r.audience.performances} />
               <Num v={r.audience.paying} />
-              <MoneyCells f={r.finance} prodExe={prodExe} coprod={coprod} />
+              <MoneyCells f={r.finance} columns={columns} prodExe={prodExe} coprod={coprod} />
             </tr>
           </tbody>
         </table>
@@ -151,7 +152,7 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
               <HeadRow cols={["Date", "Libellé", "Montant"]} />
             </thead>
             <tbody>
-              {r.paidUpcoming.map((e) => (
+              {paidUpcoming.map((e) => (
                 <tr key={e.id} className="border-b border-slate-200">
                   <td className="py-1 px-1 whitespace-nowrap capitalize">{e.dateLabel}</td>
                   <td className="py-1 px-1">{e.label}</td>
@@ -161,14 +162,6 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
               <tr className="font-semibold bg-slate-100">
                 <td className="py-1 px-1" colSpan={2}>Total</td>
                 <td className="py-1 px-1 text-right">{formatEur(r.paidUpcomingTotal)}</td>
-              </tr>
-              <tr className="border-b border-slate-200">
-                <td className="py-1 px-1" colSpan={2}>{resultLabel} des dates jouées</td>
-                <td className="py-1 px-1 text-right">{formatEur(r.finance.result)}</td>
-              </tr>
-              <tr className="font-semibold" style={{ background: "#fbf5e4" }}>
-                <td className="py-1 px-1" colSpan={2}>{resultLabel} à date, après ces dépenses</td>
-                <td className="py-1 px-1 text-right">{formatEur(r.finance.result - r.paidUpcomingTotal)}</td>
               </tr>
             </tbody>
           </table>
@@ -181,6 +174,9 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
             <tbody>
               {[
                 ["Part artiste acquise (dates jouées)", r.account.acquired],
+                ...(Math.round(r.account.upcomingCosts) !== 0
+                  ? [[`Déjà payé sur dates à venir${coprod ? " (part artiste)" : ""}`, -r.account.upcomingCosts] as [string, number]]
+                  : []),
                 ...(Math.round(r.account.pendingCollection) !== 0
                   ? [["Billetterie à recevoir", -r.account.pendingCollection] as [string, number]]
                   : []),
@@ -246,10 +242,8 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
         </div>
       </Section>
 
-      <Section title={`${4 + extra}. Frais généraux`}>
-        {p.overheads.length === 0 ? (
-          <p className="text-sm italic text-slate-500">Aucun frais général.</p>
-        ) : (
+      {p.overheads.length > 0 && (
+        <Section title={`${4 + extra}. Frais généraux`}>
           <table className="text-sm tabular-nums" style={{ width: "60%" }}>
             <thead>
               <HeadRow cols={["Date", "Libellé", "Montant", "Statut"]} />
@@ -289,20 +283,30 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
               </tr>
             </tbody>
           </table>
-        )}
-      </Section>
+        </Section>
+      )}
     </ReportShell>
   );
 }
 
 /** Colonnes montants d'une ligne de date : recettes, charges, puis fin selon le modèle. */
-function MoneyCells({ f, prodExe, coprod }: { f: FinanceBlock; prodExe: boolean; coprod: boolean }) {
+function MoneyCells({
+  f,
+  columns,
+  prodExe,
+  coprod,
+}: {
+  f: FinanceBlock;
+  columns: ReturnType<typeof detailColumns>;
+  prodExe: boolean;
+  coprod: boolean;
+}) {
   return (
     <>
-      {REVENUE_LABELS.map((l) => (
+      {columns.revenues.map((l) => (
         <Eur key={l} v={f.byLabel[l]} />
       ))}
-      {COST_ROWS.map((c) => (
+      {columns.costs.map((c) => (
         <Eur key={c} v={costRowValue(f, c)} />
       ))}
       {prodExe && <Eur v={f.knFee} gold />}

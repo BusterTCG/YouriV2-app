@@ -314,11 +314,15 @@ export function reportNotes(o: {
   upcomingCount?: number;
   unallocatedOverhead?: number;
   paidUpcomingTotal?: number;
+  /** false : pas de frais généraux, note de méthode omise. */
+  hasOverhead?: boolean;
 }): string[] {
   const r = o.rates;
   const res = r?.residency;
   return [
-    "Frais généraux : charges communes à la production, réparties au prorata du nombre de représentations (dates à venir incluses, annulées exclues) ; une date soldée garde la quote-part figée à son solde.",
+    ...(o.hasOverhead === false
+      ? []
+      : ["Frais généraux : charges communes à la production, réparties au prorata du nombre de représentations (dates à venir incluses, annulées exclues) ; une date soldée garde la quote-part figée à son solde."]),
     !r
       ? "Contrat artiste non défini."
       : res
@@ -341,9 +345,18 @@ export function reportNotes(o: {
       ? [`État à date : seules les dates déjà jouées sont comptées (${o.upcomingCount} date${(o.upcomingCount ?? 0) > 1 ? "s" : ""} à venir non comptée${(o.upcomingCount ?? 0) > 1 ? "s" : ""}).`]
       : []),
     ...((o.paidUpcomingTotal ?? 0) !== 0
-      ? ["Dépenses déjà payées sur des dates à venir : déduites du net à date uniquement. Elles n'entrent dans le compte artiste qu'une fois la date jouée."]
+      ? ["Dépenses déjà payées sur des dates à venir : déduites du solde artiste. Celles payées par l'artiste s'annulent avec ce qui lui est dû. Une fois la date jouée, elles passent dans son résultat, avec ses recettes."]
       : []),
   ];
+}
+
+/** Colonnes du détail par date : seuls les postes renseignés sur au moins une date. */
+export function detailColumns(dates: Array<{ finance: FinanceBlock }>) {
+  const used = (get: (f: FinanceBlock) => number) => dates.some((d) => Math.round(get(d.finance)) !== 0);
+  return {
+    revenues: REVENUE_LABELS.filter((l) => used((f) => f.byLabel[l])),
+    costs: COST_ROWS.filter((c) => used((f) => costRowValue(f, c))),
+  };
 }
 
 /**

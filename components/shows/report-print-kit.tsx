@@ -77,7 +77,8 @@ export function ReportShell({
       <style
         dangerouslySetInnerHTML={{
           __html: `
-@page { size: A4 landscape; margin: 0; }
+@page { size: A4 landscape; margin: 12mm 0 10mm; }
+@page :first { margin-top: 0; }
 @media print {
   html, body { background: white !important; margin: 0 !important; padding: 0 !important; }
   .report-doc { max-width: 100% !important; }
