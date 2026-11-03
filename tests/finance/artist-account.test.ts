@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { artistBalanceLabel, computeArtistAccount, type AccountDeal } from "@/lib/finance/artist-account";
+import { artistStatement, computeArtistAccount, type AccountDeal } from "@/lib/finance/artist-account";
 
 const d = (id: string, day: string, artistAmount: number, opts: Partial<AccountDeal> = {}): AccountDeal => ({
   id,
@@ -196,7 +196,12 @@ describe("computeArtistAccount — compensation et avance de trésorerie (Stan 2
     expect(a.payableOnCollection).toBe(612);
     expect(a.quotePartBalance).toBe(0);
     expect(a.balance).toBe(0);
-    expect(artistBalanceLabel(a)).toBe("Rien à verser à ce jour");
+    expect(artistStatement(a)).toEqual({
+      total: 612,
+      label: "Solde dû à l'artiste",
+      available: 0,
+      awaitingCollection: 612,
+    });
     expect(a.statuses.get("oct")).toBe("TO_INVOICE");
   });
 
@@ -209,7 +214,7 @@ describe("computeArtistAccount — compensation et avance de trésorerie (Stan 2
     expect(a.collectionOffset).toBe(100);
     expect(a.payableOnCollection).toBe(0);
     expect(a.balance).toBe(-200);
-    expect(artistBalanceLabel(a)).toBe("Solde dû par l'artiste");
+    expect(artistStatement(a).label).toBe("Solde dû par l'artiste");
   });
 
   it("billetterie reçue ensuite : la compensation disparaît, le net devient à verser", () => {
@@ -217,7 +222,20 @@ describe("computeArtistAccount — compensation et avance de trésorerie (Stan 2
     expect(a.collectionOffset).toBe(0);
     expect(a.payableOnCollection).toBe(0);
     expect(a.balance).toBe(612);
-    expect(artistBalanceLabel(a)).toBe("Solde dû à l'artiste");
+    expect(artistStatement(a).label).toBe("Solde dû à l'artiste");
+  });
+
+  it("fin du compte : solde total = disponible + billetterie en attente (Stan 2026-11-03)", () => {
+    const a = computeArtistAccount(
+      [d("a", "2026-09-30", 952), d("b", "2026-10-31", 1765, { collected: false })],
+      [{ kind: "PAYMENT", amount: 596 }],
+    );
+    expect(artistStatement(a)).toEqual({
+      total: 2121,
+      label: "Solde dû à l'artiste",
+      available: 356,
+      awaitingCollection: 1765,
+    });
   });
 
   it("frais avancés : dus en plus quand le déficit est compensé par la billetterie attendue", () => {
@@ -236,7 +254,7 @@ describe("computeArtistAccount — compensation et avance de trésorerie (Stan 2
     expect(a.upcomingCosts).toBe(1800);
     expect(a.quotePartBalance).toBe(-1188);
     expect(a.balance).toBe(-1188);
-    expect(artistBalanceLabel(a)).toBe("Solde dû par l'artiste");
+    expect(artistStatement(a).label).toBe("Solde dû par l'artiste");
   });
 
   it("dépenses déjà payées : compensées par la billetterie attendue, frais avancés rendus", () => {

@@ -40,7 +40,7 @@ import {
   type FinanceBlock,
 } from "@/lib/production-report";
 import type { ProductionReport } from "@/lib/production-report-server";
-import { ARTIST_MOVEMENT_LABEL as MOVEMENT_LABEL, artistBalanceLabel } from "@/lib/finance/artist-account";
+import { ARTIST_MOVEMENT_LABEL as MOVEMENT_LABEL, artistStatement } from "@/lib/finance/artist-account";
 
 export async function buildProductionReportXlsx(r: ProductionReport): Promise<Buffer> {
   const p = r.production;
@@ -115,16 +115,11 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
   row += 2;
   sectionTitle(ws, row, `${2 + extra}. COMPTE ARTISTE`, 5);
   const acc = r.account;
+  const statement = artistStatement(acc);
   row = writeStatTable(ws, row + 1, ["Compte artiste", "Montant"], [
-    { label: "Part artiste acquise (dates jouées)", values: [acc.acquired], fmt: EUR },
+    { label: "Part artiste (dates jouées)", values: [acc.acquired], fmt: EUR },
     ...(Math.round(acc.upcomingCosts) !== 0
       ? [{ label: `Déjà payé sur dates à venir${coprod ? " (part artiste)" : ""}`, values: [-acc.upcomingCosts], fmt: EUR }]
-      : []),
-    ...(Math.round(acc.pendingCollection) !== 0
-      ? [{ label: "Billetterie à recevoir", values: [-acc.pendingCollection], fmt: EUR }]
-      : []),
-    ...(Math.round(acc.collectionOffset) !== 0
-      ? [{ label: "Compensé par cette billetterie", values: [acc.collectionOffset], fmt: EUR }]
       : []),
     { label: "Quote-parts versées", values: [-acc.paid], fmt: EUR },
     { label: "Déficit réglé par l'artiste", values: [acc.refunded], fmt: EUR },
@@ -136,16 +131,22 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
         ]
       : []),
     {
-      label: artistBalanceLabel(acc),
-      values: [Math.abs(acc.balance)],
+      label: statement.label,
+      values: [Math.abs(statement.total)],
       fmt: EUR,
     },
   ]);
   fillRow(ws, row, SUBTOTAL_BG, 2);
-  if (Math.round(acc.payableOnCollection) > 0) {
-    row++;
-    text(ws, `A${row}`, "À verser une fois la billetterie reçue");
-    num(ws, `B${row}`, acc.payableOnCollection, EUR);
+  if (Math.round(statement.total) > 0) {
+    row += 2;
+    text(ws, `A${row}`, "Montant disponible", { bold: true });
+    num(ws, `B${row}`, statement.available, EUR, true);
+    fillRow(ws, row, SUBTOTAL_BG, 2);
+  }
+  if (Math.round(statement.awaitingCollection) > 0) {
+    row += 2;
+    text(ws, `A${row}`, "Billetterie en attente de versement");
+    num(ws, `B${row}`, statement.awaitingCollection, EUR);
   }
   if (acc.movements.length) {
     row += 2;

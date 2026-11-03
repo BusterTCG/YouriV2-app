@@ -18,11 +18,12 @@ import {
   type FinanceBlock,
 } from "@/lib/production-report";
 import type { ProductionReport } from "@/lib/production-report-server";
-import { ARTIST_MOVEMENT_LABEL as MOVEMENT_LABEL, artistBalanceLabel } from "@/lib/finance/artist-account";
+import { ARTIST_MOVEMENT_LABEL as MOVEMENT_LABEL, artistStatement } from "@/lib/finance/artist-account";
 import { KpiTiles } from "@/components/shows/kpi-visuals";
 import {
   Eur,
   FinanceTable,
+  GOLD_BG,
   HeadRow,
   NAVY,
   Num,
@@ -58,6 +59,8 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
   // Sections présentes seulement si elles ont du contenu.
   const paidUpcoming = r.account.upcomingCostItems;
   const extra = paidUpcoming.length > 0 ? 1 : 0;
+  const statement = artistStatement(r.account);
+  const owedToArtist = Math.round(statement.total) > 0;
 
   return (
     <ReportShell
@@ -170,15 +173,9 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
           <table className="w-full text-sm tabular-nums">
             <tbody>
               {[
-                ["Part artiste acquise (dates jouées)", r.account.acquired],
+                ["Part artiste (dates jouées)", r.account.acquired],
                 ...(Math.round(r.account.upcomingCosts) !== 0
                   ? [[`Déjà payé sur dates à venir${coprod ? " (part artiste)" : ""}`, -r.account.upcomingCosts] as [string, number]]
-                  : []),
-                ...(Math.round(r.account.pendingCollection) !== 0
-                  ? [["Billetterie à recevoir", -r.account.pendingCollection] as [string, number]]
-                  : []),
-                ...(Math.round(r.account.collectionOffset) !== 0
-                  ? [["Compensé par cette billetterie", r.account.collectionOffset] as [string, number]]
                   : []),
                 ["Quote-parts versées", -r.account.paid],
                 ...(r.account.refunded ? [["Déficit réglé par l'artiste", r.account.refunded] as [string, number]] : []),
@@ -195,17 +192,36 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
                   <td className="py-1 px-1 text-right">{Math.round(v as number) === 0 ? "—" : formatEur(v as number)}</td>
                 </tr>
               ))}
-              <tr className="font-semibold" style={{ background: "#fbf5e4" }}>
-                <td className="py-1 px-1">{artistBalanceLabel(r.account)}</td>
+              <tr
+                className="font-semibold"
+                style={owedToArtist ? { borderTop: `2px solid ${NAVY}` } : { background: GOLD_BG }}
+              >
+                <td className="py-1 px-1">{statement.label}</td>
                 <td className="py-1 px-1 text-right">
-                  {Math.round(r.account.balance) === 0 ? "—" : formatEur(Math.abs(r.account.balance))}
+                  {Math.round(statement.total) === 0 ? "—" : formatEur(Math.abs(statement.total))}
                 </td>
               </tr>
-              {Math.round(r.account.payableOnCollection) > 0 && (
-                <tr className="border-b border-slate-200">
-                  <td className="py-1 px-1">À verser une fois la billetterie reçue</td>
-                  <td className="py-1 px-1 text-right">{formatEur(r.account.payableOnCollection)}</td>
-                </tr>
+              {owedToArtist && (
+                <>
+                  <tr>
+                    <td colSpan={2} className="h-4" />
+                  </tr>
+                  <tr className="font-bold" style={{ background: GOLD_BG }}>
+                    <td className="py-1 px-1">Montant disponible</td>
+                    <td className="py-1 px-1 text-right">{formatEur(statement.available)}</td>
+                  </tr>
+                </>
+              )}
+              {Math.round(statement.awaitingCollection) > 0 && (
+                <>
+                  <tr>
+                    <td colSpan={2} className="h-4" />
+                  </tr>
+                  <tr>
+                    <td className="py-1 px-1">Billetterie en attente de versement</td>
+                    <td className="py-1 px-1 text-right">{formatEur(statement.awaitingCollection)}</td>
+                  </tr>
+                </>
               )}
             </tbody>
           </table>

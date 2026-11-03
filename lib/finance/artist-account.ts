@@ -185,9 +185,16 @@ export function computeArtistAccount(
   };
 }
 
-/** Libellé du solde dans les bilans (PDF, Excel). */
-export function artistBalanceLabel(a: Pick<ArtistAccount, "balance" | "payableOnCollection">): string {
-  if (a.balance > 0) return "Solde dû à l'artiste";
-  if (a.balance < 0) return "Solde dû par l'artiste";
-  return Math.round(a.payableOnCollection) > 0 ? "Rien à verser à ce jour" : "Compte soldé";
+/**
+ * Fin du compte artiste dans les bilans (PDF, Excel), Stan 2026-11-03 : le solde
+ * total, puis ce qui est disponible maintenant et ce qui attend la billetterie.
+ */
+export function artistStatement(a: Pick<ArtistAccount, "balance" | "payableOnCollection">) {
+  const total = round2(a.balance + a.payableOnCollection);
+  return {
+    total,
+    label: total > 0 ? "Solde dû à l'artiste" : total < 0 ? "Solde dû par l'artiste" : "Compte soldé",
+    available: Math.max(0, a.balance),
+    awaitingCollection: a.payableOnCollection,
+  };
 }
