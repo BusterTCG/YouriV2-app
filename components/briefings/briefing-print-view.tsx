@@ -239,8 +239,9 @@ export function BriefingPrintView({
           {/* TRAJETS — cards visuelles aller/retour/inter */}
           {briefing && briefing.travels.length > 0 && (
             <PrintSection title="Trajets">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {briefing.travels.map((t, i) => {
+              <TravelColumns
+                travels={briefing.travels}
+                render={(t, i) => {
                   const directionStyle: Record<
                     TravelDirection,
                     { bg: string; text: string; label: string; emoji: string }
@@ -342,8 +343,8 @@ export function BriefingPrintView({
                       )}
                     </div>
                   );
-                })}
-              </div>
+                }}
+              />
             </PrintSection>
           )}
 
@@ -391,9 +392,16 @@ export function BriefingPrintView({
                               {briefing.restaurantName}
                             </span>
                           )}
-                          {/* Badge vert "· pris en charge" retiré
-                              (Stan 2026-05-26) — était en doublon avec la
-                              mention italique en dessous. */}
+                          {/* Badge "· pris en charge" seulement quand un
+                              nom/adresse est affiché — sinon c'est la mention
+                              italique plus bas qui le dit (pas de doublon). */}
+                          {briefing.restaurantCovered &&
+                            (briefing.restaurantName ||
+                              briefing.restaurantAddress) && (
+                              <span className="text-[10px] text-emerald-700 italic ml-1.5">
+                                · pris en charge
+                              </span>
+                            )}
                           {briefing.restaurantName &&
                             briefing.restaurantAddress &&
                             " — "}
@@ -649,5 +657,37 @@ function DefItem({
       </span>
       <span className="text-slate-900">{value}</span>
     </li>
+  );
+}
+
+/**
+ * Trajets en 2 colonnes : allers empilés à gauche, retours à droite
+ * (Stan 2026-11-12). Les « inter » viennent ensuite en grille classique.
+ */
+function TravelColumns<T extends { direction: TravelDirection }>({
+  travels,
+  render,
+}: {
+  travels: T[];
+  render: (t: T, i: number) => React.ReactNode;
+}) {
+  const indexed = travels.map((t, i) => ({ t, i }));
+  const outs = indexed.filter((x) => x.t.direction === "OUTBOUND");
+  const rets = indexed.filter((x) => x.t.direction === "RETURN");
+  const inters = indexed.filter((x) => x.t.direction === "INTER");
+  return (
+    <div className="space-y-3">
+      {(outs.length > 0 || rets.length > 0) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+          <div className="space-y-3">{outs.map((x) => render(x.t, x.i))}</div>
+          <div className="space-y-3">{rets.map((x) => render(x.t, x.i))}</div>
+        </div>
+      )}
+      {inters.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {inters.map((x) => render(x.t, x.i))}
+        </div>
+      )}
+    </div>
   );
 }
