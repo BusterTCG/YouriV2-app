@@ -318,11 +318,11 @@ function MoneyCells({
       {columns.costs.map((c) => (
         <Eur key={c} v={costRowValue(f, c)} />
       ))}
-      <Eur v={f.result} sign />
+      <Eur v={f.result} sign gold={!coprod} />
       {coprod && (
         <>
-          <Eur v={f.knShare} gold />
-          <Eur v={f.artist} sign />
+          <Eur v={f.knShare} />
+          <Eur v={f.artist} sign gold />
         </>
       )}
     </>

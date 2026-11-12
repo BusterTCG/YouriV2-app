@@ -128,10 +128,7 @@ export function HeadRow({
         <th
           key={c + i}
           className={`py-1 px-1 font-semibold align-bottom ${i === 0 || LEFT_COLS.has(c) ? "text-left" : "text-right"}`}
-          style={{
-            ...(c === "Part Pangee" ? { color: "#9a7415" } : {}),
-            ...(numericWidth && i !== 0 && !LEFT_COLS.has(c) ? { width: numericWidth } : {}),
-          }}
+          style={numericWidth && i !== 0 && !LEFT_COLS.has(c) ? { width: numericWidth } : undefined}
         >
           {c}
         </th>
@@ -150,7 +147,7 @@ export function Eur({ v, sign, gold }: { v: number; sign?: boolean; gold?: boole
   return (
     <td
       className="py-1 px-1 text-right whitespace-nowrap"
-      style={{ ...(sign ? signedStyle(v) : {}), ...(gold ? { background: GOLD_BG } : {}) }}
+      style={{ ...(sign ? signedStyle(v) : {}), ...(gold ? { background: GOLD_BG, fontWeight: 600 } : {}) }}
     >
       {Math.round(v) === 0 ? "—" : formatEur(v)}
     </td>
@@ -248,9 +245,10 @@ export function FinanceTable({
         {group("Charges")}
         {COST_ROWS.map((c) => row(costRowLabel(c), (f) => costRowValue(f, c), { indent: true, hideZero: true }))}
         {row("Total charges", (f) => f.totalCost, { strong: true })}
-        {row(L.result, (f) => f.result, { strong: true, signed: true })}
-        {L.showSplit && row(L.kn, (f) => f.knShare, { gold: true })}
-        {L.showSplit && row(L.artist, (f) => f.artist, { strong: true, signed: true })}
+        {/* La part de l'artiste ressort (Stan 2026-11-03), pas celle de Pangee. */}
+        {row(L.result, (f) => f.result, { strong: true, signed: true, gold: !L.showSplit })}
+        {L.showSplit && row(L.kn, (f) => f.knShare)}
+        {L.showSplit && row(L.artist, (f) => f.artist, { gold: true, signed: true })}
       </tbody>
     </table>
   );

@@ -232,8 +232,8 @@ function addDates(ws: ExcelJS.Worksheet, r: ProductionReport) {
     for (const l of columns.revenues) num(ws, cell(c++, row), f.byLabel[l], EUR, bold);
     for (const k of columns.costs) num(ws, cell(c++, row), costRowValue(f, k), EUR, bold);
     for (const [v, signed, gold] of endValues(r, f)) {
-      num(ws, cell(c, row), v, EUR, bold, signed);
-      if (gold && !bold) ws.getCell(cell(c, row)).fill = solid(GOLD_BG);
+      num(ws, cell(c, row), v, EUR, bold || gold, signed);
+      if (gold) ws.getCell(cell(c, row)).fill = solid(GOLD_BG);
       c++;
     }
   };
@@ -278,11 +278,11 @@ function endValues(r: ProductionReport, f: FinanceBlock): Array<[number, boolean
   // Colonnes selon le(s) contrat(s) — y compris contrat « Résidences » distinct.
   const { showSplit: cp } = resultLabels(r.rates);
   return [
-    [f.result, true, false],
+    [f.result, true, !cp],
     ...(cp
       ? ([
-          [f.knShare, false, true],
-          [f.artist, true, false],
+          [f.knShare, false, false],
+          [f.artist, true, true],
         ] as Array<[number, boolean, boolean]>)
       : []),
   ];

@@ -57,6 +57,21 @@ describe("compte de production Excel", () => {
     expect(all).not.toMatch(/Kuro Neko/i);
   });
 
+  it("la part de l'artiste ressort, pas celle de Pangee (Stan 2026-11-03)", async () => {
+    const buf = await buildDealReportXlsx({ ...report, rates: { pe: 0, cp: 30 } });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf as unknown as ArrayBuffer);
+    const fills = new Map<string, unknown>();
+    wb.eachSheet((ws) =>
+      ws.eachRow((row) => {
+        const fill = row.getCell(1).fill;
+        fills.set(String(row.getCell(1).value ?? ""), fill?.type === "pattern" ? fill.pattern : undefined);
+      }),
+    );
+    expect(fills.get("Part co-prod Pangee (30 %)")).not.toBe("solid");
+    expect(fills.get("Part artiste (70 %)")).toBe("solid");
+  });
+
   it("prod-exé entre SACD et location, sans couleur propre (Stan 2026-11-02)", async () => {
     const i = (c: (typeof COST_ROWS)[number]) => COST_ROWS.indexOf(c);
     expect(i("KN_FEE")).toBe(i("SACD") + 1);

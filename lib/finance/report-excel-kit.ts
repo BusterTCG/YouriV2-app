@@ -108,10 +108,11 @@ export function writeFinanceTable(
   group(ws, row++, "CHARGES");
   for (const c of COST_ROWS) line(costRowLabel(c), (f) => costRowValue(f, c), { indent: true, hideZero: true });
   line("Total charges", (f) => f.totalCost, { strong: true });
-  line(L.result, (f) => f.result, { strong: true, signed: true });
+  // La part de l'artiste ressort (Stan 2026-11-03), pas celle de Pangee.
+  line(L.result, (f) => f.result, { strong: true, signed: true, gold: !L.showSplit });
   if (L.showSplit) {
-    line(L.kn, (f) => f.knShare, { gold: true });
-    line(L.artist, (f) => f.artist, { strong: true, signed: true });
+    line(L.kn, (f) => f.knShare);
+    line(L.artist, (f) => f.artist, { gold: true, signed: true });
   }
   return row - 1;
 }
@@ -162,7 +163,7 @@ export function tableHeader(ws: ExcelJS.Worksheet, row: number, labels: string[]
   labels.forEach((l, i) => {
     const c = ws.getRow(row).getCell(i + 1);
     c.value = l;
-    c.font = { size: 9, bold: true, color: { argb: l === "Part Pangee" ? "FF9A7415" : YR_NAVY } };
+    c.font = { size: 9, bold: true, color: { argb: YR_NAVY } };
     c.alignment = {
       horizontal: i === 0 || LEFT_HEADERS.has(l) ? "left" : "right",
       wrapText: true,
