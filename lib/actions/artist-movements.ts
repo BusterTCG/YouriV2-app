@@ -247,7 +247,13 @@ export async function deleteArtistMovement(id: string): Promise<ActionResult> {
 
 const SettleSchema = z.object({
   productionId: z.string().min(1),
-  dealIds: z.array(z.string().min(1)).min(1, "Coche au moins une date"),
+  /** Dates soldées par ce versement. */
+  dealIds: z.array(z.string().min(1)).default([]),
+  /** Acomptes (Stan 2026-11-13) : part du versement attribuée à des dates
+   *  qui restent à solder. */
+  partials: z
+    .array(z.object({ dealId: z.string().min(1), amount: z.coerce.number().positive("Acompte invalide") }))
+    .default([]),
   /** Quote-part versée (0 = solder sans versement, ex. date en perte). */
   amount: z.coerce.number().min(0),
   date: z.coerce.date(),
@@ -259,7 +265,9 @@ const SettleSchema = z.object({
 /**
  * Appel de quote-part : verse `amount` à l'artiste et SOLDE les dates cochées
  * (dates jouées de la production). Chaque date soldée fige sa quote-part de
- * frais généraux et sort des listes « à solder ».
+ * frais généraux et sort des listes « à solder ». Acomptes (Stan 2026-11-13) :
+ * une partie du versement peut être attribuée à des dates sans les solder ;
+ * leur reste (part artiste − acomptes) est proposé aux versements suivants.
  */
 export async function settleDatesWithPayment(input: unknown): Promise<ActionResult> {
   const parsed = SettleSchema.safeParse(input);
@@ -267,28 +275,52 @@ export async function settleDatesWithPayment(input: unknown): Promise<ActionResu
   const d = parsed.data;
   return safeAction("settleDatesWithPayment", async () => {
     await requireUser();
+    const partialIds = d.partials.map((p) => p.dealId);
+    if (d.dealIds.length === 0 && partialIds.length === 0) throw new Error("Coche au moins une date");
+    if (new Set(partialIds).size !== partialIds.length || partialIds.some((id) => d.dealIds.includes(id))) {
+      throw new Error("Une date est soit soldée, soit payée en acompte");
+    }
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
-    const deals = await prisma.deal.findMany({
-      where: { id: { in: d.dealIds }, productionId: d.productionId, category: "PROD_EXE", deletedAt: null },
+    const all = await prisma.deal.findMany({
+      where: {
+        id: { in: [...d.dealIds, ...partialIds] },
+        productionId: d.productionId,
+        category: "PROD_EXE",
+        deletedAt: null,
+      },
       select: {
         id: true,
         title: true,
         date: true,
         settledAt: true,
+        artistAmount: true,
+        artistAllocations: { select: { amount: true } },
         performances: { where: { cancelled: false }, select: { date: true } },
       },
     });
-    if (deals.length !== d.dealIds.length) throw new Error("Date introuvable dans cette production");
-    for (const deal of deals) {
+    if (all.length !== d.dealIds.length + partialIds.length) throw new Error("Date introuvable dans cette production");
+    for (const deal of all) {
       if (deal.settledAt) throw new Error(`« ${deal.title} » est déjà soldée`);
       const last = deal.performances.length
         ? new Date(Math.max(...deal.performances.map((p) => p.date.getTime())))
         : deal.date;
       if (last.getTime() >= startOfToday.getTime()) throw new Error(`« ${deal.title} » n'est pas encore jouée`);
     }
+    const deals = all.filter((x) => d.dealIds.includes(x.id));
+    // Acompte : au plus le reste de la date (part artiste − acomptes déjà versés).
+    for (const p of d.partials) {
+      const deal = all.find((x) => x.id === p.dealId)!;
+      const left = round2(
+        Number(deal.artistAmount ?? 0) - deal.artistAllocations.reduce((s, a) => s + Number(a.amount), 0),
+      );
+      if (left <= 0) throw new Error(`« ${deal.title} » : plus rien à verser, solde-la`);
+      if (p.amount > left + 0.005) throw new Error(`« ${deal.title} » : acompte supérieur au reste (${left} €)`);
+    }
+    const partialSum = round2(d.partials.reduce((s, p) => s + p.amount, 0));
     const advance = await advancesTotal(d.productionId, d.advances);
     if (d.amount + 0.005 < advance) throw new Error("Montant inférieur aux frais cochés");
+    if (d.amount + 0.005 < advance + partialSum) throw new Error("Montant inférieur aux acomptes et frais cochés");
     const movement =
       d.amount > 0
         ? await prisma.artistMovement.create({
@@ -303,6 +335,15 @@ export async function settleDatesWithPayment(input: unknown): Promise<ActionResu
           })
         : null;
     if (movement) await linkAdvances(movement.id, d.date, d.advances);
+    if (movement && d.partials.length) {
+      await prisma.artistPaymentAllocation.createMany({
+        data: d.partials.map((p) => ({
+          movementId: movement.id,
+          dealId: p.dealId,
+          amount: new Prisma.Decimal(p.amount),
+        })),
+      });
+    }
     // Quote-part de frais généraux figée à sa valeur actuelle.
     const allocation = await getProductionOverheadAllocation(d.productionId);
     for (const deal of deals) {
@@ -320,10 +361,12 @@ export async function settleDatesWithPayment(input: unknown): Promise<ActionResu
       entityId: d.productionId,
       action: "update",
       summary: `${deals.length} date${deals.length > 1 ? "s" : ""} soldée${deals.length > 1 ? "s" : ""}${
-        movement ? ` — quote-part versée ${d.amount} €` : " sans versement"
-      }${advance > 0 ? ` (dont frais avancés ${advance} €)` : ""}`,
+        d.partials.length ? `, acompte sur ${d.partials.length} date${d.partials.length > 1 ? "s" : ""} (${partialSum} €)` : ""
+      }${movement ? ` — quote-part versée ${d.amount} €` : " sans versement"}${
+        advance > 0 ? ` (dont frais avancés ${advance} €)` : ""
+      }`,
     });
-    await recomputeProductionFinancials(d.productionId);
+    if (deals.length > 0) await recomputeProductionFinancials(d.productionId);
     await after(d.productionId);
   });
 }

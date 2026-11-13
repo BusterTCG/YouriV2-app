@@ -18,7 +18,11 @@ import {
   type FinanceBlock,
 } from "@/lib/production-report";
 import type { ProductionReport } from "@/lib/production-report-server";
-import { ARTIST_MOVEMENT_LABEL as MOVEMENT_LABEL, artistStatement } from "@/lib/finance/artist-account";
+import {
+  ARTIST_MOVEMENT_LABEL as MOVEMENT_LABEL,
+  artistStatement,
+  movementDatesText,
+} from "@/lib/finance/artist-account";
 import { KpiTiles } from "@/components/shows/kpi-visuals";
 import {
   Eur,
@@ -238,6 +242,9 @@ export function ProductionReportPrint({ r }: { r: ProductionReport }) {
                       {MOVEMENT_LABEL[m.kind]}
                       {m.kind === "PAYMENT" && m.advanceAmount > 0 && (
                         <span className="text-slate-500"> (dont frais avancés {formatEur(m.advanceAmount)})</span>
+                      )}
+                      {movementDatesText(m, formatEur) && (
+                        <span className="text-slate-500"> · {movementDatesText(m, formatEur)}</span>
                       )}
                       {m.note && <span className="text-slate-500"> — {m.note}</span>}
                     </td>

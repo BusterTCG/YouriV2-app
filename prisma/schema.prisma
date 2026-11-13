@@ -596,6 +596,8 @@ model Deal {
   /// Versement de quote-part qui a soldé la date (le supprimer rouvre la date).
   settledMovementId    String?
   settledMovement      ArtistMovement? @relation("SettledByMovement", fields: [settledMovementId], references: [id], onDelete: SetNull)
+  /// Acomptes de quote-part versés sur la date avant son solde (Stan 2026-11-13).
+  artistAllocations    ArtistPaymentAllocation[]
 
   /// VenueRoom snapshot (depuis annuaire KN) — la salle peut avoir plusieurs
   /// configurations (grande salle, petite salle, etc.).
@@ -810,8 +812,26 @@ model ArtistMovement {
   /// Avance de trésorerie (CASH_ADVANCE) : cachets non payés de l'artiste
   /// qui la constituent (Stan 2026-10-16, idem KN).
   advanceDealArtistes DealArtiste[] @relation("CashAdvanceDealArtistes")
+  /// Acomptes : part du versement attribuée à des dates qui restent à solder.
+  allocations ArtistPaymentAllocation[]
 
   @@index([productionId])
+}
+
+/// Acompte de quote-part (Stan 2026-11-13) : part d'un versement attribuée à
+/// une date jouée sans la solder. Le reste de la date (part artiste − acomptes)
+/// est proposé aux versements suivants ; supprimer le versement retire l'acompte.
+model ArtistPaymentAllocation {
+  id         String         @id @default(cuid())
+  movementId String
+  movement   ArtistMovement @relation(fields: [movementId], references: [id], onDelete: Cascade)
+  dealId     String
+  deal       Deal           @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  amount     Decimal
+  createdAt  DateTime       @default(now())
+
+  @@index([movementId])
+  @@index([dealId])
 }
 
 /// Frais général d'une production (charge commune à toutes les dates) —

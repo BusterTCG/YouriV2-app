@@ -444,6 +444,7 @@ export default async function ProductionPage({ params, searchParams }: Props) {
               } · ${d.venueName ?? d.title}`,
               artistAmount: d.pnl.artistAmount ?? 0,
               collected: Math.round(d.pnl.revenue) !== 0 && Math.round(d.openRevenue) === 0,
+              paidOnAccount: account.paidOnAccount[d.id] ?? 0,
             }))}
           account={{
             acquired: account.acquired,
@@ -469,6 +470,8 @@ export default async function ProductionPage({ params, searchParams }: Props) {
               date: m.date.toISOString().slice(0, 10),
               note: m.note,
               dealLabels: m.dealLabels,
+              settledLabels: m.settledLabels,
+              partials: m.partials,
             })),
             advanceItems: account.advanceItems,
           }}

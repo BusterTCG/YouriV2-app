@@ -53,8 +53,14 @@ export type ArtistAccountView = ArtistAccount & {
     note: string | null;
     /** Avance de trésorerie : deals dont le cachet la constitue. */
     dealLabels: string[];
+    /** Versement de quote-part : dates qu'il a soldées (« 04/10/2026 · MCC »). */
+    settledLabels: string[];
+    /** Versement de quote-part : acomptes versés sur des dates (Stan 2026-11-13). */
+    partials: Array<{ label: string; amount: number }>;
   }>;
   advanceItems: ArtistAdvanceItem[];
+  /** Acomptes déjà versés par date (dealId → €), Stan 2026-11-13. */
+  paidOnAccount: Record<string, number>;
 };
 
 /** Cachet de l'artiste pas encore payé, utilisable comme avance de trésorerie
@@ -62,6 +68,41 @@ export type ArtistAccountView = ArtistAccount & {
 export type AdvanceableDeal = { id: string; label: string; amount: number };
 
 const dealLabel = (d: { title: string; date: Date }) => `${d.title} · ${format(d.date, "dd/MM/yyyy")}`;
+
+/** Date d'une production : « 04/10/2026 · MCC » ou « octobre 2026 · Le Complexe » (résidence). */
+export function productionDateLabel(d: {
+  date: Date;
+  title: string;
+  venueName: string | null;
+  residencyId: string | null;
+  firstDate?: Date;
+}): string {
+  const when = d.residencyId
+    ? format(d.firstDate ?? d.date, "MMMM yyyy", { locale: fr })
+    : format(d.date, "dd/MM/yyyy");
+  return `${when} · ${d.venueName ?? d.title}`;
+}
+
+const LABEL_DEAL_SELECT = {
+  date: true,
+  title: true,
+  venueName: true,
+  residencyId: true,
+  performances: {
+    where: { cancelled: false },
+    orderBy: { date: "asc" as const },
+    take: 1,
+    select: { date: true },
+  },
+} as const;
+
+const labelOf = (d: {
+  date: Date;
+  title: string;
+  venueName: string | null;
+  residencyId: string | null;
+  performances: Array<{ date: Date }>;
+}) => productionDateLabel({ ...d, firstDate: d.performances[0]?.date });
 
 /**
  * Cachets de l'artiste (hors productions) que Pangee n'a pas encore payés —
@@ -239,6 +280,11 @@ export async function getArtistAccount(
           select: { deal: { select: { title: true, date: true } } },
           orderBy: { deal: { date: "asc" } },
         },
+        settledDeals: { select: LABEL_DEAL_SELECT, orderBy: { date: "asc" } },
+        allocations: {
+          select: { amount: true, dealId: true, deal: { select: LABEL_DEAL_SELECT } },
+          orderBy: { deal: { date: "asc" } },
+        },
       },
     }),
     advanceItemsOf(productionId),
@@ -278,8 +324,16 @@ export async function getArtistAccount(
       date: m.date,
       note: m.note,
       dealLabels: m.advanceDealArtistes.map((a) => dealLabel(a.deal)),
+      settledLabels: m.settledDeals.map(labelOf),
+      partials: m.allocations.map((a) => ({ label: labelOf(a.deal), amount: Number(a.amount) })),
     })),
     advanceItems: [...cashItems, ...advanceItems],
+    paidOnAccount: movements
+      .flatMap((m) => m.allocations)
+      .reduce<Record<string, number>>((acc, a) => {
+        acc[a.dealId] = Math.round(((acc[a.dealId] ?? 0) + Number(a.amount)) * 100) / 100;
+        return acc;
+      }, {}),
   };
 }
 

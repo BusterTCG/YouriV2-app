@@ -40,7 +40,11 @@ import {
   type FinanceBlock,
 } from "@/lib/production-report";
 import type { ProductionReport } from "@/lib/production-report-server";
-import { ARTIST_MOVEMENT_LABEL as MOVEMENT_LABEL, artistStatement } from "@/lib/finance/artist-account";
+import {
+  ARTIST_MOVEMENT_LABEL as MOVEMENT_LABEL,
+  artistStatement,
+  movementDatesText,
+} from "@/lib/finance/artist-account";
 
 export async function buildProductionReportXlsx(r: ProductionReport): Promise<Buffer> {
   const p = r.production;
@@ -158,6 +162,7 @@ export async function buildProductionReportXlsx(r: ProductionReport): Promise<Bu
         `A${row}`,
         MOVEMENT_LABEL[m.kind] +
           (m.kind === "PAYMENT" && m.advanceAmount > 0 ? ` (dont frais avancés ${m.advanceAmount} €)` : "") +
+          (movementDatesText(m, (n) => `${n} €`) ? ` · ${movementDatesText(m, (n) => `${n} €`)}` : "") +
           (m.note ? ` — ${m.note}` : ""),
       );
       text(ws, `B${row}`, format(m.date, "dd/MM/yyyy"));
@@ -259,11 +264,12 @@ function addDates(ws: ExcelJS.Worksheet, r: ProductionReport) {
     moneyCols(d.finance, false);
     row++;
   }
+  // Fond gris d'abord : la part artiste garde son fond or sur la ligne Total.
+  fillRow(ws, row, SUBTOTAL_BG, heads.length);
   text(ws, `A${row}`, "Total", { bold: true });
   num(ws, `C${row}`, r.audience.performances, INT, true);
   num(ws, `D${row}`, r.audience.paying, INT, true);
   moneyCols(r.finance, true);
-  fillRow(ws, row, SUBTOTAL_BG, heads.length);
 }
 
 /** En-têtes des colonnes de fin selon le contrat. */

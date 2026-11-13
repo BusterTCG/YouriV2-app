@@ -18,7 +18,7 @@ import { GlossaryHint } from "@/components/shows/glossary-hint";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { CheckCircle2, HandCoins, Loader2, Trash2 } from "lucide-react";
+import { CheckCircle2, HandCoins, Loader2, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SensitiveAmount } from "@/components/dashboard/sensitive-amount";
@@ -66,6 +66,9 @@ export type ArtistAccountData = {
     note: string | null;
     /** Avance de trésorerie : deals dont la part artiste la constitue. */
     dealLabels?: string[];
+    /** Versement de quote-part : dates soldées et acomptes (Stan 2026-11-13). */
+    settledLabels?: string[];
+    partials?: Array<{ label: string; amount: number }>;
   }>;
   /** Dû à l'artiste : frais avancés (charges, frais généraux) et avances de trésorerie. */
   advanceItems: Array<{
@@ -86,7 +89,12 @@ export type SettleableDate = {
   artistAmount: number;
   /** Billetterie encaissée → pré-cochée. */
   collected: boolean;
+  /** Acomptes déjà versés sur la date (Stan 2026-11-13). */
+  paidOnAccount?: number;
 };
+
+/** Reste à verser sur une date : part artiste − acomptes déjà versés. */
+const remainingOf = (d: SettleableDate) => Math.round((d.artistAmount - (d.paidOnAccount ?? 0)) * 100) / 100;
 
 /** Deal de l'artiste pas encore payé, utilisable comme avance de trésorerie. */
 export type AdvanceableDeal = { id: string; label: string; amount: number };
@@ -121,10 +129,12 @@ export function ArtistAccountCard({
   const [form, setForm] = useState<null | FormKind>(openFor ? "PAYMENT" : null);
   /** Argent reçu de l'artiste : remboursement ou avance de trésorerie. */
   const [received, setReceived] = useState<"REFUND" | "CASH_ADVANCE">("REFUND");
-  const [amount, setAmount] = useState(openFor && openFor.artistAmount > 0 ? String(openFor.artistAmount) : "");
+  const [amount, setAmount] = useState(openFor && remainingOf(openFor) > 0 ? String(remainingOf(openFor)) : "");
   const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [note, setNote] = useState("");
   const [checked, setChecked] = useState<Set<string>>(() => new Set(openFor ? [openFor.id] : []));
+  /** Acomptes saisis : date → montant (texte du champ). */
+  const [partials, setPartials] = useState<Map<string, string>>(() => new Map());
   const [checkedAdv, setCheckedAdv] = useState<Set<string>>(() => new Set());
   const [checkedDeals, setCheckedDeals] = useState<Set<string>>(() => new Set());
   const b = account.balance;
@@ -132,7 +142,9 @@ export function ArtistAccountCard({
 
   const round2 = (n: number) => Math.round(n * 100) / 100;
   const sumOf = (ids: Set<string>) =>
-    round2(settleable.filter((d) => ids.has(d.id)).reduce((s, d) => s + d.artistAmount, 0));
+    round2(settleable.filter((d) => ids.has(d.id)).reduce((s, d) => s + remainingOf(d), 0));
+  const parseEur = (s: string) => parseFloat(s.replace(/\s/g, "").replace(",", ".")) || 0;
+  const partialSumOf = (p: Map<string, string>) => round2([...p.values()].reduce((s, v) => s + parseEur(v), 0));
   const advSumOf = (keys: Set<string>) =>
     round2(openAdvances.filter((a) => keys.has(advanceKey(a))).reduce((s, a) => s + a.amount, 0));
   const advSum = advSumOf(checkedAdv);
@@ -178,11 +190,20 @@ export function ArtistAccountCard({
   /** Remboursement de frais / avances : au plus l'excédent sur le déficit. */
   const expensesAmount = (keys: Set<string>) => round2(Math.min(advSumOf(keys), toReturn));
 
-  /** Montant proposé : dates cochées (ou solde quote-part) + frais cochés. */
-  function suggest(dates: Set<string>, adv: Set<string>): string {
+  /** Montant proposé : reste des dates cochées (ou solde quote-part) + acomptes + frais cochés. */
+  function suggest(dates: Set<string>, adv: Set<string>, p: Map<string, string> = partials): string {
     const base = settleable.length > 0 ? Math.max(0, sumOf(dates)) : Math.max(0, account.quotePartBalance);
-    const total = round2(base + advSumOf(adv));
+    const total = round2(base + partialSumOf(p) + advSumOf(adv));
     return total > 0 ? String(total) : "";
+  }
+
+  /** Acompte sur une date (Stan 2026-11-13) : `null` le retire. */
+  function setPartial(id: string, value: string | null) {
+    const next = new Map(partials);
+    if (value == null) next.delete(id);
+    else next.set(id, value);
+    setPartials(next);
+    setAmount(suggest(checked, checkedAdv, next));
   }
 
   function open(kind: FormKind) {
@@ -190,6 +211,7 @@ export function ArtistAccountCard({
     setError(null);
     setNote("");
     setCheckedDeals(new Set());
+    setPartials(new Map());
     // Frais / avances à rendre : tous cochés d'office (remboursement ; quote-part
     // seulement sans déficit — sinon ils comblent le déficit).
     const adv =
@@ -200,7 +222,7 @@ export function ArtistAccountCard({
     if (kind === "PAYMENT") {
       const pre = new Set(settleable.filter((d) => d.collected).map((d) => d.id));
       setChecked(pre);
-      setAmount(suggest(pre, adv));
+      setAmount(suggest(pre, adv, new Map()));
       return;
     }
     setChecked(new Set());
@@ -235,7 +257,11 @@ export function ArtistAccountCard({
     if (next.has(id)) next.delete(id);
     else next.add(id);
     setChecked(next);
-    setAmount(suggest(next, checkedAdv));
+    // Une date soldée n'a pas d'acompte en plus.
+    const p = new Map(partials);
+    p.delete(id);
+    setPartials(p);
+    setAmount(suggest(next, checkedAdv, p));
   }
 
   function toggleAdv(key: string) {
@@ -249,8 +275,26 @@ export function ArtistAccountCard({
   function save() {
     if (!form) return;
     setError(null);
-    const n = parseFloat(amount.replace(/\s/g, "").replace(",", ".")) || 0;
-    const settling = form === "PAYMENT" && checked.size > 0;
+    const n = parseEur(amount);
+    const partialList = [...partials].map(([dealId, v]) => ({ dealId, amount: parseEur(v) }));
+    const settling = form === "PAYMENT" && (checked.size > 0 || partialList.length > 0);
+    if (form === "PAYMENT") {
+      for (const p of partialList) {
+        const d = settleable.find((x) => x.id === p.dealId);
+        if (p.amount <= 0) {
+          setError(`Acompte à saisir pour ${d?.label ?? "la date"}`);
+          return;
+        }
+        if (d && p.amount > remainingOf(d) + 0.005) {
+          setError(`Acompte supérieur au reste de ${d.label} (${fmt(remainingOf(d))})`);
+          return;
+        }
+      }
+      if (n + 0.005 < partialSumOf(partials) + advSum) {
+        setError("Montant inférieur aux acomptes et frais cochés");
+        return;
+      }
+    }
     const pick = (k: AdvanceKind) =>
       openAdvances.filter((a) => a.kind === k && checkedAdv.has(advanceKey(a))).map((a) => a.id);
     const advances = { lines: pick("LINE"), overheads: pick("OVERHEAD"), cash: pick("CASH") };
@@ -280,6 +324,7 @@ export function ArtistAccountCard({
         ? await settleDatesWithPayment({
             productionId,
             dealIds: [...checked],
+            partials: partialList,
             amount: n,
             date: new Date(`${date}T12:00:00Z`),
             note: note || null,
@@ -451,13 +496,22 @@ export function ArtistAccountCard({
                 <span className="w-24 tabular-nums text-muted-foreground">
                   {format(new Date(`${m.date}T12:00:00Z`), "dd/MM/yyyy")}
                 </span>
-                <span className="flex-1 min-w-0 truncate">
+                <span className="flex-1 min-w-0">
                   {MOVEMENT_LABEL[m.kind]}
                   {m.kind === "PAYMENT" && m.advanceAmount > 0 && (
                     <span className="text-muted-foreground"> (dont frais / avances rendus {fmt(m.advanceAmount)})</span>
                   )}
                   {m.dealLabels && m.dealLabels.length > 0 && (
                     <span className="text-muted-foreground"> · depuis {m.dealLabels.join(", ")}</span>
+                  )}
+                  {m.settledLabels && m.settledLabels.length > 0 && (
+                    <span className="text-muted-foreground"> · solde {m.settledLabels.join(", ")}</span>
+                  )}
+                  {m.partials && m.partials.length > 0 && (
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · acompte {m.partials.map((p) => `${p.label} (${fmt(p.amount)})`).join(", ")}
+                    </span>
                   )}
                   {m.note && <span className="text-muted-foreground"> — {m.note}</span>}
                 </span>
@@ -582,8 +636,14 @@ export function ArtistAccountCard({
               onChange={(e) => setNote(e.target.value)}
             />
             <Button size="sm" className="h-8" onClick={save} disabled={pending}>
-              {form === "PAYMENT" && checked.size > 0
-                ? `Verser et solder ${checked.size} date${checked.size > 1 ? "s" : ""}`
+              {form === "PAYMENT" && (checked.size > 0 || partials.size > 0)
+                ? [
+                    checked.size > 0 && `solder ${checked.size} date${checked.size > 1 ? "s" : ""}`,
+                    partials.size > 0 && `acompte sur ${partials.size} date${partials.size > 1 ? "s" : ""}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" + ")
+                    .replace(/^./, (c) => `Verser et ${c}`)
                 : "Enregistrer"}
             </Button>
             <Button size="sm" variant="ghost" className="h-8" onClick={() => setForm(null)}>
@@ -593,27 +653,70 @@ export function ArtistAccountCard({
             {form === "PAYMENT" && settleable.length > 0 && (
               <div className="w-full space-y-1 pt-1">
                 <div className="text-[11px] text-muted-foreground">
-                  Dates soldées par ce versement — leurs comptes seront clos et leur quote-part de
-                  frais généraux figée. Montant = somme des parts artiste cochées
+                  Coche une date pour la solder (compte clos, quote-part de frais généraux figée), ou
+                  verse un acompte : la date reste à solder et son reste sera proposé au prochain
+                  versement. Montant = reste des dates cochées + acomptes
                   {openAdvances.length > 0 ? " + frais avancés cochés" : ""} (modifiable ; 0 = solder
                   sans versement).
                 </div>
                 <div className="rounded-md border bg-card divide-y">
-                  {settleable.map((d) => (
-                    <label key={d.id} className="flex items-center gap-2 px-2 py-1 text-xs cursor-pointer hover:bg-accent/30">
-                      <input
-                        type="checkbox"
-                        checked={checked.has(d.id)}
-                        onChange={() => toggle(d.id)}
-                        className="h-3.5 w-3.5 accent-violet-600"
-                      />
-                      <span className="flex-1 min-w-0 truncate">{d.label}</span>
-                      {!d.collected && <span className="text-amber-700 dark:text-amber-400">billetterie pas reçue</span>}
-                      <span className={cn("tabular-nums font-medium w-24 text-right", d.artistAmount < 0 && "text-red-600 dark:text-red-400")}>
-                        <SensitiveAmount value={d.artistAmount} />
-                      </span>
-                    </label>
-                  ))}
+                  {settleable.map((d) => {
+                    const left = remainingOf(d);
+                    const partial = partials.get(d.id);
+                    return (
+                      <div key={d.id} className="flex items-center gap-2 px-2 py-1 text-xs hover:bg-accent/30">
+                        <label className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked.has(d.id)}
+                            onChange={() => toggle(d.id)}
+                            className="h-3.5 w-3.5 accent-violet-600"
+                          />
+                          <span className="min-w-0 truncate">{d.label}</span>
+                        </label>
+                        {!d.collected && <span className="text-amber-700 dark:text-amber-400">billetterie pas reçue</span>}
+                        {(d.paidOnAccount ?? 0) > 0 && (
+                          <span className="text-muted-foreground">
+                            acompte {fmt(d.paidOnAccount ?? 0)} versé · reste
+                          </span>
+                        )}
+                        {!checked.has(d.id) && left > 0 && partial === undefined && (
+                          <button
+                            type="button"
+                            className="text-violet-700 dark:text-violet-400 hover:underline"
+                            onClick={() => setPartial(d.id, "")}
+                          >
+                            Acompte
+                          </button>
+                        )}
+                        {partial !== undefined && (
+                          <span className="flex items-center gap-1">
+                            <span className="text-muted-foreground">Acompte</span>
+                            <Input
+                              autoFocus
+                              type="text"
+                              inputMode="decimal"
+                              value={partial}
+                              onChange={(e) => setPartial(d.id, e.target.value)}
+                              placeholder="€"
+                              className="h-6 w-20 text-xs text-right tabular-nums"
+                            />
+                            <button
+                              type="button"
+                              title="Retirer l'acompte"
+                              className="p-0.5 text-muted-foreground hover:text-destructive"
+                              onClick={() => setPartial(d.id, null)}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        )}
+                        <span className={cn("tabular-nums font-medium w-24 text-right", left < 0 && "text-red-600 dark:text-red-400")}>
+                          <SensitiveAmount value={left} />
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

@@ -57,6 +57,19 @@ export const ARTIST_MOVEMENT_LABEL: Record<AccountMovement["kind"], string> = {
   EXPENSES: "Remboursement à l'artiste",
 };
 
+/** Dates concernées par un versement de quote-part : « solde … · acompte … (200 €) ». */
+export function movementDatesText(
+  m: { settledLabels: string[]; partials: Array<{ label: string; amount: number }> },
+  fmt: (n: number) => string,
+): string {
+  return [
+    m.settledLabels.length > 0 && `solde ${m.settledLabels.join(", ")}`,
+    m.partials.length > 0 && `acompte ${m.partials.map((p) => `${p.label} (${fmt(p.amount)})`).join(", ")}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 /** Frais avancé par l'artiste (charge d'une date ou frais général). */
 export type AccountAdvance = { amount: number };
 

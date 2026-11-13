@@ -799,6 +799,50 @@ describe("Lot 3 — solder par appel de quote-part, frais généraux figés (Sta
     expect(await share(ids[0])).toBe(75);
   });
 
+  it("acompte sur une date (Stan 2026-11-13) : reste proposé ensuite, puis solde ; libellés des dates", async () => {
+    const { getArtistAccount } = await import("@/lib/finance/artist-account-server");
+    const dealId = ids[2];
+    const due = num((await deal(dealId)).artistAmount)!;
+    // Acompte seul : la date reste à solder.
+    ok(
+      await AM.settleDatesWithPayment({
+        productionId: prod,
+        partials: [{ dealId, amount: 200 }],
+        amount: 200,
+        date: new Date("2025-04-03T12:00:00Z"),
+        note: "Paiement Pilote Top10",
+      }),
+    );
+    expect((await deal(dealId)).settledAt).toBeNull();
+    let acc = await getArtistAccount(prod, Date.now());
+    expect(acc.paidOnAccount[dealId]).toBe(200);
+    const first = acc.movements.find((m) => m.note === "Paiement Pilote Top10")!;
+    expect(first.partials).toEqual([{ label: expect.stringContaining("/2025 ·"), amount: 200 }]);
+    // Acompte au-delà du reste, ou montant inférieur aux acomptes : refusés.
+    expect(
+      (await AM.settleDatesWithPayment({ productionId: prod, partials: [{ dealId, amount: due }], amount: due, date: new Date() })).ok,
+    ).toBe(false);
+    expect(
+      (await AM.settleDatesWithPayment({ productionId: prod, partials: [{ dealId, amount: 50 }], amount: 10, date: new Date() })).ok,
+    ).toBe(false);
+    // Solde de la date avec le reste.
+    ok(
+      await AM.settleDatesWithPayment({
+        productionId: prod,
+        dealIds: [dealId],
+        amount: due - 200,
+        date: new Date("2025-04-04T12:00:00Z"),
+      }),
+    );
+    expect((await deal(dealId)).settledAt).not.toBeNull();
+    acc = await getArtistAccount(prod, Date.now());
+    const last = acc.movements.find((m) => m.settledLabels.length > 0 && m.amount === due - 200)!;
+    expect(last.settledLabels[0]).toContain("/2025 ·");
+    // Supprimer le versement de l'acompte retire l'acompte.
+    ok(await AM.deleteArtistMovement(first.id));
+    expect(await prisma.artistPaymentAllocation.count({ where: { dealId } })).toBe(0);
+  });
+
   it("reprise de l'existant : date soldée sans quote-part figée → figée à sa valeur actuelle", async () => {
     await prisma.deal.update({ where: { id: ids[2] }, data: { settledAt: new Date() } });
     const { freezeSettledOverheads } = await import("@/lib/finance/show-financials");
