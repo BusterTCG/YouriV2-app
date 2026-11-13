@@ -28,7 +28,7 @@ import {
   deleteArtistMovement,
   settleDatesWithPayment,
 } from "@/lib/actions/artist-movements";
-import { ARTIST_MOVEMENT_LABEL } from "@/lib/finance/artist-account";
+import { ARTIST_MOVEMENT_LABEL, paymentPlan } from "@/lib/finance/artist-account";
 import { cn } from "@/lib/utils";
 
 type MovementKind = "PAYMENT" | "REFUND" | "EXPENSES" | "CASH_ADVANCE";
@@ -272,12 +272,24 @@ export function ArtistAccountCard({
     setAmount(form === "EXPENSES" ? String(expensesAmount(next)) : suggest(checked, next));
   }
 
+  // Répartition du versement de quote-part saisi (soldes / acomptes).
+  const plan = paymentPlan(
+    settleable.filter((d) => checked.has(d.id)).map((d) => ({ id: d.id, remaining: remainingOf(d) })),
+    round2(parseEur(amount) - partialSumOf(partials) - advSum),
+    parseEur(amount),
+  );
+  const planPartialCount = partials.size + plan.partials.length;
+  const labelOfDate = (id: string) => settleable.find((d) => d.id === id)?.label ?? "";
+
   function save() {
     if (!form) return;
     setError(null);
     const n = parseEur(amount);
     const partialList = [...partials].map(([dealId, v]) => ({ dealId, amount: parseEur(v) }));
-    const settling = form === "PAYMENT" && (checked.size > 0 || partialList.length > 0);
+    // Montant inférieur au reste des dates cochées : acompte, pas de solde.
+    const toSettle = form === "PAYMENT" ? plan.settle : [];
+    const allPartials = form === "PAYMENT" ? [...partialList, ...plan.partials] : partialList;
+    const settling = form === "PAYMENT" && (toSettle.length > 0 || allPartials.length > 0);
     if (form === "PAYMENT") {
       for (const p of partialList) {
         const d = settleable.find((x) => x.id === p.dealId);
@@ -323,8 +335,8 @@ export function ArtistAccountCard({
       const res = settling
         ? await settleDatesWithPayment({
             productionId,
-            dealIds: [...checked],
-            partials: partialList,
+            dealIds: toSettle,
+            partials: allPartials,
             amount: n,
             date: new Date(`${date}T12:00:00Z`),
             note: note || null,
@@ -636,10 +648,11 @@ export function ArtistAccountCard({
               onChange={(e) => setNote(e.target.value)}
             />
             <Button size="sm" className="h-8" onClick={save} disabled={pending}>
-              {form === "PAYMENT" && (checked.size > 0 || partials.size > 0)
+              {form === "PAYMENT" && (plan.settle.length > 0 || planPartialCount > 0)
                 ? [
-                    checked.size > 0 && `solder ${checked.size} date${checked.size > 1 ? "s" : ""}`,
-                    partials.size > 0 && `acompte sur ${partials.size} date${partials.size > 1 ? "s" : ""}`,
+                    plan.settle.length > 0 &&
+                      `solder ${plan.settle.length} date${plan.settle.length > 1 ? "s" : ""}`,
+                    planPartialCount > 0 && `acompte sur ${planPartialCount} date${planPartialCount > 1 ? "s" : ""}`,
                   ]
                     .filter(Boolean)
                     .join(" + ")
@@ -657,8 +670,18 @@ export function ArtistAccountCard({
                   verse un acompte : la date reste à solder et son reste sera proposé au prochain
                   versement. Montant = reste des dates cochées + acomptes
                   {openAdvances.length > 0 ? " + frais avancés cochés" : ""} (modifiable ; 0 = solder
-                  sans versement).
+                  sans versement). Un montant plus petit que le reste des dates cochées devient un
+                  acompte.
                 </div>
+                {plan.settle.length < checked.size && (
+                  <div className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                    {fmt(parseEur(amount))} ne couvre pas le reste des dates cochées
+                    {plan.partials.length > 0 &&
+                      ` : acompte de ${plan.partials.map((p) => `${fmt(p.amount)} sur ${labelOfDate(p.dealId)}`).join(", ")}`}
+                    {plan.settle.length > 0 && `, solde de ${plan.settle.map(labelOfDate).join(", ")}`}.{" "}
+                    {checked.size - plan.settle.length > 1 ? "Les autres dates restent" : "La date reste"} à solder.
+                  </div>
+                )}
                 <div className="rounded-md border bg-card divide-y">
                   {settleable.map((d) => {
                     const left = remainingOf(d);

@@ -57,6 +57,36 @@ export const ARTIST_MOVEMENT_LABEL: Record<AccountMovement["kind"], string> = {
   EXPENSES: "Remboursement à l'artiste",
 };
 
+/**
+ * Versement de quote-part plus petit que le reste des dates cochées (Stan
+ * 2026-11-13 : 200 € sur une date de 1 010 € ne la solde pas) : les dates
+ * entièrement couvertes sont soldées (déficits d'abord), la suivante reçoit le
+ * reliquat en acompte, les autres restent à solder. 0 € = solder sans versement.
+ * `free` = montant − acomptes saisis − frais cochés ; `dates` dans l'ordre affiché.
+ */
+export function paymentPlan(
+  dates: Array<{ id: string; remaining: number }>,
+  free: number,
+  amount: number,
+): { settle: string[]; partials: Array<{ dealId: string; amount: number }> } {
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const need = r2(dates.reduce((s, d) => s + d.remaining, 0));
+  if (amount <= 0 || free + 0.005 >= need) return { settle: dates.map((d) => d.id), partials: [] };
+  const settle: string[] = [];
+  const partials: Array<{ dealId: string; amount: number }> = [];
+  let left = r2(free);
+  for (const d of [...dates].sort((a, b) => Number(a.remaining >= 0) - Number(b.remaining >= 0))) {
+    if (d.remaining <= left + 0.005) {
+      settle.push(d.id);
+      left = r2(left - d.remaining);
+    } else {
+      if (left > 0.005) partials.push({ dealId: d.id, amount: left });
+      left = 0;
+    }
+  }
+  return { settle, partials };
+}
+
 /** Dates concernées par un versement de quote-part : « solde … · acompte … (200 €) ». */
 export function movementDatesText(
   m: { settledLabels: string[]; partials: Array<{ label: string; amount: number }> },

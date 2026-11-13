@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { artistStatement, computeArtistAccount, type AccountDeal } from "@/lib/finance/artist-account";
+import { artistStatement, computeArtistAccount, paymentPlan, type AccountDeal } from "@/lib/finance/artist-account";
 
 const d = (id: string, day: string, artistAmount: number, opts: Partial<AccountDeal> = {}): AccountDeal => ({
   id,
@@ -276,5 +276,35 @@ describe("computeArtistAccount — compensation et avance de trésorerie (Stan 2
     const a = computeArtistAccount([d("a", "2026-09-01", -440)], [{ kind: "REFUND", amount: 440 }]);
     expect(a.balance).toBe(0);
     expect(a.advancesDue).toBe(0);
+  });
+});
+
+describe("paymentPlan — versement plus petit que le reste des dates cochées (Stan 2026-11-13)", () => {
+  it("200 € sur une date de 1 010 € : acompte, la date n'est pas soldée", () => {
+    expect(paymentPlan([{ id: "mcc", remaining: 1010 }], 200, 200)).toEqual({
+      settle: [],
+      partials: [{ dealId: "mcc", amount: 200 }],
+    });
+  });
+
+  it("montant qui couvre le reste : la date est soldée", () => {
+    expect(paymentPlan([{ id: "mcc", remaining: 1010 }], 1010, 1010)).toEqual({ settle: ["mcc"], partials: [] });
+  });
+
+  it("plusieurs dates : déficit d'abord, dates couvertes soldées, reliquat en acompte", () => {
+    const dates = [
+      { id: "a", remaining: 500 },
+      { id: "b", remaining: 800 },
+      { id: "c", remaining: 300 },
+      { id: "def", remaining: -100 },
+    ];
+    expect(paymentPlan(dates, 700, 700)).toEqual({
+      settle: ["def", "a"],
+      partials: [{ dealId: "b", amount: 300 }],
+    });
+  });
+
+  it("0 € : solde sans versement (date en perte), comme avant", () => {
+    expect(paymentPlan([{ id: "a", remaining: 400 }], 0, 0)).toEqual({ settle: ["a"], partials: [] });
   });
 });
